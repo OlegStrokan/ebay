@@ -4,11 +4,12 @@ using Microsoft.Extensions.Logging;
 namespace Infrastructure.Persistence;
 
 public sealed class InventoryDbInitializer(
-    InventoryDbContext dbContext,
+    IDbContextFactory<InventoryDbContext> dbContextFactory,
     ILogger<InventoryDbInitializer> logger)
 {
     public async Task EnsureCreatedAsync(CancellationToken cancellationToken = default)
     {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
         logger.LogInformation("Inventory database schema ensured.");
     }

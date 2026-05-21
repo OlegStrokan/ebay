@@ -20,8 +20,6 @@ public static class InfrastructureModule
         services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.SectionName));
         services.Configure<ReservationExpiryOptions>(configuration.GetSection(ReservationExpiryOptions.SectionName));
 
-        services.AddDbContext<InventoryDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("Postgres")));
         services.AddDbContextFactory<InventoryDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Postgres")));
 
