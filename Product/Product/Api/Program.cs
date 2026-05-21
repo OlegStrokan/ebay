@@ -33,6 +33,12 @@ builder.Services.AddOpenTelemetry()
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.ProductDbContext>();
+    await db.Database.EnsureCreatedAsync();
+}
+
 app.MapGrpcService<ProductGrpcService>();
 app.MapGrpcHealthChecksService();
 
