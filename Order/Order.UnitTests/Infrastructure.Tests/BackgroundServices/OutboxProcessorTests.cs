@@ -42,6 +42,7 @@ public class OutboxProcessorTests
         _serviceScope.ServiceProvider.GetService(typeof(IOutboxRepository)).Returns(_outboxRepository);
         // ProcessBatchAsync always resolves IDeadLetterRepository - must be registered
         _serviceScope.ServiceProvider.GetService(typeof(IDeadLetterRepository)).Returns(_deadLetterRepository);
+        _serviceScope.ServiceProvider.GetService(typeof(IEventPublisher)).Returns(_eventPublisher);
     }
 
     [Fact]
@@ -58,7 +59,7 @@ public class OutboxProcessorTests
             .When(x => x.MarkAsProcessedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()))
             .Do(_ => signal.TrySetResult(true));
 
-        var worker = new OutboxProcessor(_serviceProvider, _eventPublisher, _logger, _configuration);
+        var worker = new OutboxProcessor(_serviceProvider, _logger, _configuration);
         using var cts = new CancellationTokenSource();
 
         await worker.StartAsync(cts.Token);
@@ -90,7 +91,7 @@ public class OutboxProcessorTests
             .When(x => x.IncrementRetryCountAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()))
             .Do(_ => signal.TrySetResult(true));
 
-        var worker = new OutboxProcessor(_serviceProvider, _eventPublisher, _logger, _configuration);
+        var worker = new OutboxProcessor(_serviceProvider, _logger, _configuration);
         using var cts = new CancellationTokenSource();
 
         await worker.StartAsync(cts.Token);
@@ -121,7 +122,7 @@ public class OutboxProcessorTests
                 Arg.Any<DateTime>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
             .Do(_ => signal.TrySetResult(true));
 
-        var worker = new OutboxProcessor(_serviceProvider, _eventPublisher, _logger, _configuration);
+        var worker = new OutboxProcessor(_serviceProvider, _logger, _configuration);
         using var cts = new CancellationTokenSource();
 
         await worker.StartAsync(cts.Token);
@@ -152,7 +153,7 @@ public class OutboxProcessorTests
                 Arg.Any<DateTime>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>()))
             .Do(_ => signal.TrySetResult(true));
 
-        var worker = new OutboxProcessor(_serviceProvider, _eventPublisher, _logger, _configuration);
+        var worker = new OutboxProcessor(_serviceProvider, _logger, _configuration);
         using var cts = new CancellationTokenSource();
 
         await worker.StartAsync(cts.Token);

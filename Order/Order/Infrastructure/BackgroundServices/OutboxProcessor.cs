@@ -5,7 +5,6 @@ namespace Infrastructure.BackgroundServices;
 
 public sealed class OutboxProcessor(
     IServiceProvider serviceProvider,
-    IEventPublisher eventPublisher,
     ILogger<OutboxProcessor> logger,
     IConfiguration configuration) : BackgroundService
 {
@@ -76,10 +75,11 @@ public sealed class OutboxProcessor(
             using var groupScope = serviceProvider.CreateScope();
             var groupOutboxRepository = groupScope.ServiceProvider.GetRequiredService<IOutboxRepository>();
             var groupDeadLetterRepository = groupScope.ServiceProvider.GetRequiredService<IDeadLetterRepository>();
+            var groupEventPublisher = groupScope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             foreach (var message in group)
             {
-                var success = await ProcessMessageAsync(message, groupOutboxRepository, groupDeadLetterRepository, ct);
+                var success = await ProcessMessageAsync(message, groupOutboxRepository, groupDeadLetterRepository, groupEventPublisher, ct);
                 if (!success)
                     break;
             }
@@ -90,6 +90,7 @@ public sealed class OutboxProcessor(
         OutboxMessage message,
         IOutboxRepository outboxRepository,
         IDeadLetterRepository deadLetterRepository,
+        IEventPublisher eventPublisher,
         CancellationToken ct)
     {
         try

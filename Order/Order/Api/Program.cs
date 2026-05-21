@@ -34,6 +34,14 @@ builder.Services.AddOpenTelemetry()
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var writeDb = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.AppDbContext>();
+    await writeDb.Database.EnsureCreatedAsync();
+    var readDb = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.ReadDbContext>();
+    await readDb.Database.EnsureCreatedAsync();
+}
+
 app.MapGrpcService<OrderGrpcService>();
 app.MapGrpcService<B2BOrderGrpcService>();
 app.MapGrpcService<RecurringOrderGrpcService>();

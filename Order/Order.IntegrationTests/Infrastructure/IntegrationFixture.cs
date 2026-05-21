@@ -69,7 +69,7 @@ public sealed class IntegrationFixture : IAsyncLifetime
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<IIdempotencyRepository, IdempotencyRepository>();
         services.AddScoped<IDeadLetterRepository, DeadLetterRepository>();
-        services.AddScoped<IEventPublisher, FakeEventPublisher>();
+        services.AddSingleton<IEventPublisher, FakeEventPublisher>();
         services.AddScoped<IOrderPersistenceService, OrderPersistenceService>();
         services.AddScoped<IReturnRequestPersistenceService, ReturnRequestPersistenceService>();
         services.AddScoped<IB2BOrderPersistenceService, B2BOrderPersistenceService>();

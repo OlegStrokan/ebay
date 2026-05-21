@@ -1,3 +1,4 @@
+using Application.Interfaces;
 using Application.Models;
 using FluentAssertions;
 using Infrastructure.BackgroundServices;
@@ -34,11 +35,10 @@ public sealed class OutboxProcessorTests : IClassFixture<IntegrationFixture>
             })
             .Build();
 
-        var publisher = new FakeEventPublisher();
+        var publisher = (FakeEventPublisher)_fixture.Services.GetRequiredService<IEventPublisher>();
 
         var processor = new OutboxProcessor(
             _fixture.Services,
-            publisher,
             NullLogger<OutboxProcessor>.Instance,
             config);
 
