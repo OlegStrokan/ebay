@@ -13,7 +13,9 @@ internal sealed class StripePaymentProvider(
     ILogger<StripePaymentProvider> logger) : IStripePaymentProvider
 {
     private readonly StripeOptions _stripeOptions = stripeOptions.Value;
-    private readonly IStripeClient _stripeClient = new StripeClient(stripeOptions.Value.SecretKey);
+    private readonly IStripeClient? _stripeClient = stripeOptions.Value.UseFakeProvider
+        ? null
+        : new StripeClient(stripeOptions.Value.SecretKey);
 
     public async Task<ProcessPaymentProviderResult> ProcessPaymentAsync(
         ProcessPaymentProviderRequest request,

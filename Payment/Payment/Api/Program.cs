@@ -19,6 +19,12 @@ builder.Services.AddGrpcHealthChecks();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.PaymentDbContext>();
+    await db.Database.EnsureCreatedAsync();
+}
+
 app.MapGrpcService<PaymentGrpcService>();
 app.MapGrpcHealthChecksService();
 
