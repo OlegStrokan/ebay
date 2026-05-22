@@ -261,7 +261,7 @@ public class UserGrpcService(
         try
         {
             var result = await updateUserPasswordUseCase.ExecuteAsync(
-                new UpdateUserPasswordCommand(request.UserId, request.NewPasswordHash));
+                new UpdateUserPasswordCommand(request.UserId, request.NewPassword));
 
             return new UpdateUserPasswordResponseProto
             {

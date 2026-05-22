@@ -42,7 +42,7 @@ message VerifyUserEmailResponse {
 
 message UpdateUserPasswordRequest {
   string user_id = 1;
-  string new_password_hash = 2;
+  string new_password = 2;
 }
 
 message UpdateUserPasswordResponse {
