@@ -17,7 +17,7 @@ _ATTRIBUTE_EXCLUSION_MAP: dict[str, tuple[str, list[str]]] = {
 
 class QdrantSearchClient:
     def __init__(self, url: str, collection: str) -> None:
-        self._client = AsyncQdrantClient(url=url)
+        self._client = AsyncQdrantClient(url=url, check_compatibility=False)
         self._collection = collection
 
     async def search(
