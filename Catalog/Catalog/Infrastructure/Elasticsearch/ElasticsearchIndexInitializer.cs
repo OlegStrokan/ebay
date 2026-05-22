@@ -34,9 +34,9 @@ public sealed class ElasticsearchIndexInitializer(
                 {
                     Properties = new Properties
                     {
-                        // Boosted text fields for BM25 full-text search
-                        ["name"] = new TextProperty { Boost = 3.0 },
-                        ["description"] = new TextProperty { Boost = 1.5 },
+                        // Full-text search fields (boost applied at query time, not mapping)
+                        ["name"] = new TextProperty(),
+                        ["description"] = new TextProperty(),
 
                         // Keyword fields for exact-match filtering
                         ["categoryId"]  = new KeywordProperty(),
