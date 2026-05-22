@@ -69,7 +69,7 @@ public class CreateUserUseCase(
             throw new ArgumentException("Phone is required", nameof(command.Phone));
         }
 
-        if (command.CountryCode.Trim().Length != 2)
+        if (!string.IsNullOrWhiteSpace(command.CountryCode) && command.CountryCode.Trim().Length != 2)
         {
             throw new ArgumentException("Country code must be a 2-letter ISO code", nameof(command.CountryCode));
         }
