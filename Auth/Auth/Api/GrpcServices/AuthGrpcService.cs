@@ -53,6 +53,10 @@ public class AuthGrpcService(
             logger.LogWarning(ex, "Registration failed: {Message}", ex.Message);
             throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
         }
+        catch (RpcException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during registration");
@@ -162,9 +166,9 @@ public class AuthGrpcService(
     {
         try
         {
-            logger.LogInformation("VerifyEmail request received for token");
+            logger.LogInformation("VerifyEmail request received");
 
-            var command = new VerifyEmailCommand(request.Token);
+            var command = new VerifyEmailCommand(request.Code);
             var response = await verifyEmailUseCase.ExecuteAsync(command);
 
             return new VerifyEmailResponseProto
