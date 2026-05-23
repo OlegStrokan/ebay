@@ -8,4 +8,5 @@ public record CreateUserCommand(
 	string Fullname,
 	string Phone,
 	string CountryCode = "DE",
-	CustomerTier CustomerTier = CustomerTier.Standard);
+	CustomerTier CustomerTier = CustomerTier.Standard,
+	bool AutoVerifyEmail = false);

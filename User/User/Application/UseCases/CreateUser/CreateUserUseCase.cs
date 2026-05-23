@@ -31,6 +31,7 @@ public class CreateUserUseCase(
             Phone = command.Phone.Trim(),
             CountryCode = command.CountryCode.Trim().ToUpperInvariant(),
             CustomerTier = command.CustomerTier,
+            IsEmailVerified = command.AutoVerifyEmail,
             CreatedAt = now,
             UpdatedAt = now,
         };

@@ -48,19 +48,22 @@ public class UserGrpcService(
     IAssignRoleUseCase assignRoleUseCase,
     IRevokeRoleUseCase revokeRoleUseCase,
     IGetUserRolesUseCase getUserRolesUseCase,
-    IGetAllRolesUseCase getAllRolesUseCase) : UserServiceProto.UserServiceProtoBase
+    IGetAllRolesUseCase getAllRolesUseCase,
+    IConfiguration configuration) : UserServiceProto.UserServiceProtoBase
 {
     public override async Task<CreateUserResponseProto> CreateUser(CreateUserRequest request, ServerCallContext context)
     {
         try
         {
+            var autoVerify = configuration.GetValue<bool>("Testing:AutoVerifyEmail");
             var user = await createUserUseCase.ExecuteAsync(new CreateUserCommand(
                 request.Email,
                 request.Password,
                 request.FullName,
                 request.Phone,
                 request.CountryCode,
-                request.CustomerTier.ToEntity()));
+                request.CustomerTier.ToEntity(),
+                AutoVerifyEmail: autoVerify));
 
             return user.ToProto();
         }
