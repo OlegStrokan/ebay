@@ -38,7 +38,6 @@ builder.Services.AddGrpcClient<UserServiceProto.UserServiceProtoClient>(options 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IJwtTokenGenerator>(sp => sp.GetRequiredService<JwtTokenService>());
 builder.Services.AddSingleton<IJwtTokenValidator>(sp => sp.GetRequiredService<JwtTokenService>());
-builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IIdGenerator, IdGenerator>();
 
 // repositories
@@ -68,7 +67,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
 	var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-	await db.Database.MigrateAsync();
+	await db.Database.EnsureCreatedAsync();
 }
 
 app.MapGrpcService<AuthGrpcService>();
