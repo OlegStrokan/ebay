@@ -32,10 +32,8 @@ public sealed class KafkaEmailDlqReplayWorker(
         var producerConfig = new ProducerConfig
         {
             BootstrapServers = _options.BootstrapServers,
-            EnableIdempotence = true,
             Acks = Acks.All,
-            MessageSendMaxRetries = 10,
-            MaxInFlight = 1
+            MessageSendMaxRetries = 5
         };
 
         using var consumer = new ConsumerBuilder<string, string>(consumerConfig)
