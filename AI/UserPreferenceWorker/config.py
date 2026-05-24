@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="USER_PREF_")
 
-    kafka_bootstrap_server: str = "localhost:9092"
+    kafka_bootstrap_server: str = "localhost:9093"
     kafka_group_id: str = "user-preference-worker"
     kafka_topics: list[str] = ["user.events"]
 
