@@ -4,7 +4,7 @@ import pytest
 
 # Local project module — imported by name to use QdrantIndexClient
 # (the pip qdrant_client package is re-exported inside this module as AsyncQdrantClient)
-import qdrant_client as _local
+import qdrant_index_client as _local
 QdrantIndexClient = _local.QdrantIndexClient
 
 from tests.integration.conftest import (

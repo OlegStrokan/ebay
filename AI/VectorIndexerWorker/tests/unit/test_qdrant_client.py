@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import qdrant_client as _local
+import qdrant_index_client as _local
 QdrantIndexClient = _local.QdrantIndexClient
 
 

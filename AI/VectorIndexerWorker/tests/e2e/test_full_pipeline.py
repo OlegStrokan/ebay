@@ -6,7 +6,7 @@ import pytest
 import respx
 from testcontainers.core.container import DockerContainer
 
-import qdrant_client as _local
+import qdrant_index_client as _local
 QdrantIndexClient = _local.QdrantIndexClient
 
 from consumer import process_event
