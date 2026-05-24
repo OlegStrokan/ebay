@@ -4,7 +4,7 @@
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="INDEXER_")
 
-    kafka_bootstrap_server: str = "localhost:9092"
+    kafka_bootstrap_server: str = "localhost:9093"
     kafka_group_id: str = "vector-indexer-worker"
     kafka_topics: list[str] = ["product.events"]
 

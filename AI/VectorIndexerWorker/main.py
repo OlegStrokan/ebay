@@ -1,7 +1,7 @@
 ﻿import asyncio
 import structlog
 from grpc_embedding_client import GrpcEmbeddingClient
-from qdrant_client import QdrantIndexClient
+from qdrant_index_client import QdrantIndexClient
 from indexer import Indexer
 from consumer import run_consumer
 from config import settings
