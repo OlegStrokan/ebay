@@ -12,7 +12,7 @@ public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<Password
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).IsRequired().HasMaxLength(26);
-        builder.Property(x => x.UserId).IsRequired().HasMaxLength(26);
+        builder.Property(x => x.UserId).IsRequired().HasMaxLength(36);
         builder.Property(x => x.Token).IsRequired().HasMaxLength(100);
         builder.Property(x => x.CreatedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.Property(x => x.IsUsed).IsRequired();

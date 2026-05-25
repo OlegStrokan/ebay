@@ -13,7 +13,7 @@ public class EmailVerificationTokenConfiguration : IEntityTypeConfiguration<Emai
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).IsRequired().HasMaxLength(26);
-        builder.Property(x => x.UserId).IsRequired().HasMaxLength(26);
+        builder.Property(x => x.UserId).IsRequired().HasMaxLength(36);
         builder.Property(x => x.Token).IsRequired().HasMaxLength(100);
         builder.Property(x => x.ExpiresAt).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
