@@ -38,7 +38,7 @@ public class UserGateway
         catch (RpcException ex)
         {
             logger.LogError(ex, "gRPC error creating user: {Status}", ex.StatusCode);
-            throw new InvalidOperationException($"Failed to create user: {ex.Status.Detail}", ex);
+            throw;
         }
     }
 
@@ -149,7 +149,7 @@ public class UserGateway
         }
     }
 
-    public async Task<bool> UpdateUserPasswordAsync(string userId, string newPasswordHash)
+    public async Task<bool> UpdateUserPasswordAsync(string userId, string newPassword)
     {
         try
         {
@@ -158,7 +158,7 @@ public class UserGateway
             var request = new UpdateUserPasswordRequest
             {
                 UserId = userId,
-                NewPasswordHash = newPasswordHash
+                NewPassword = newPassword
             };
 
             var response = await userClient.UpdateUserPasswordAsync(request);

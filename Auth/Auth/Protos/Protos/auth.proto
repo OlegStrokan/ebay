@@ -92,7 +92,7 @@ message ValidateTokenResponse {
 // Verify Email Messages
 // ============================================
 message VerifyEmailRequest {
-  string token = 1;
+  string code = 1;
 }
 
 message VerifyEmailResponse {

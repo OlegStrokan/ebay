@@ -11,18 +11,16 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
     private const string VerificationEventType = "EmailVerificationRequested";
     private const string PasswordResetEventType = "PasswordResetRequested";
 
-    public async Task SendVerificationEmailAsync(string recipientEmail, string verificationToken, CancellationToken cancellationToken = default)
+    public async Task SendVerificationEmailAsync(string recipientEmail, string verificationCode, CancellationToken cancellationToken = default)
     {
-        var frontendUrl = configuration["App:FrontendUrl"] ?? "http://localhost:3000";
-        var verificationLink = $"{frontendUrl}/verify-email?token={verificationToken}";
         var fromAddress = configuration["Email:FromAddress"] ?? "no-reply@free-ebay.com";
 
         var payload = new EmailVerificationRequested(
             Guid.NewGuid(),
             recipientEmail,
             fromAddress,
-            "Verify your email address",
-            BuildVerificationBody(verificationLink),
+            "Your verification code",
+            BuildVerificationBody(verificationCode),
             IsImportant: true,
             DateTime.UtcNow);
 
@@ -85,13 +83,12 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
         }
     }
 
-    private static string BuildVerificationBody(string verificationLink) =>
+    private static string BuildVerificationBody(string verificationCode) =>
         $"""
         <h2>Verify your email address</h2>
-        <p>Click the button below to verify your email address. The link expires in <strong>24 hours</strong>.</p>
-        <p><a href="{verificationLink}" style="padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;">Verify Email</a></p>
-        <p>Or copy this link into your browser:<br/><code>{verificationLink}</code></p>
-        """;
+        <p>Use the code below to verify your email address. The code expires in <strong>10 minutes</strong>.</p>
+        <p style="font-size:32px;font-weight:bold;letter-spacing:8px;text-align:center;">{verificationCode}</p>
+        """;  
 
     private static string BuildPasswordResetBody(string resetLink) =>
         $"""
