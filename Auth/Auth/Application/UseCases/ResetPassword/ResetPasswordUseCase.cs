@@ -1,6 +1,4 @@
-using Application.Common.Interfaces;
 using Application.UseCases.RequestPasswordReset;
-using Domain.Common.Interfaces;
 using Domain.Gateways;
 using Domain.Repositories;
 
@@ -9,8 +7,7 @@ namespace Application.UseCases.ResetPassword;
 public class ResetPasswordUseCase(
     IPasswordResetTokenRepository passwordResetTokenRepository,
     IRefreshTokenRepository refreshTokenRepository,
-    IUserGateway userGateway,
-    IPasswordHasher passwordHasher) : IResetPasswordUseCase
+    IUserGateway userGateway) : IResetPasswordUseCase
 {
     public async Task<ResetPasswordResponse> ExecuteAsync(ResetPasswordCommand command)
     {
@@ -31,9 +28,7 @@ public class ResetPasswordUseCase(
             return new ResetPasswordResponse(false, "Token has expired");
         }
 
-        var hashedPassword = passwordHasher.HashPassword(command.NewPassword);
-
-        var success = await userGateway.UpdateUserPasswordAsync(token.UserId, hashedPassword);
+        var success = await userGateway.UpdateUserPasswordAsync(token.UserId, command.NewPassword);
 
         if (!success)
         {

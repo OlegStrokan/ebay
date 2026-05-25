@@ -10,7 +10,7 @@ public class VerifyEmailUseCase (
 {
     public async Task<VerifyEmailResponse> ExecuteAsync(VerifyEmailCommand command)
     {
-        var token = await verificationTokenRepository.GetByTokenAsync(command.Token);
+        var token = await verificationTokenRepository.GetByTokenAsync(command.Code);
 
         if (token == null)
         {
@@ -34,7 +34,7 @@ public class VerifyEmailUseCase (
             return new VerifyEmailResponse(false, "Failed to verify email in user service", null);
         }
 
-        await verificationTokenRepository.MarkAsUsedAsync(command.Token);
+        await verificationTokenRepository.MarkAsUsedAsync(command.Code);
 
         return new VerifyEmailResponse(true, "Email verified successfully", token.UserId);
     }
