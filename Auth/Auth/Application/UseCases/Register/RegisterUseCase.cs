@@ -10,7 +10,6 @@ public class RegisterUseCase(
     IEmailVerificationTokenRepository verificationTokenRepository, 
     IIdGenerator idGenerator,
     IUserGateway userGateway,
-    IPasswordHasher passwordHasher,
     IEmailGateway emailGateway
     ) : IRegisterUseCase
 {
@@ -19,31 +18,35 @@ public class RegisterUseCase(
 
     public async Task<RegisterResponse> ExecuteAsync(RegisterCommand command)
     {
-        var hashedPassword = passwordHasher.HashPassword(command.Password);
-
- 
         var userId = await userGateway.CreateUserAsync(
             email: command.Email,
-            hashedPassword: hashedPassword,
+            hashedPassword: command.Password,
             fullName: command.Fullname,
             phone: command.Phone
         );
 
 
-        var verificationToken = new EmailVerificationTokenEntity
+        var verificationCode = new EmailVerificationTokenEntity
         {
             Id = idGenerator.GenerateId(),
             UserId = userId,
-            Token = Guid.NewGuid().ToString(),
-            ExpiresAt = DateTime.UtcNow.AddHours(24),
+            Token = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString(),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
         };
 
-        await verificationTokenRepository.CreateAsync(verificationToken);
+        await verificationTokenRepository.CreateAsync(verificationCode);
 
-        await emailGateway.SendVerificationEmailAsync(command.Email, verificationToken.Token);
+        try
+        {
+            await emailGateway.SendVerificationEmailAsync(command.Email, verificationCode.Token);
+        }
+        catch (Exception)
+        {
+            // Email dispatch is non-critical; Kafka error already logged by EmailGateway
+        }
 
-        return new RegisterResponse(userId, command.Email, command.Fullname, verificationToken.Token, SuccessMessage);
+        return new RegisterResponse(userId, command.Email, command.Fullname, verificationCode.Token, SuccessMessage);
     }
 }
