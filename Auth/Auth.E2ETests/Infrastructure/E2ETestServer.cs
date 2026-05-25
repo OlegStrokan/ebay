@@ -154,7 +154,7 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
 
 internal sealed class NoOpEmailGateway : IEmailGateway
 {
-    public Task SendVerificationEmailAsync(string recipientEmail, string verificationToken, CancellationToken cancellationToken = default)
+    public Task SendVerificationEmailAsync(string recipientEmail, string verificationCode, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
     public Task SendPasswordResetEmailAsync(string recipientEmail, string resetToken, CancellationToken cancellationToken = default)
