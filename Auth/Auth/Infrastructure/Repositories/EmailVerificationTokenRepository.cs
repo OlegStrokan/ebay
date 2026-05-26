@@ -7,9 +7,9 @@ namespace Infrastructure.Repositories;
 
 public class EmailVerificationTokenRepository(AppDbContext dbContext): IEmailVerificationTokenRepository
 {
-    public async Task<EmailVerificationTokenEntity?> GetByTokenAsync(string token)
+    public async Task<EmailVerificationTokenEntity?> GetByCodeAsync(string code)
     {
-        return await dbContext.EmailVerificationTokens.FirstOrDefaultAsync(evt => evt.Token == token);
+        return await dbContext.EmailVerificationTokens.FirstOrDefaultAsync(evt => evt.Code == code);
     }
 
     public async Task<EmailVerificationTokenEntity?> GetByUserIdAsync(string userId)
@@ -36,13 +36,13 @@ public class EmailVerificationTokenRepository(AppDbContext dbContext): IEmailVer
         return verificationTokenEntity;
     }
 
-    public async Task MarkAsUsedAsync(string token)
+    public async Task MarkAsUsedAsync(string code)
     {
-        var emailVerificationToken = await GetByTokenAsync(token);
+        var emailVerificationToken = await GetByCodeAsync(code);
 
         if (emailVerificationToken == null)
         {
-            throw new InvalidOperationException($"Email verification token with Token {token} not found");
+            throw new InvalidOperationException($"Email verification code {code} not found");
         }
 
         emailVerificationToken.IsUsed = true;

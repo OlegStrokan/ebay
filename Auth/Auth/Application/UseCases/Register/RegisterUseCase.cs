@@ -30,7 +30,7 @@ public class RegisterUseCase(
         {
             Id = idGenerator.GenerateId(),
             UserId = userId,
-            Token = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString(),
+            Code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString(),
             ExpiresAt = DateTime.UtcNow.AddMinutes(10),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -40,13 +40,13 @@ public class RegisterUseCase(
 
         try
         {
-            await emailGateway.SendVerificationEmailAsync(command.Email, verificationCode.Token);
+            await emailGateway.SendVerificationEmailAsync(command.Email, verificationCode.Code);
         }
         catch (Exception)
         {
             // Email dispatch is non-critical; Kafka error already logged by EmailGateway
         }
 
-        return new RegisterResponse(userId, command.Email, command.Fullname, verificationCode.Token, SuccessMessage);
+        return new RegisterResponse(userId, command.Email, command.Fullname, verificationCode.Code, SuccessMessage);
     }
 }

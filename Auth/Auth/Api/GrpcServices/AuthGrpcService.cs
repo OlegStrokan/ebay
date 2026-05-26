@@ -153,6 +153,7 @@ public class AuthGrpcService(
             {
                 IsValid = response.IsValid,
                 UserId = response.UserId ?? string.Empty,
+                Message = response.Message ?? string.Empty,
             };
         }
         catch (Exception ex)

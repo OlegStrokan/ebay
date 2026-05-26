@@ -10,24 +10,24 @@ public class VerifyEmailUseCase (
 {
     public async Task<VerifyEmailResponse> ExecuteAsync(VerifyEmailCommand command)
     {
-        var token = await verificationTokenRepository.GetByTokenAsync(command.Code);
+        var code = await verificationTokenRepository.GetByCodeAsync(command.Code);
 
-        if (token == null)
+        if (code == null)
         {
-            return new VerifyEmailResponse(false, "Invalid verification token", null);
+            return new VerifyEmailResponse(false, "Invalid verification code", null);
         }
 
-        if (token.IsUsed)
+        if (code.IsUsed)
         {
-            return new VerifyEmailResponse(false, "Token has already been used", null);
+            return new VerifyEmailResponse(false, "Verification code has already been used", null);
         }
 
-        if (token.ExpiresAt < DateTime.UtcNow)
+        if (code.ExpiresAt < DateTime.UtcNow)
         {
-            return new VerifyEmailResponse(false, "Token has expired", null);
+            return new VerifyEmailResponse(false, "Verification code has expired", null);
         }
 
-        var success = await userGateway.VerifyUserEmailAsync(token.UserId);
+        var success = await userGateway.VerifyUserEmailAsync(code.UserId);
 
         if (!success)
         {
@@ -36,6 +36,6 @@ public class VerifyEmailUseCase (
 
         await verificationTokenRepository.MarkAsUsedAsync(command.Code);
 
-        return new VerifyEmailResponse(true, "Email verified successfully", token.UserId);
+        return new VerifyEmailResponse(true, "Email verified successfully", code.UserId);
     }
 }
