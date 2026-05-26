@@ -20,14 +20,14 @@ public class VerifyEmailGrpcTests
         var service = AuthGrpcServiceTestFactory.Create(verifyEmailUseCase: useCase);
 
         var response = await service.VerifyEmail(
-            new VerifyEmailRequest { Token = "verify-token" },
+            new VerifyEmailRequest { Code = "verify-token" },
             Substitute.For<ServerCallContext>());
 
         Assert.True(response.Success);
         Assert.Equal("Email verified successfully", response.Message);
         Assert.Equal("userId", response.UserId);
 
-        await useCase.Received(1).ExecuteAsync(Arg.Is<VerifyEmailCommand>(c => c.Token == "verify-token"));
+        await useCase.Received(1).ExecuteAsync(Arg.Is<VerifyEmailCommand>(c => c.Code == "verify-token"));
     }
 
     [Fact]
@@ -35,14 +35,14 @@ public class VerifyEmailGrpcTests
     {
         var useCase = Substitute.For<IVerifyEmailUseCase>();
         useCase.ExecuteAsync(Arg.Any<VerifyEmailCommand>())
-            .Returns(new VerifyEmailUseCaseResponse(false, "Invalid verification token", null));
+            .Returns(new VerifyEmailUseCaseResponse(false, "Invalid verification code", null));
 
         var service = AuthGrpcServiceTestFactory.Create(verifyEmailUseCase: useCase);
 
         var response = await service.VerifyEmail(new VerifyEmailRequest(), Substitute.For<ServerCallContext>());
 
         Assert.False(response.Success);
-        Assert.Equal("Invalid verification token", response.Message);
+        Assert.Equal("Invalid verification code", response.Message);
         Assert.Equal(string.Empty, response.UserId);
     }
 

@@ -19,13 +19,13 @@ public class VerifyEmailUseCaseTests
             UserId = "userId",
             Id = "tokenId",
             IsUsed = false,
-            Token = "token",
+            Code = "123456",
             ExpiresAt = DateTime.UtcNow.AddDays(1),
         };
-        emailVerificationRepository.GetByTokenAsync(emailVerificationToken.Token).Returns(emailVerificationToken);
+        emailVerificationRepository.GetByCodeAsync(emailVerificationToken.Code).Returns(emailVerificationToken);
         userGateway.VerifyUserEmailAsync(emailVerificationToken.UserId).Returns(true);
         
-        var command = new VerifyEmailCommand(emailVerificationToken.Token);
+        var command = new VerifyEmailCommand(emailVerificationToken.Code);
         
         var useCase = new VerifyEmailUseCase(emailVerificationRepository, userGateway);
 
@@ -36,7 +36,7 @@ public class VerifyEmailUseCaseTests
         Assert.True(result.Success);
         
         
-        await emailVerificationRepository.Received(1).GetByTokenAsync(emailVerificationToken.Token);
+        await emailVerificationRepository.Received(1).GetByCodeAsync(emailVerificationToken.Code);
         await userGateway.Received(1).VerifyUserEmailAsync(emailVerificationToken.UserId);
         
     }
@@ -49,17 +49,17 @@ public class VerifyEmailUseCaseTests
         
         emailVerificationRepository.GetByTokenAsync(Arg.Any<string>()).Returns((EmailVerificationTokenEntity?)null);
         
-        var command = new VerifyEmailCommand("token");
+        var command = new VerifyEmailCommand("123456");
         
         var useCase = new VerifyEmailUseCase(emailVerificationRepository, userGateway);
 
         var result = await useCase.ExecuteAsync(command);
 
-        Assert.Equal("Invalid verification token", result.Message);
+        Assert.Equal("Invalid verification code", result.Message);
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         
-        await emailVerificationRepository.Received(1).GetByTokenAsync("token");
+        await emailVerificationRepository.Received(1).GetByCodeAsync("123456");
         await userGateway.DidNotReceive().VerifyUserEmailAsync(Arg.Any<string>());
     }
     
@@ -74,22 +74,22 @@ public class VerifyEmailUseCaseTests
             UserId = "userId",
             Id = "tokenId",
             IsUsed = true,
-            Token = "token",
+            Code = "123456",
             ExpiresAt = DateTime.UtcNow.AddDays(1),
         };
-        emailVerificationRepository.GetByTokenAsync(emailVerificationToken.Token).Returns(emailVerificationToken);
+        emailVerificationRepository.GetByCodeAsync(emailVerificationToken.Code).Returns(emailVerificationToken);
 
-        var command = new VerifyEmailCommand(emailVerificationToken.Token);
+        var command = new VerifyEmailCommand(emailVerificationToken.Code);
         
         var useCase = new VerifyEmailUseCase(emailVerificationRepository, userGateway);
 
         var result = await useCase.ExecuteAsync(command);
 
-        Assert.Equal("Token has already been used", result.Message);
+        Assert.Equal("Verification code has already been used", result.Message);
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         
-        await emailVerificationRepository.Received(1).GetByTokenAsync("token");
+        await emailVerificationRepository.Received(1).GetByCodeAsync("123456");
         await userGateway.DidNotReceive().VerifyUserEmailAsync(Arg.Any<string>());
     }
 
@@ -104,22 +104,22 @@ public class VerifyEmailUseCaseTests
             UserId = "userId",
             Id = "tokenId",
             IsUsed = false,
-            Token = "token",
+            Code = "123456",
             ExpiresAt = DateTime.UtcNow.AddDays(-1),
         };
-        emailVerificationRepository.GetByTokenAsync(emailVerificationToken.Token).Returns(emailVerificationToken);
+        emailVerificationRepository.GetByCodeAsync(emailVerificationToken.Code).Returns(emailVerificationToken);
 
-        var command = new VerifyEmailCommand(emailVerificationToken.Token);
+        var command = new VerifyEmailCommand(emailVerificationToken.Code);
         
         var useCase = new VerifyEmailUseCase(emailVerificationRepository, userGateway);
 
         var result = await useCase.ExecuteAsync(command);
 
-        Assert.Equal("Token has expired", result.Message);
+        Assert.Equal("Verification code has expired", result.Message);
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         
-        await emailVerificationRepository.Received(1).GetByTokenAsync("token");
+        await emailVerificationRepository.Received(1).GetByCodeAsync("123456");
         await userGateway.DidNotReceive().VerifyUserEmailAsync(Arg.Any<string>());
     }
     
@@ -134,13 +134,13 @@ public class VerifyEmailUseCaseTests
             UserId = "userId",
             Id = "tokenId",
             IsUsed = false,
-            Token = "token",
+            Code = "123456",
             ExpiresAt = DateTime.UtcNow.AddDays(1),
         };
-        emailVerificationRepository.GetByTokenAsync(emailVerificationToken.Token).Returns(emailVerificationToken);
+        emailVerificationRepository.GetByCodeAsync(emailVerificationToken.Code).Returns(emailVerificationToken);
         userGateway.VerifyUserEmailAsync(emailVerificationToken.UserId).Returns(false);
         
-        var command = new VerifyEmailCommand(emailVerificationToken.Token);
+        var command = new VerifyEmailCommand(emailVerificationToken.Code);
         
         var useCase = new VerifyEmailUseCase(emailVerificationRepository, userGateway);
 
@@ -150,8 +150,8 @@ public class VerifyEmailUseCaseTests
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         
-        await emailVerificationRepository.Received(1).GetByTokenAsync("token");
-        await emailVerificationRepository.DidNotReceive().MarkAsUsedAsync("token");
+        await emailVerificationRepository.Received(1).GetByCodeAsync("123456");
+        await emailVerificationRepository.DidNotReceive().MarkAsUsedAsync("123456");
         await userGateway.Received().VerifyUserEmailAsync(emailVerificationToken.UserId);
 
     }

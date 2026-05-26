@@ -44,8 +44,8 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         register.UserId.Should().NotBeNullOrWhiteSpace();
         register.Email.Should().Be(email);
 
-        var verifyToken = await GetLatestEmailVerificationTokenAsync(register.UserId);
-        await _client.VerifyEmailAsync(new VerifyEmailRequest { Token = verifyToken });
+        var verifyCode = await GetLatestEmailVerificationCodeAsync(register.UserId);
+        await _client.VerifyEmailAsync(new VerifyEmailRequest { Code = verifyCode });
 
         var login = await _client.LoginAsync(new LoginRequest
         {
@@ -71,8 +71,8 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
     {
         var (refreshUserId, email, password) = await RegisterUserAsync();
 
-        var verifyToken = await GetLatestEmailVerificationTokenAsync(refreshUserId);
-        await _client.VerifyEmailAsync(new VerifyEmailRequest { Token = verifyToken });
+        var verifyCode = await GetLatestEmailVerificationCodeAsync(refreshUserId);
+        await _client.VerifyEmailAsync(new VerifyEmailRequest { Code = verifyCode });
 
         var login = await _client.LoginAsync(new LoginRequest
         {
@@ -112,8 +112,8 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
     {
         var (userId, email, oldPassword) = await RegisterUserAsync();
 
-        var emailVerifyToken = await GetLatestEmailVerificationTokenAsync(userId);
-        await _client.VerifyEmailAsync(new VerifyEmailRequest { Token = emailVerifyToken });
+        var emailVerifyCode = await GetLatestEmailVerificationCodeAsync(userId);
+        await _client.VerifyEmailAsync(new VerifyEmailRequest { Code = emailVerifyCode });
 
         var requestReset = await _client.RequestPasswordResetAsync(new RequestPasswordResetRequest
         {
@@ -155,14 +155,14 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
     }
 
     [Fact]
-    public async Task VerifyEmail_ShouldSucceedThenRejectReusedToken()
+    public async Task VerifyEmail_ShouldSucceedThenRejectReusedCode()
     {
         var (userId, _, _) = await RegisterUserAsync();
-        var verifyToken = await GetLatestEmailVerificationTokenAsync(userId);
+        var verifyCode = await GetLatestEmailVerificationCodeAsync(userId);
 
         var first = await _client.VerifyEmailAsync(new VerifyEmailRequest
         {
-            Token = verifyToken
+            Code = verifyCode
         });
 
         first.Success.Should().BeTrue();
@@ -170,11 +170,11 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
 
         var second = await _client.VerifyEmailAsync(new VerifyEmailRequest
         {
-            Token = verifyToken
+            Code = verifyCode
         });
 
         second.Success.Should().BeFalse();
-        second.Message.Should().Be("Token has already been used");
+        second.Message.Should().Be("Verification code has already been used");
     }
 
     private async Task<(string UserId, string Email, string Password)> RegisterUserAsync()
@@ -207,17 +207,17 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         return token;
     }
 
-    private async Task<string> GetLatestEmailVerificationTokenAsync(string userId)
+    private async Task<string> GetLatestEmailVerificationCodeAsync(string userId)
     {
         await using var scope = _server.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var token = await db.EmailVerificationTokens
+        var code = await db.EmailVerificationTokens
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.CreatedAt)
-            .Select(x => x.Token)
+            .Select(x => x.Code)
             .FirstAsync();
 
-        return token;
+        return code;
     }
 }

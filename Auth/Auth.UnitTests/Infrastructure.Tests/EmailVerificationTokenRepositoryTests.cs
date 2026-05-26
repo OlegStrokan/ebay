@@ -23,7 +23,7 @@ public class EmailVerificationTokenRepositoryTests
         var token = new EmailVerificationTokenEntity
         {
             Id = "tokenId",
-            Token = "token",
+            Code = "123456",
             UserId = "userId",
             IsUsed = false,
             CreatedAt = DateTime.UtcNow,
@@ -33,7 +33,7 @@ public class EmailVerificationTokenRepositoryTests
         var result = await emailVerificationTokenRepository.CreateAsync(token);
 
         Assert.NotNull(result);
-        Assert.Equal(token.Token, result.Token);
+        Assert.Equal(token.Code, result.Code);
         Assert.Equal(token.UserId, result.UserId);
         Assert.Equal(token.IsUsed, result.IsUsed);
         Assert.Equal(token.CreatedAt, result.CreatedAt);
@@ -42,7 +42,7 @@ public class EmailVerificationTokenRepositoryTests
         var fetchedToken = await emailVerificationTokenRepository.GetByUserIdAsync(token.UserId);
         
         Assert.NotNull(fetchedToken);
-        Assert.Equal(token.Token, fetchedToken.Token); 
+        Assert.Equal(token.Code, fetchedToken.Code); 
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class EmailVerificationTokenRepositoryTests
         var token = new EmailVerificationTokenEntity
         {
             Id = "tokenId",
-            Token = "token",
+            Code = "123456",
             UserId = "userId",
             IsUsed = false,
             CreatedAt = DateTime.UtcNow,
@@ -63,10 +63,10 @@ public class EmailVerificationTokenRepositoryTests
 
         await repository.CreateAsync(token);
         
-        var result = await repository.GetByTokenAsync(token.Token);
+        var result = await repository.GetByCodeAsync(token.Code);
 
         Assert.NotNull(result);
-        Assert.Equal(token.Token, result.Token);
+        Assert.Equal(token.Code, result.Code);
         Assert.Equal(token.UserId, result.UserId);
         Assert.Equal(token.Id, result.Id);
         Assert.False(result.IsUsed);
@@ -78,7 +78,7 @@ public class EmailVerificationTokenRepositoryTests
         var dbContext = GetDbContext("GetByTokenAsync_NotExists_Db");
         var repository = new EmailVerificationTokenRepository(dbContext);
 
-        var result = await repository.GetByTokenAsync("nonExistingTokenValue");
+        var result = await repository.GetByCodeAsync("nonExistingTokenValue");
         
         Assert.Null(result);
     }
@@ -96,7 +96,7 @@ public class EmailVerificationTokenRepositoryTests
             Id = "oldTokenId",
             UserId = "userId",
             IsUsed = false,
-            Token = "oldToken",
+            Code = "111111",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = (DateTime.UtcNow.AddHours(-1))
         };
@@ -106,7 +106,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "newTokenId",
             UserId = "userId",
-            Token = "newToken",
+            Code = "222222",
             IsUsed = false,
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow
@@ -118,7 +118,7 @@ public class EmailVerificationTokenRepositoryTests
         var result = await repository.GetByUserIdAsync(userId);
         
         Assert.NotNull(result);
-        Assert.Equal(newestToken.Token, result.Token);
+        Assert.Equal(newestToken.Code, result.Code);
         Assert.False(result.IsUsed);
     }
 
@@ -134,7 +134,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "usedTokenId",
             UserId = "userId",
-            Token = "usedToken",
+            Code = "333333",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = true,
@@ -160,7 +160,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "userTokenId",
             UserId = "userId",
-            Token = "usedToken",
+            Code = "444444",
             ExpiresAt = DateTime.UtcNow.AddHours(-1),
             CreatedAt = DateTime.UtcNow.AddHours(-2),
             IsUsed = true,
@@ -195,7 +195,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "tokenId",
             UserId = "userId",
-            Token = "token",
+            Code = "123456",
             ExpiresAt = DateTime.UtcNow.AddHours(1),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false,
@@ -212,7 +212,7 @@ public class EmailVerificationTokenRepositoryTests
         Assert.True(result.IsUsed);
         Assert.NotNull(result.UsedAt);
 
-        var fetchedToken = await repository.GetByTokenAsync(token.Token);
+        var fetchedToken = await repository.GetByCodeAsync(token.Code);
         Assert.NotNull(fetchedToken);
         Assert.True(fetchedToken.IsUsed);
         Assert.NotNull(fetchedToken.UsedAt);
@@ -228,7 +228,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "tokenId",
             UserId = "userId",
-            Token = "token",
+            Code = "123456",
             ExpiresAt = DateTime.UtcNow.AddHours(1),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false,
@@ -236,9 +236,9 @@ public class EmailVerificationTokenRepositoryTests
         
         await repository.CreateAsync(token);
 
-        await repository.MarkAsUsedAsync(token.Token);
+        await repository.MarkAsUsedAsync(token.Code);
         
-        var updatedToken = await repository.GetByTokenAsync(token.Token);
+        var updatedToken = await repository.GetByCodeAsync(token.Code);
         
         Assert.NotNull(updatedToken);
         Assert.True(updatedToken.IsUsed);
@@ -266,7 +266,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "token_valid",
             UserId = "user_123",
-            Token = "valid_token",
+            Code = "111111",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -276,7 +276,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "token_expired",
             UserId = "user_456",
-            Token = "expired_token",
+            Code = "222222",
             ExpiresAt = DateTime.UtcNow.AddHours(-1),
             CreatedAt = DateTime.UtcNow.AddHours(-25),
             IsUsed = false
@@ -286,7 +286,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "token_used",
             UserId = "user_789",
-            Token = "used_token",
+            Code = "333333",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = true,
@@ -301,12 +301,12 @@ public class EmailVerificationTokenRepositoryTests
 
         var remainingTokens = await dbContext.EmailVerificationTokens.ToListAsync();
         Assert.Single(remainingTokens);
-        Assert.Equal(validToken.Token, remainingTokens.First().Token);
+        Assert.Equal(validToken.Code, remainingTokens.First().Code);
         
         
         // verify if expired and used token are deleted
-        var expiredCheck = await repository.GetByTokenAsync(expiredToken.Token);
-        var usedCheck = await repository.GetByTokenAsync(usedToken.Token);
+        var expiredCheck = await repository.GetByCodeAsync(expiredToken.Code);
+        var usedCheck = await repository.GetByCodeAsync(usedToken.Code);
         Assert.Null(expiredCheck);
         Assert.Null(usedCheck);
     }
@@ -323,7 +323,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "token_1",
             UserId = userId,
-            Token = "token_abc",
+            Code = "111111",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -333,7 +333,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "token_2",
             UserId = userId,
-            Token = "token_def",
+            Code = "222222",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = true,
@@ -344,7 +344,7 @@ public class EmailVerificationTokenRepositoryTests
         {
             Id = "token_other",
             UserId = "user_456",
-            Token = "token_other",
+            Code = "333333",
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -361,8 +361,8 @@ public class EmailVerificationTokenRepositoryTests
         Assert.Single(remainingTokens);
         Assert.Equal("user_456", remainingTokens.First().UserId);
 
-        var deletedToken1 = await repository.GetByTokenAsync("token_abc");
-        var deletedToken2 = await repository.GetByTokenAsync("token_def");
+        var deletedToken1 = await repository.GetByCodeAsync("111111");
+        var deletedToken2 = await repository.GetByCodeAsync("222222");
         
         Assert.Null(deletedToken1);
         Assert.Null(deletedToken2);

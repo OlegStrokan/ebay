@@ -124,7 +124,7 @@ public sealed class TokenRepositoriesIntegrationTests : IClassFixture<Integratio
         {
             Id = NewId(),
             UserId = userId,
-            Token = Guid.NewGuid().ToString("N"),
+            Code = Guid.NewGuid().ToString("N"),
             ExpiresAt = DateTime.UtcNow.AddHours(12),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -134,7 +134,7 @@ public sealed class TokenRepositoriesIntegrationTests : IClassFixture<Integratio
         {
             Id = NewId(),
             UserId = otherUserId,
-            Token = Guid.NewGuid().ToString("N"),
+            Code = Guid.NewGuid().ToString("N"),
             ExpiresAt = DateTime.UtcNow.AddHours(12),
             CreatedAt = DateTime.UtcNow.AddMinutes(1),
             IsUsed = false
@@ -146,7 +146,7 @@ public sealed class TokenRepositoriesIntegrationTests : IClassFixture<Integratio
         var fetched = await repo.GetByUserIdAsync(userId);
 
         fetched.Should().NotBeNull();
-        fetched!.Token.Should().Be(tokenForTargetUser.Token);
+        fetched!.Code.Should().Be(tokenForTargetUser.Code);
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class TokenRepositoriesIntegrationTests : IClassFixture<Integratio
         {
             Id = NewId(),
             UserId = user1,
-            Token = Guid.NewGuid().ToString("N"),
+            Code = Guid.NewGuid().ToString("N"),
             ExpiresAt = DateTime.UtcNow.AddHours(12),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -172,7 +172,7 @@ public sealed class TokenRepositoriesIntegrationTests : IClassFixture<Integratio
         {
             Id = NewId(),
             UserId = user2,
-            Token = Guid.NewGuid().ToString("N"),
+            Code = Guid.NewGuid().ToString("N"),
             ExpiresAt = DateTime.UtcNow.AddHours(12),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
@@ -183,8 +183,8 @@ public sealed class TokenRepositoriesIntegrationTests : IClassFixture<Integratio
 
         await repo.DeleteByUserIdAsync(user1);
 
-        var deleted = await repo.GetByTokenAsync(user1Token.Token);
-        var remaining = await repo.GetByTokenAsync(user2Token.Token);
+        var deleted = await repo.GetByCodeAsync(user1Token.Code);
+        var remaining = await repo.GetByCodeAsync(user2Token.Code);
 
         deleted.Should().BeNull();
         remaining.Should().NotBeNull();
