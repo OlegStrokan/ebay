@@ -37,9 +37,9 @@ public static class RecurringOrderEndpoints
 
             return response.Success
                 ? Results.Created($"/api/v1/recurring-orders/{response.RecurringOrderId}",
-                    new RecurringOrderActionResponse(true, response.RecurringOrderId, null))
+                    new ApiResponse<RecurringOrderActionResponse>(new RecurringOrderActionResponse(true, response.RecurringOrderId, null)))
                 : Results.UnprocessableEntity(
-                    new RecurringOrderActionResponse(false, response.RecurringOrderId, response.ErrorMessage));
+                    new ApiResponse<RecurringOrderActionResponse>(new RecurringOrderActionResponse(false, response.RecurringOrderId, response.ErrorMessage)));
         });
 
         group.MapGet("/{id}", async (string id, GrpcOrder.RecurringOrderService.RecurringOrderServiceClient client) =>
@@ -47,7 +47,7 @@ public static class RecurringOrderEndpoints
             var response = await client.GetRecurringOrderAsync(
                 new GrpcOrder.GetRecurringOrderRequest { RecurringOrderId = id });
 
-            return Results.Ok(MapRecurringOrderDetails(response.Order));
+            return Results.Ok(new ApiResponse<RecurringOrderDetailsResponse>(MapRecurringOrderDetails(response.Order)));
         });
 
         group.MapGet("/customer/{customerId}", async (string customerId, GrpcOrder.RecurringOrderService.RecurringOrderServiceClient client) =>
@@ -55,7 +55,7 @@ public static class RecurringOrderEndpoints
             var response = await client.GetCustomerRecurringOrdersAsync(
                 new GrpcOrder.GetCustomerRecurringOrdersRequest { CustomerId = customerId });
 
-            return Results.Ok(response.Orders.Select(MapRecurringOrderSummary).ToList());
+            return Results.Ok(new ApiResponse<IReadOnlyList<RecurringOrderSummaryResponse>>(response.Orders.Select(MapRecurringOrderSummary).ToList()));
         });
 
         group.MapPost("/{id}/pause", async (string id, GrpcOrder.RecurringOrderService.RecurringOrderServiceClient client) =>
@@ -63,7 +63,7 @@ public static class RecurringOrderEndpoints
             var response = await client.PauseRecurringOrderAsync(
                 new GrpcOrder.PauseRecurringOrderRequest { RecurringOrderId = id });
 
-            return Results.Ok(new RecurringOrderActionResponse(response.Success, response.RecurringOrderId, response.ErrorMessage));
+            return Results.Ok(new ApiResponse<RecurringOrderActionResponse>(new RecurringOrderActionResponse(response.Success, response.RecurringOrderId, response.ErrorMessage)));
         });
 
         group.MapPost("/{id}/resume", async (string id, GrpcOrder.RecurringOrderService.RecurringOrderServiceClient client) =>
@@ -71,7 +71,7 @@ public static class RecurringOrderEndpoints
             var response = await client.ResumeRecurringOrderAsync(
                 new GrpcOrder.ResumeRecurringOrderRequest { RecurringOrderId = id });
 
-            return Results.Ok(new RecurringOrderActionResponse(response.Success, response.RecurringOrderId, response.ErrorMessage));
+            return Results.Ok(new ApiResponse<RecurringOrderActionResponse>(new RecurringOrderActionResponse(response.Success, response.RecurringOrderId, response.ErrorMessage)));
         });
 
         group.MapPost("/{id}/cancel", async (string id, CancelRecurringOrderRequest request, GrpcOrder.RecurringOrderService.RecurringOrderServiceClient client) =>
@@ -83,7 +83,7 @@ public static class RecurringOrderEndpoints
                     Reason = request.Reason
                 });
 
-            return Results.Ok(new RecurringOrderActionResponse(response.Success, response.RecurringOrderId, response.ErrorMessage));
+            return Results.Ok(new ApiResponse<RecurringOrderActionResponse>(new RecurringOrderActionResponse(response.Success, response.RecurringOrderId, response.ErrorMessage)));
         });
 
         return group;

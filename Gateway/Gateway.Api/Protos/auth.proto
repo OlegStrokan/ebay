@@ -67,6 +67,7 @@ message ValidateTokenResponse {
   bool is_valid = 1;
   string user_id = 2;
   repeated string roles = 3;
+  string message = 4;
 }
 
 message VerifyEmailRequest {

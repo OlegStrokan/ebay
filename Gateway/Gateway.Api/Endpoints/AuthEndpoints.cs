@@ -1,4 +1,5 @@
 using Gateway.Api.Contracts.Auth;
+using Gateway.Api.Contracts.Common;
 
 namespace Gateway.Api.Endpoints;
 
@@ -19,7 +20,7 @@ public static class AuthEndpoints
             });
 
             return Results.Created($"/api/v1/users/{response.UserId}",
-                new RegisterResponse(response.UserId, response.Email, response.FullName, response.Message));
+                new ApiResponse<RegisterResponse>(new RegisterResponse(response.UserId, response.Email, response.FullName, response.Message)));
         });
 
         group.MapPost("/login", async (LoginRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
@@ -30,8 +31,8 @@ public static class AuthEndpoints
                 Password = request.Password
             });
 
-            return Results.Ok(new LoginResponse(
-                response.AccessToken, response.RefreshToken, response.ExpiresIn, response.TokenType));
+            return Results.Ok(new ApiResponse<LoginResponse>(new LoginResponse(
+                response.AccessToken, response.RefreshToken, response.ExpiresIn, response.TokenType)));
         });
 
         group.MapPost("/refresh", async (RefreshTokenRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
@@ -41,7 +42,7 @@ public static class AuthEndpoints
                 RefreshToken = request.RefreshToken
             });
 
-            return Results.Ok(new RefreshTokenResponse(response.AccessToken, response.ExpiresIn));
+            return Results.Ok(new ApiResponse<RefreshTokenResponse>(new RefreshTokenResponse(response.AccessToken, response.ExpiresIn)));
         });
 
         group.MapPost("/revoke", async (RevokeTokenRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
@@ -51,7 +52,7 @@ public static class AuthEndpoints
                 RefreshToken = request.RefreshToken
             });
 
-            return Results.Ok(new MessageResponse(response.Success, response.Message));
+            return Results.Ok(new ApiResponse<MessageResponse>(new MessageResponse(response.Success, response.Message)));
         }).RequireAuthorization();
 
         group.MapPost("/validate", async (ValidateTokenRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
@@ -61,9 +62,9 @@ public static class AuthEndpoints
                 AccessToken = request.AccessToken
             });
 
-            return Results.Ok(new ValidateTokenResponse(
-                response.IsValid, response.UserId, response.Roles.ToList()));
-        }).RequireAuthorization();
+            return Results.Ok(new ApiResponse<ValidateTokenResponse>(new ValidateTokenResponse(
+                response.IsValid, response.UserId, response.Roles.ToList(), response.Message)));
+        }).AllowAnonymous();
         group.MapPost("/verify-email", async (VerifyEmailRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
         {
             var response = await client.VerifyEmailAsync(new Protos.Auth.VerifyEmailRequest
@@ -71,7 +72,7 @@ public static class AuthEndpoints
                 Code = request.Code
             });
 
-            return Results.Ok(new VerifyEmailResponse(response.Success, response.Message, response.UserId));
+            return Results.Ok(new ApiResponse<VerifyEmailResponse>(new VerifyEmailResponse(response.Success, response.Message, response.UserId)));
         });
 
         group.MapPost("/password-reset/request", async (
@@ -87,7 +88,7 @@ public static class AuthEndpoints
                 IpAddress = ipAddress
             });
 
-            return Results.Ok(new MessageResponse(response.Success, response.Message));
+            return Results.Ok(new ApiResponse<MessageResponse>(new MessageResponse(response.Success, response.Message)));
         });
 
         group.MapPost("/password-reset/confirm", async (ResetPasswordRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
@@ -98,7 +99,7 @@ public static class AuthEndpoints
                 NewPassword = request.NewPassword
             });
 
-            return Results.Ok(new MessageResponse(response.Success, response.Message));
+            return Results.Ok(new ApiResponse<MessageResponse>(new MessageResponse(response.Success, response.Message)));
         });
 
         return group;

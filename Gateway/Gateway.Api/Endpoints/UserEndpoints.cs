@@ -1,3 +1,4 @@
+using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Users;
 using GrpcUser = Protos.User;
 
@@ -27,13 +28,13 @@ public static class UserEndpoints
             });
 
             var user = MapUser(response.Data);
-            return Results.Created($"/api/v1/users/{user.Id}", user);
+            return Results.Created($"/api/v1/users/{user.Id}", new ApiResponse<UserResponse>(user));
         });
 
         group.MapGet("/{id}", async (string id, GrpcUser.UserServiceProto.UserServiceProtoClient client) =>
         {
             var response = await client.GetUserByIdAsync(new GrpcUser.GetUserByIdRequest { Id = id });
-            return Results.Ok(MapUser(response.Data));
+            return Results.Ok(new ApiResponse<UserResponse>(MapUser(response.Data)));
         });
 
         group.MapPut("/{id}", async (string id, UpdateUserRequest request, GrpcUser.UserServiceProto.UserServiceProtoClient client) =>
@@ -51,7 +52,7 @@ public static class UserEndpoints
                 CustomerTier = tier
             });
 
-            return Results.Ok(MapUser(response.Data));
+            return Results.Ok(new ApiResponse<UserResponse>(MapUser(response.Data)));
         });
 
         group.MapDelete("/{id}", async (string id, GrpcUser.UserServiceProto.UserServiceProtoClient client) =>
@@ -75,7 +76,7 @@ public static class UserEndpoints
         group.MapPost("/{id}/block", async (string id, GrpcUser.UserServiceProto.UserServiceProtoClient client) =>
         {
             var response = await client.BlockUserAsync(new GrpcUser.BlockUserRequest { Id = id });
-            return Results.Ok(MapUser(response.Data));
+            return Results.Ok(new ApiResponse<UserResponse>(MapUser(response.Data)));
         });
 
         return group;

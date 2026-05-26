@@ -1,3 +1,4 @@
+using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Payments;
 using Gateway.Api.Mappers;
 using GrpcPayment = Protos.Payment;
@@ -17,7 +18,7 @@ public static class PaymentEndpoints
             var response = await client.GetPaymentAsync(new GrpcPayment.GetPaymentRequest { PaymentId = id });
 
             return response.Success
-                ? Results.Ok(MapPaymentDetails(response.Payment))
+                ? Results.Ok(new ApiResponse<PaymentDetailsResponse>(MapPaymentDetails(response.Payment)))
                 : Results.NotFound(response.ErrorMessage);
         });
 
@@ -34,7 +35,7 @@ public static class PaymentEndpoints
                 });
 
             return response.Success
-                ? Results.Ok(MapPaymentDetails(response.Payment))
+                ? Results.Ok(new ApiResponse<PaymentDetailsResponse>(MapPaymentDetails(response.Payment)))
                 : Results.NotFound(response.ErrorMessage);
         });
 

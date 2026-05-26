@@ -1,3 +1,4 @@
+using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Inventory;
 using GrpcInventory = Protos.Inventory;
 
@@ -26,9 +27,9 @@ public static class InventoryEndpoints
             var response = await client.ReserveInventoryAsync(grpcRequest);
 
             return response.Success
-                ? Results.Ok(new ReserveInventoryResponse(true, response.ReservationId, null))
+                ? Results.Ok(new ApiResponse<ReserveInventoryResponse>(new ReserveInventoryResponse(true, response.ReservationId, null)))
                 : Results.UnprocessableEntity(
-                    new ReserveInventoryResponse(false, response.ReservationId, response.ErrorMessage));
+                    new ApiResponse<ReserveInventoryResponse>(new ReserveInventoryResponse(false, response.ReservationId, response.ErrorMessage)));
         });
 
         group.MapPost("/release", async (ReleaseInventoryRequest request, GrpcInventory.InventoryService.InventoryServiceClient client) =>
@@ -37,8 +38,8 @@ public static class InventoryEndpoints
                 new GrpcInventory.ReleaseInventoryRequest { ReservationId = request.ReservationId });
 
             return response.Success
-                ? Results.Ok(new ReleaseInventoryResponse(true, null))
-                : Results.UnprocessableEntity(new ReleaseInventoryResponse(false, response.ErrorMessage));
+                ? Results.Ok(new ApiResponse<ReleaseInventoryResponse>(new ReleaseInventoryResponse(true, null)))
+                : Results.UnprocessableEntity(new ApiResponse<ReleaseInventoryResponse>(new ReleaseInventoryResponse(false, response.ErrorMessage)));
         });
 
         return group;

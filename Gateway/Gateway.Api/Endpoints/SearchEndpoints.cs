@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Search;
 using Grpc.Core;
 using GrpcSearch = Protos.Search;
@@ -30,7 +31,7 @@ public static class SearchEndpoints
                 UserId = userId ?? string.Empty
             });
 
-            return Results.Ok(new SearchResponse(
+            return Results.Ok(new ApiResponse<SearchResponse>(new SearchResponse(
                 response.Items.Select(i => new SearchResultItemResponse(
                     i.ProductId,
                     i.Name,
@@ -43,7 +44,7 @@ public static class SearchEndpoints
                 response.Page,
                 response.Size,
                 response.WasAiSearch,
-                string.IsNullOrEmpty(response.ParsedQueryDebug) ? null : response.ParsedQueryDebug));
+                string.IsNullOrEmpty(response.ParsedQueryDebug) ? null : response.ParsedQueryDebug)));
         });
 
         group.MapGet("/similar/{catalogItemId}", async (
@@ -61,10 +62,10 @@ public static class SearchEndpoints
                 Condition = condition ?? string.Empty
             });
 
-            return Results.Ok(new SimilarItemsResponse(
+            return Results.Ok(new ApiResponse<SimilarItemsResponse>(new SimilarItemsResponse(
                 response.Items.Select(i => new SimilarItemResponse(
                     i.CatalogItemId,
-                    i.Score)).ToList()));
+                    i.Score)).ToList())));
         });
 
         group.MapGet("/frequently-bought-together/{catalogItemId}", async (
@@ -79,10 +80,10 @@ public static class SearchEndpoints
                     Limit = limit ?? 10,
                 });
 
-            return Results.Ok(new FrequentlyBoughtTogetherResponse(
+            return Results.Ok(new ApiResponse<FrequentlyBoughtTogetherResponse>(new FrequentlyBoughtTogetherResponse(
                 response.Items.Select(i => new CoOccurrenceItemResponse(
                     i.CatalogItemId,
-                    i.Score)).ToList()));
+                    i.Score)).ToList())));
         });
 
         group.MapGet("/stream", async (

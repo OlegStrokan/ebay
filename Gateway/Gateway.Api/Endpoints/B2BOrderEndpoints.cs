@@ -25,15 +25,15 @@ public static class B2BOrderEndpoints
 
             return response.Success
                 ? Results.Created($"/api/v1/b2b-orders/{response.B2BOrderId}",
-                    new B2BOrderActionResponse(true, response.B2BOrderId, null))
+                    new ApiResponse<B2BOrderActionResponse>(new B2BOrderActionResponse(true, response.B2BOrderId, null)))
                 : Results.UnprocessableEntity(
-                    new B2BOrderActionResponse(false, response.B2BOrderId, response.ErrorMessage));
+                    new ApiResponse<B2BOrderActionResponse>(new B2BOrderActionResponse(false, response.B2BOrderId, response.ErrorMessage)));
         });
 
         group.MapGet("/{id}", async (string id, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
         {
             var response = await client.GetB2BOrderAsync(new GrpcOrder.GetB2BOrderRequest { B2BOrderId = id });
-            return Results.Ok(MapB2BOrderDetails(response.B2BOrder));
+            return Results.Ok(new ApiResponse<B2BOrderDetailsResponse>(MapB2BOrderDetails(response.B2BOrder)));
         });
 
         group.MapPatch("/{id}/quote", async (string id, UpdateQuoteDraftRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
@@ -55,7 +55,7 @@ public static class B2BOrderEndpoints
 
             var response = await client.UpdateQuoteDraftAsync(grpcRequest);
 
-            return Results.Ok(new B2BOrderActionResponse(response.Success, response.B2BOrderId, response.ErrorMessage));
+            return Results.Ok(new ApiResponse<B2BOrderActionResponse>(new B2BOrderActionResponse(response.Success, response.B2BOrderId, response.ErrorMessage)));
         });
 
         group.MapPost("/{id}/finalize", async (string id, FinalizeQuoteRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
@@ -68,9 +68,9 @@ public static class B2BOrderEndpoints
             });
 
             return response.Success
-                ? Results.Ok(new FinalizeQuoteResponse(true, response.B2BOrderId, response.OrderId, null))
+                ? Results.Ok(new ApiResponse<FinalizeQuoteResponse>(new FinalizeQuoteResponse(true, response.B2BOrderId, response.OrderId, null)))
                 : Results.UnprocessableEntity(
-                    new FinalizeQuoteResponse(false, response.B2BOrderId, response.OrderId, response.ErrorMessage));
+                    new ApiResponse<FinalizeQuoteResponse>(new FinalizeQuoteResponse(false, response.B2BOrderId, response.OrderId, response.ErrorMessage)));
         });
 
         group.MapPost("/{id}/cancel", async (string id, CancelB2BOrderRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
@@ -80,7 +80,7 @@ public static class B2BOrderEndpoints
 
             var response = await client.CancelB2BOrderAsync(grpcRequest);
 
-            return Results.Ok(new B2BOrderActionResponse(response.Success, response.B2BOrderId, response.ErrorMessage));
+            return Results.Ok(new ApiResponse<B2BOrderActionResponse>(new B2BOrderActionResponse(response.Success, response.B2BOrderId, response.ErrorMessage)));
         });
 
         return group;

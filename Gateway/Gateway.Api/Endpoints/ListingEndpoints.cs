@@ -1,3 +1,4 @@
+using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Listings;
 using Gateway.Api.Mappers;
 using GrpcProduct = Protos.Product;
@@ -28,9 +29,9 @@ public static class ListingEndpoints
                     ConditionFilter = condition ?? string.Empty,
                 });
 
-            return Results.Ok(new GetListingsForCatalogItemResponse(
+            return Results.Ok(new ApiResponse<GetListingsForCatalogItemResponse>(new GetListingsForCatalogItemResponse(
                 response.Listings.Select(MapListingDetail).ToList(),
-                response.TotalCount));
+                response.TotalCount)));
         })
         .WithName("GetListingsForCatalogItem");
 

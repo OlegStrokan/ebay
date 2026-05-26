@@ -1,3 +1,4 @@
+using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Products;
 using Gateway.Api.Mappers;
 using GrpcProduct = Protos.Product;
@@ -13,7 +14,7 @@ public static class ProductEndpoints
         group.MapGet("/{id}", async (string id, GrpcProduct.ProductService.ProductServiceClient client) =>
         {
             var response = await client.GetProductAsync(new GrpcProduct.GetProductRequest { ProductId = id });
-            return Results.Ok(MapProductDetail(response.Product));
+            return Results.Ok(new ApiResponse<ProductDetailResponse>(MapProductDetail(response.Product)));
         });
 
         group.MapPost("/batch", async (GetProductsRequest request, GrpcProduct.ProductService.ProductServiceClient client) =>
@@ -23,9 +24,9 @@ public static class ProductEndpoints
 
             var response = await client.GetProductsAsync(grpcRequest);
 
-            return Results.Ok(new GetProductsResponse(
+            return Results.Ok(new ApiResponse<GetProductsResponse>(new GetProductsResponse(
                 response.Products.Select(MapProductDetail).ToList(),
-                response.NotFoundIds.ToList()));
+                response.NotFoundIds.ToList())));
         });
 
         group.MapPost("/prices", async (GetProductPricesRequest request, GrpcProduct.ProductService.ProductServiceClient client) =>
@@ -35,12 +36,12 @@ public static class ProductEndpoints
 
             var response = await client.GetProductPricesAsync(grpcRequest);
 
-            return Results.Ok(new GetProductPricesResponse(
+            return Results.Ok(new ApiResponse<GetProductPricesResponse>(new GetProductPricesResponse(
                 response.Prices.Select(p => new ProductPriceResponse(
                     p.ProductId,
                     DecimalValueMapper.ToDecimal(p.Price),
                     p.Currency)).ToList(),
-                response.NotFoundIds.ToList()));
+                response.NotFoundIds.ToList())));
         });
 
         return group;

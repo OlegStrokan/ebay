@@ -28,15 +28,15 @@ public static class OrderEndpoints
 
             return response.Success
                 ? Results.Created($"/api/v1/orders/{response.OrderId}",
-                    new CreateOrderResponse(true, response.OrderId, null))
+                    new ApiResponse<CreateOrderResponse>(new CreateOrderResponse(true, response.OrderId, null)))
                 : Results.UnprocessableEntity(
-                    new CreateOrderResponse(false, response.OrderId, response.ErrorMessage));
+                    new ApiResponse<CreateOrderResponse>(new CreateOrderResponse(false, response.OrderId, response.ErrorMessage)));
         });
 
         group.MapGet("/{id}", async (string id, GrpcOrder.OrderService.OrderServiceClient client) =>
         {
             var response = await client.GetOrderAsync(new GrpcOrder.GetOrderRequest { OrderId = id });
-            return Results.Ok(MapOrderDetails(response.Order));
+            return Results.Ok(new ApiResponse<OrderDetailsResponse>(MapOrderDetails(response.Order)));
         });
 
         group.MapGet("/", async (int? pageNumber, int? pageSize, GrpcOrder.OrderService.OrderServiceClient client) =>
@@ -47,7 +47,7 @@ public static class OrderEndpoints
                 PageSize = pageSize ?? 20
             });
 
-            return Results.Ok(response.Orders.Select(MapOrderSummary).ToList());
+            return Results.Ok(new ApiResponse<IReadOnlyList<OrderSummaryResponse>>(response.Orders.Select(MapOrderSummary).ToList()));
         });
 
         group.MapGet("/customer/{customerId}", async (string customerId, GrpcOrder.OrderService.OrderServiceClient client) =>
@@ -55,7 +55,7 @@ public static class OrderEndpoints
             var response = await client.GetCustomerOrdersAsync(
                 new GrpcOrder.GetCustomerOrdersRequest { CustomerId = customerId });
 
-            return Results.Ok(response.Orders.Select(MapOrderSummary).ToList());
+            return Results.Ok(new ApiResponse<IReadOnlyList<OrderSummaryResponse>>(response.Orders.Select(MapOrderSummary).ToList()));
         });
 
         group.MapPost("/{id}/return", async (string id, RequestReturnRequest request, GrpcOrder.OrderService.OrderServiceClient client) =>
@@ -71,9 +71,9 @@ public static class OrderEndpoints
             var response = await client.RequestReturnAsync(grpcRequest);
 
             return response.Success
-                ? Results.Ok(new RequestReturnResponse(true, response.ReturnRequestId, null))
+                ? Results.Ok(new ApiResponse<RequestReturnResponse>(new RequestReturnResponse(true, response.ReturnRequestId, null)))
                 : Results.UnprocessableEntity(
-                    new RequestReturnResponse(false, response.ReturnRequestId, response.ErrorMessage));
+                    new ApiResponse<RequestReturnResponse>(new RequestReturnResponse(false, response.ReturnRequestId, response.ErrorMessage)));
         });
 
         return group;
