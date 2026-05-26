@@ -2,6 +2,9 @@
 **/bin/
 **/obj/
 
+# Python
+**/__pycache__/
+
 # User-specific files
 *.user
 *.suo
