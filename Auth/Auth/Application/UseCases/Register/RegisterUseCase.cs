@@ -30,8 +30,8 @@ public class RegisterUseCase(
         {
             Id = idGenerator.GenerateId(),
             UserId = userId,
-            Code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString(),
-            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+            Code = Guid.NewGuid().ToString(),
+            ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow,
             IsUsed = false
         };
@@ -47,6 +47,6 @@ public class RegisterUseCase(
             // Email dispatch is non-critical; Kafka error already logged by EmailGateway
         }
 
-        return new RegisterResponse(userId, command.Email, command.Fullname, verificationCode.Code, SuccessMessage);
+        return new RegisterResponse(userId, command.Email, command.Fullname, SuccessMessage);
     }
 }

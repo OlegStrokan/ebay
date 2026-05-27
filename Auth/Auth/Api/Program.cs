@@ -4,6 +4,7 @@ using Application.UseCases.Login;
 using Application.UseCases.RefreshToken;
 using Application.UseCases.Register;
 using Application.UseCases.RequestPasswordReset;
+using Application.UseCases.ResendVerificationEmail;
 using Application.UseCases.ResetPassword;
 using Application.UseCases.RevokeToken;
 using Application.UseCases.ValidateToken;
@@ -53,6 +54,7 @@ builder.Services.AddScoped<IRequestPasswordResetUseCase, RequestPasswordResetUse
 builder.Services.AddScoped<IRevokeTokenUseCase, RevokeTokenUseCase>();
 builder.Services.AddScoped<IValidateTokenUseCase,  ValidateTokenUseCase>();
 builder.Services.AddScoped<IVerifyEmailUseCase, VerifyEmailUseCase>();
+builder.Services.AddScoped<IResendVerificationEmailUseCase, ResendVerificationEmailUseCase>();
 builder.Services.AddScoped<IResetPasswordUseCase, ResetPasswordUseCase>();
 
 // external systems
