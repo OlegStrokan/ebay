@@ -4,6 +4,7 @@ using Application.UseCases.Register;
 using Application.UseCases.RequestPasswordReset;
 using Application.UseCases.ResetPassword;
 using Application.UseCases.RevokeToken;
+using Application.UseCases.ResendVerificationEmail;
 using Application.UseCases.ValidateToken;
 using Application.UseCases.VerifyEmail;
 using Domain.Common;
@@ -13,6 +14,7 @@ using LoginResponseProto = Protos.Auth.LoginResponse;
 using RefreshTokenResponseProto = Protos.Auth.RefreshTokenResponse;
 using RegisterResponseProto = Protos.Auth.RegisterResponse;
 using RequestPasswordResetResponseProto = Protos.Auth.RequestPasswordResetResponse;
+using ResendVerificationEmailResponseProto = Protos.Auth.ResendVerificationEmailResponse;
 using ResetPasswordResponseProto = Protos.Auth.ResetPasswordResponse;
 using RevokeTokenResponseProto = Protos.Auth.RevokeTokenResponse;
 using ValidateTokenResponseProto = Protos.Auth.ValidateTokenResponse;
@@ -29,6 +31,7 @@ public class AuthGrpcService(
     IResetPasswordUseCase resetPasswordUseCase,
     IValidateTokenUseCase validateTokenUseCase,
     IVerifyEmailUseCase verifyEmailUseCase,
+    IResendVerificationEmailUseCase resendVerificationEmailUseCase,
     IRevokeTokenUseCase revokeTokenUseCase) : AuthService.AuthServiceBase
 {
     public override async Task<RegisterResponseProto> Register(RegisterRequest request, ServerCallContext context)
@@ -169,7 +172,7 @@ public class AuthGrpcService(
         {
             logger.LogInformation("VerifyEmail request received");
 
-            var command = new VerifyEmailCommand(request.Code);
+            var command = new VerifyEmailCommand(request.Token);
             var response = await verifyEmailUseCase.ExecuteAsync(command);
 
             return new VerifyEmailResponseProto
@@ -227,6 +230,29 @@ public class AuthGrpcService(
         {
             logger.LogError(ex, "Error resetting password");
             throw new RpcException(new Status(StatusCode.Internal, "Password reset request failed"));
+        }
+    }
+
+    public override async Task<ResendVerificationEmailResponseProto> ResendVerificationEmail(
+        Protos.Auth.ResendVerificationEmailRequest request, ServerCallContext context)
+    {
+        try
+        {
+            logger.LogInformation("ResendVerificationEmail request received for email: {Email}", request.Email);
+
+            var command = new ResendVerificationEmailCommand(request.Email);
+            var response = await resendVerificationEmailUseCase.ExecuteAsync(command);
+
+            return new ResendVerificationEmailResponseProto
+            {
+                Success = response.Success,
+                Message = response.Message,
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error resending verification email");
+            throw new RpcException(new Status(StatusCode.Internal, "Resend verification email failed"));
         }
     }
 }
