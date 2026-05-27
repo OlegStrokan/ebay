@@ -69,10 +69,20 @@ public static class AuthEndpoints
         {
             var response = await client.VerifyEmailAsync(new Protos.Auth.VerifyEmailRequest
             {
-                Code = request.Code
+                Token = request.Token
             });
 
             return Results.Ok(new ApiResponse<VerifyEmailResponse>(new VerifyEmailResponse(response.Success, response.Message, response.UserId)));
+        });
+
+        group.MapPost("/resend-verification", async (ResendVerificationEmailRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
+        {
+            var response = await client.ResendVerificationEmailAsync(new Protos.Auth.ResendVerificationEmailRequest
+            {
+                Email = request.Email
+            });
+
+            return Results.Ok(new ApiResponse<ResendVerificationEmailResponse>(new ResendVerificationEmailResponse(response.Success, response.Message)));
         });
 
         group.MapPost("/password-reset/request", async (

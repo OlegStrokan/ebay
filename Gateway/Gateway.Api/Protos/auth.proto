@@ -11,6 +11,7 @@ service AuthService {
   rpc RevokeToken (RevokeTokenRequest) returns (RevokeTokenResponse);
   rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc VerifyEmail (VerifyEmailRequest) returns (VerifyEmailResponse);
+  rpc ResendVerificationEmail (ResendVerificationEmailRequest) returns (ResendVerificationEmailResponse);
   rpc RequestPasswordReset (RequestPasswordResetRequest) returns (RequestPasswordResetResponse);
   rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
 }
@@ -71,13 +72,22 @@ message ValidateTokenResponse {
 }
 
 message VerifyEmailRequest {
-  string code = 1;
+  string token = 1;
 }
 
 message VerifyEmailResponse {
   bool success = 1;
   string message = 2;
   string user_id = 3;
+}
+
+message ResendVerificationEmailRequest {
+  string email = 1;
+}
+
+message ResendVerificationEmailResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 message RequestPasswordResetRequest {

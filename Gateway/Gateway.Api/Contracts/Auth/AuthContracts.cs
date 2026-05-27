@@ -15,8 +15,11 @@ public sealed record MessageResponse(bool Success, string Message);
 public sealed record ValidateTokenRequest(string AccessToken);
 public sealed record ValidateTokenResponse(bool IsValid, string UserId, IReadOnlyList<string> Roles, string Message);
 
-public sealed record VerifyEmailRequest(string Code);
+public sealed record VerifyEmailRequest(string Token);
 public sealed record VerifyEmailResponse(bool Success, string Message, string UserId);
+
+public sealed record ResendVerificationEmailRequest(string Email);
+public sealed record ResendVerificationEmailResponse(bool Success, string Message);
 
 public sealed record RequestPasswordResetRequest(string Email);
 public sealed record ResetPasswordRequest(string Token, string NewPassword);
