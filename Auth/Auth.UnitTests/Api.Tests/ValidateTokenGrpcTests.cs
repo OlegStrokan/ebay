@@ -15,7 +15,7 @@ public class ValidateTokenGrpcTests
     {
         var useCase = Substitute.For<IValidateTokenUseCase>();
         useCase.ExecuteAsync(Arg.Any<ValidateTokenCommand>())
-            .Returns(new ValidateTokenUseCaseResponse(true, "userId"));
+            .Returns(new ValidateTokenUseCaseResponse(true, "userId", null));
 
         var service = AuthGrpcServiceTestFactory.Create(validateTokenUseCase: useCase);
 
@@ -34,7 +34,7 @@ public class ValidateTokenGrpcTests
     {
         var useCase = Substitute.For<IValidateTokenUseCase>();
         useCase.ExecuteAsync(Arg.Any<ValidateTokenCommand>())
-            .Returns(new ValidateTokenUseCaseResponse(false, null));
+            .Returns(new ValidateTokenUseCaseResponse(false, null, "Invalid or expired token"));
 
         var service = AuthGrpcServiceTestFactory.Create(validateTokenUseCase: useCase);
 
@@ -42,6 +42,7 @@ public class ValidateTokenGrpcTests
 
         Assert.False(response.IsValid);
         Assert.Equal(string.Empty, response.UserId);
+        Assert.Equal("Invalid or expired token", response.Message);
     }
 
     [Fact]

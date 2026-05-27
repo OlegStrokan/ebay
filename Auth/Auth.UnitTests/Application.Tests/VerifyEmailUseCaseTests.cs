@@ -47,7 +47,7 @@ public class VerifyEmailUseCaseTests
         var emailVerificationRepository = Substitute.For<IEmailVerificationTokenRepository>();
         var userGateway = Substitute.For<IUserGateway>();
         
-        emailVerificationRepository.GetByTokenAsync(Arg.Any<string>()).Returns((EmailVerificationTokenEntity?)null);
+        emailVerificationRepository.GetByCodeAsync(Arg.Any<string>()).Returns((EmailVerificationTokenEntity?)null);
         
         var command = new VerifyEmailCommand("123456");
         
@@ -55,7 +55,7 @@ public class VerifyEmailUseCaseTests
 
         var result = await useCase.ExecuteAsync(command);
 
-        Assert.Equal("Invalid verification code", result.Message);
+        Assert.Equal("Invalid verification token", result.Message);
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         
@@ -85,7 +85,7 @@ public class VerifyEmailUseCaseTests
 
         var result = await useCase.ExecuteAsync(command);
 
-        Assert.Equal("Verification code has already been used", result.Message);
+        Assert.Equal("Verification token has already been used", result.Message);
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         
@@ -115,7 +115,7 @@ public class VerifyEmailUseCaseTests
 
         var result = await useCase.ExecuteAsync(command);
 
-        Assert.Equal("Verification code has expired", result.Message);
+        Assert.Equal("Verification token has expired", result.Message);
         Assert.False(result.Success);
         Assert.Null(result.UserId);
         

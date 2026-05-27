@@ -45,7 +45,7 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         register.Email.Should().Be(email);
 
         var verifyCode = await GetLatestEmailVerificationCodeAsync(register.UserId);
-        await _client.VerifyEmailAsync(new VerifyEmailRequest { Code = verifyCode });
+        await _client.VerifyEmailAsync(new VerifyEmailRequest { Token = verifyCode });
 
         var login = await _client.LoginAsync(new LoginRequest
         {
@@ -72,7 +72,7 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         var (refreshUserId, email, password) = await RegisterUserAsync();
 
         var verifyCode = await GetLatestEmailVerificationCodeAsync(refreshUserId);
-        await _client.VerifyEmailAsync(new VerifyEmailRequest { Code = verifyCode });
+        await _client.VerifyEmailAsync(new VerifyEmailRequest { Token = verifyCode });
 
         var login = await _client.LoginAsync(new LoginRequest
         {
@@ -113,7 +113,7 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         var (userId, email, oldPassword) = await RegisterUserAsync();
 
         var emailVerifyCode = await GetLatestEmailVerificationCodeAsync(userId);
-        await _client.VerifyEmailAsync(new VerifyEmailRequest { Code = emailVerifyCode });
+        await _client.VerifyEmailAsync(new VerifyEmailRequest { Token = emailVerifyCode });
 
         var requestReset = await _client.RequestPasswordResetAsync(new RequestPasswordResetRequest
         {
@@ -162,7 +162,7 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
 
         var first = await _client.VerifyEmailAsync(new VerifyEmailRequest
         {
-            Code = verifyCode
+            Token = verifyCode
         });
 
         first.Success.Should().BeTrue();
@@ -170,11 +170,11 @@ public sealed class AuthGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
 
         var second = await _client.VerifyEmailAsync(new VerifyEmailRequest
         {
-            Code = verifyCode
+            Token = verifyCode
         });
 
         second.Success.Should().BeFalse();
-        second.Message.Should().Be("Verification code has already been used");
+        second.Message.Should().Be("Verification token has already been used");
     }
 
     private async Task<(string UserId, string Email, string Password)> RegisterUserAsync()

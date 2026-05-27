@@ -20,14 +20,14 @@ public class VerifyEmailGrpcTests
         var service = AuthGrpcServiceTestFactory.Create(verifyEmailUseCase: useCase);
 
         var response = await service.VerifyEmail(
-            new VerifyEmailRequest { Code = "verify-token" },
+            new VerifyEmailRequest { Token = "verify-token" },
             Substitute.For<ServerCallContext>());
 
         Assert.True(response.Success);
         Assert.Equal("Email verified successfully", response.Message);
         Assert.Equal("userId", response.UserId);
 
-        await useCase.Received(1).ExecuteAsync(Arg.Is<VerifyEmailCommand>(c => c.Code == "verify-token"));
+        await useCase.Received(1).ExecuteAsync(Arg.Is<VerifyEmailCommand>(c => c.Token == "verify-token"));
     }
 
     [Fact]

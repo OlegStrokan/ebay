@@ -22,7 +22,6 @@ public class RegisterGrpcTests
             "userId",
             "oleh@email.com",
             "Sam Faggotman",
-            "token",
             "Success"
         );
 

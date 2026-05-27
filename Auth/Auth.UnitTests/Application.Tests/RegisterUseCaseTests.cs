@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.UseCases.Register;
+using Domain.Common.Interfaces;
 using Domain.Entities;
 using Domain.Gateways;
 using Domain.Repositories;
@@ -9,6 +10,7 @@ namespace Application.Tests;
 
 public class RegisterUseCaseTests
 {
+    private static bool IsValidGuid(string value) => Guid.TryParse(value, out _);
     [Fact]
     public async Task ShouldRegisterUserAndCreateVerificationToken()
     {
@@ -40,8 +42,6 @@ public class RegisterUseCaseTests
             Assert.Equal(generatedUserId, result.UserId);
             Assert.Equal(command.Email, result.Email);
             Assert.Equal(command.Fullname, result.Fullname);
-            Assert.NotNull(result.VerificationCode);
-            Assert.Matches(@"^\d{6}$", result.VerificationCode);
             Assert.Equal(RegisterUseCase.SuccessMessage, result.Message);
             
             await userGateway.Received(1).CreateUserAsync(command.Email, command.Password, command.Fullname, command.Phone);
@@ -50,11 +50,12 @@ public class RegisterUseCaseTests
                 Arg.Is<EmailVerificationTokenEntity>(t =>
                     t.Id == generatedTokenId &&
                     t.UserId == generatedUserId &&
-                    System.Text.RegularExpressions.Regex.IsMatch(t.Token, @"^\d{6}$") &&
-                    t.ExpiresAt > DateTime.UtcNow &&
+                    IsValidGuid(t.Code) &&
+                    t.ExpiresAt > DateTime.UtcNow.AddHours(23) &&
                     t.IsUsed == false
                 ));
 
-            await emailGateway.Received(1).SendVerificationEmailAsync(command.Email, Arg.Is<string>(c => System.Text.RegularExpressions.Regex.IsMatch(c, @"^\d{6}$")));
+            await emailGateway.Received(1).SendVerificationEmailAsync(command.Email,
+                Arg.Is<string>(c => IsValidGuid(c)));
     }
 }

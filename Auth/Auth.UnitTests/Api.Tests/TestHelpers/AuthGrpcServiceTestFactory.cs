@@ -5,6 +5,7 @@ using Application.UseCases.Register;
 using Application.UseCases.RequestPasswordReset;
 using Application.UseCases.ResetPassword;
 using Application.UseCases.RevokeToken;
+using Application.UseCases.ResendVerificationEmail;
 using Application.UseCases.ValidateToken;
 using Application.UseCases.VerifyEmail;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,7 @@ internal static class AuthGrpcServiceTestFactory
         IResetPasswordUseCase? resetPasswordUseCase = null,
         IValidateTokenUseCase? validateTokenUseCase = null,
         IVerifyEmailUseCase? verifyEmailUseCase = null,
+        IResendVerificationEmailUseCase? resendVerificationEmailUseCase = null,
         IRevokeTokenUseCase? revokeTokenUseCase = null)
     {
         return new AuthGrpcService(
@@ -33,6 +35,7 @@ internal static class AuthGrpcServiceTestFactory
             resetPasswordUseCase ?? Substitute.For<IResetPasswordUseCase>(),
             validateTokenUseCase ?? Substitute.For<IValidateTokenUseCase>(),
             verifyEmailUseCase ?? Substitute.For<IVerifyEmailUseCase>(),
+            resendVerificationEmailUseCase ?? Substitute.For<IResendVerificationEmailUseCase>(),
             revokeTokenUseCase ?? Substitute.For<IRevokeTokenUseCase>());
     }
 }
