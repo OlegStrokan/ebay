@@ -10,9 +10,9 @@ public class ValidateTokenUseCase(IJwtTokenValidator jwtTokenValidator) : IValid
 
         if (!validationResult.IsValid)
         {
-            return Task.FromResult(new ValidateTokenResponse(false, null, "Invalid or expired token"));
+            return Task.FromResult(new ValidateTokenResponse(false, null, [], "Invalid or expired token"));
         }
 
-        return Task.FromResult(new ValidateTokenResponse(true, validationResult.UserId, null));
+        return Task.FromResult(new ValidateTokenResponse(true, validationResult.UserId, validationResult.Roles, null));
     }
 }

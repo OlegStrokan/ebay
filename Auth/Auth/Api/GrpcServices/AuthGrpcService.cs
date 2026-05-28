@@ -152,12 +152,14 @@ public class AuthGrpcService(
             var command = new ValidateTokenCommand(request.AccessToken);
             var response = await validateTokenUseCase.ExecuteAsync(command);
 
-            return new ValidateTokenResponseProto
+            var proto = new ValidateTokenResponseProto
             {
                 IsValid = response.IsValid,
                 UserId = response.UserId ?? string.Empty,
                 Message = response.Message ?? string.Empty,
             };
+            proto.Roles.AddRange(response.Roles);
+            return proto;
         }
         catch (Exception ex)
         {

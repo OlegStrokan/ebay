@@ -69,7 +69,9 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
 	var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-	await db.Database.EnsureCreatedAsync();
+	// TODO: delete it for long running testing
+	await db.Database.EnsureDeletedAsync();  // DROP everything
+	await db.Database.EnsureCreatedAsync();  // Recreate from current models
 }
 
 app.MapGrpcService<AuthGrpcService>();

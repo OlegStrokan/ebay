@@ -112,11 +112,16 @@ public class JwtTokenService : IJwtTokenGenerator, IJwtTokenValidator
             var email = principal.FindFirst(ClaimTypes.Email)?.Value ??
                         principal.FindFirst(JwtRegisteredClaimNames.Email)?.Value;
 
+            var roles = principal.FindAll(ClaimTypes.Role)
+                .Select(c => c.Value)
+                .ToList();
+
             return new TokenValidationResult
             {
                 IsValid = true,
                 UserId = userId,
                 Email = email,
+                Roles = roles,
             };
         }
         catch (SecurityTokenExpiredException)
