@@ -10,7 +10,7 @@ public static class RoleEndpoints
     {
         var group = routes.MapGroup("/api/v1/roles")
             .WithTags("Roles")
-            .RequireAuthorization();
+            .RequireAuthorization("AdminOnly");
 
         group.MapPost("/", async (CreateRoleRequest request, GrpcRole.RoleService.RoleServiceClient client) =>
         {
