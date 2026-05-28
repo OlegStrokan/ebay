@@ -29,8 +29,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
                     System.Text.Encoding.UTF8.GetBytes(jwtSecretKey))
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new { success = false, message = "Unauthorized. A valid access token is required." });
+            }
+        };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin", "SuperAdmin"));
+});
 
 builder.Services.AddGrpcClients(builder.Configuration);
 

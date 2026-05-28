@@ -22,4 +22,4 @@ public sealed record ResendVerificationEmailRequest(string Email);
 public sealed record ResendVerificationEmailResponse(bool Success, string Message);
 
 public sealed record RequestPasswordResetRequest(string Email);
-public sealed record ResetPasswordRequest(string Token, string NewPassword);
+public sealed record ResetPasswordRequest(string NewPassword);

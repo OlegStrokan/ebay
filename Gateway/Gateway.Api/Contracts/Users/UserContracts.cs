@@ -28,3 +28,6 @@ public sealed record UserResponse(
     string CountryCode,
     string CustomerTier,
     bool IsEmailVerified);
+
+public sealed record AssignRoleRequest(string RoleName);
+public sealed record AssignRoleResponse(bool Success);
