@@ -37,8 +37,10 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var writeDb = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.AppDbContext>();
+    await writeDb.Database.EnsureDeletedAsync();
     await writeDb.Database.EnsureCreatedAsync();
     var readDb = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.ReadDbContext>();
+    await readDb.Database.EnsureDeletedAsync();
     await readDb.Database.EnsureCreatedAsync();
 }
 
