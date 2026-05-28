@@ -22,6 +22,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.PaymentDbContext>();
+    await db.Database.EnsureDeletedAsync();
     await db.Database.EnsureCreatedAsync();
 }
 
