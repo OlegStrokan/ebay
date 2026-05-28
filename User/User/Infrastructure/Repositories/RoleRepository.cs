@@ -12,6 +12,11 @@ public class RoleRepository(AppDbContext dbContext) : IRoleRepository
         return await dbContext.Roles.ToListAsync();
     }
 
+    public async Task<RoleEntity?> GetByIdAsync(string id)
+    {
+        return await dbContext.Roles.FirstOrDefaultAsync(r => r.Id == id);
+    }
+
     public async Task<RoleEntity?> GetByNameAsync(string name)
     {
         return await dbContext.Roles.FirstOrDefaultAsync(r => r.Name == name);
@@ -42,6 +47,26 @@ public class RoleRepository(AppDbContext dbContext) : IRoleRepository
             throw new KeyNotFoundException($"User {userId} does not have role '{roleName}'");
 
         dbContext.UserRoles.Remove(userRole);
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task<RoleEntity> CreateAsync(RoleEntity role)
+    {
+        dbContext.Roles.Add(role);
+        await dbContext.SaveChangesAsync();
+        return role;
+    }
+
+    public async Task<RoleEntity> UpdateAsync(RoleEntity role)
+    {
+        dbContext.Roles.Update(role);
+        await dbContext.SaveChangesAsync();
+        return role;
+    }
+
+    public async Task DeleteAsync(RoleEntity role)
+    {
+        dbContext.Roles.Remove(role);
         await dbContext.SaveChangesAsync();
     }
 }

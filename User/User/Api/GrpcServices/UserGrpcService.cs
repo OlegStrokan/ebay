@@ -301,6 +301,10 @@ public class UserGrpcService(
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, ex.Message));
+        }
         catch (InvalidOperationException ex)
         {
             throw new RpcException(new Status(StatusCode.AlreadyExists, ex.Message));

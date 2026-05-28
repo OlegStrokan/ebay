@@ -1,5 +1,6 @@
 using Application.Dtos;
 using Domain.Common.Interfaces;
+using Domain.Entities.Role;
 using Domain.Entities.User;
 using Domain.Repositories;
 using System.Net.Mail;
@@ -8,6 +9,7 @@ namespace Application.UseCases.CreateUser;
 
 public class CreateUserUseCase(
     IUserRepository userRepository,
+    IRoleRepository roleRepository,
     IPasswordHasher passwordHasher) : ICreateUserUseCase
 {
     
@@ -37,6 +39,21 @@ public class CreateUserUseCase(
         };
 
         var user = await userRepository.CreateUser(userEntity);
+
+        // Domain invariant: every user must have at least the "User" role
+        var defaultRole = await roleRepository.GetByNameAsync("User");
+        if (defaultRole != null)
+        {
+            var userRole = new UserRoleEntity
+            {
+                UserId = user.Id,
+                RoleId = defaultRole.Id,
+                AssignedBy = "SYSTEM",
+                AssignedAt = now,
+            };
+            await roleRepository.AssignRoleAsync(userRole);
+            user = await userRepository.GetUserById(user.Id) ?? user;
+        }
 
         return new CreateUserResponse(
             user.Id,

@@ -1,5 +1,6 @@
 using Application.UseCases.CreateUser;
 using Domain.Common.Interfaces;
+using Domain.Entities.Role;
 using Domain.Entities.User;
 using Domain.Repositories;
 using NSubstitute;
@@ -13,6 +14,7 @@ public class CreateUserUseCaseTests
     public async Task ShouldCreateUserAndReturnResponse()
     {
         var userRepository = Substitute.For<IUserRepository>();
+        var roleRepository = Substitute.For<IRoleRepository>();
         var passwordHasher = Substitute.For<IPasswordHasher>();
 
         const string hashedPassword = "$2a$12$hashed";
@@ -49,7 +51,16 @@ public class CreateUserUseCaseTests
             .CreateUser(Arg.Do<UserEntity>(u => createdUser = u))
             .Returns(callInfo => callInfo.Arg<UserEntity>());
 
-        var useCase = new CreateUserUseCase(userRepository, passwordHasher);
+        var defaultRole = new RoleEntity { Id = "role-1", Name = "User", Description = "Default buyer/browser" };
+        roleRepository.GetByNameAsync("User").Returns(defaultRole);
+        userRepository.GetUserById(Arg.Any<string>()).Returns(callInfo =>
+        {
+            var user = createdUser!;
+            user.UserRoles = [new UserRoleEntity { UserId = user.Id, RoleId = defaultRole.Id, AssignedBy = "SYSTEM", AssignedAt = now, Role = defaultRole }];
+            return user;
+        });
+
+        var useCase = new CreateUserUseCase(userRepository, roleRepository, passwordHasher);
 
         var result = await useCase.ExecuteAsync(command);
 
@@ -72,10 +83,12 @@ public class CreateUserUseCaseTests
         Assert.NotNull(result.DeliveryInfos);
         Assert.Empty(result.DeliveryInfos);
         Assert.NotNull(result.Roles);
-        Assert.Empty(result.Roles);
+        Assert.Contains("User", result.Roles);
 
         await userRepository.Received(1).ExistsByEmail(normalizedEmail);
         passwordHasher.Received(1).HashPassword(command.Password);
         await userRepository.Received(1).CreateUser(Arg.Any<UserEntity>());
+        await roleRepository.Received(1).GetByNameAsync("User");
+        await roleRepository.Received(1).AssignRoleAsync(Arg.Any<UserRoleEntity>());
     }
 }
