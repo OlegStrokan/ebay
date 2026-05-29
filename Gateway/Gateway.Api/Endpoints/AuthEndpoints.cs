@@ -65,11 +65,11 @@ public static class AuthEndpoints
             return Results.Ok(new ApiResponse<ValidateTokenResponse>(new ValidateTokenResponse(
                 response.IsValid, response.UserId, response.Roles.ToList(), response.Message)));
         }).AllowAnonymous();
-        group.MapPost("/verify-email", async (VerifyEmailRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
+        group.MapGet("/verify-email", async ([Microsoft.AspNetCore.Mvc.FromQuery] string token, Protos.Auth.AuthService.AuthServiceClient client) =>
         {
             var response = await client.VerifyEmailAsync(new Protos.Auth.VerifyEmailRequest
             {
-                Token = request.Token
+                Token = token
             });
 
             return Results.Ok(new ApiResponse<VerifyEmailResponse>(new VerifyEmailResponse(response.Success, response.Message, response.UserId)));
@@ -101,11 +101,11 @@ public static class AuthEndpoints
             return Results.Ok(new ApiResponse<MessageResponse>(new MessageResponse(response.Success, response.Message)));
         });
 
-        group.MapPost("/password-reset/confirm", async (ResetPasswordRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
+        group.MapPost("/password-reset/confirm", async ([Microsoft.AspNetCore.Mvc.FromQuery] string token, ResetPasswordRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
         {
             var response = await client.ResetPasswordAsync(new Protos.Auth.ResetPasswordRequest
             {
-                Token = request.Token,
+                Token = token,
                 NewPassword = request.NewPassword
             });
 

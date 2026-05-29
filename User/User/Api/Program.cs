@@ -60,10 +60,12 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
 	var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+	await db.Database.EnsureDeletedAsync();
 	await db.Database.EnsureCreatedAsync();
 }
 
 app.MapGrpcService<UserGrpcService>();
+app.MapGrpcService<RoleGrpcService>();
 
 
 

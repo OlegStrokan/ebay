@@ -34,7 +34,7 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
     public async Task SendPasswordResetEmailAsync(string recipientEmail, string resetToken, CancellationToken cancellationToken = default)
     {
         var frontendUrl = configuration["App:FrontendUrl"] ?? "http://localhost:3000";
-        var resetLink = $"{frontendUrl}/reset-password?token={resetToken}";
+        var resetLink = $"{frontendUrl}/password-reset/confirm?token={resetToken}";
         var fromAddress = configuration["Email:FromAddress"] ?? "no-reply@free-ebay.com";
 
         var payload = new PasswordResetRequested(

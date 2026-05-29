@@ -10,6 +10,7 @@ public sealed class InventoryDbInitializer(
     public async Task EnsureCreatedAsync(CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await dbContext.Database.EnsureDeletedAsync(cancellationToken);
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
         logger.LogInformation("Inventory database schema ensured.");
     }

@@ -86,6 +86,22 @@ message DeleteUserRequest {
 }
 message DeleteUserResponse {}
 
+message AssignRoleRequest {
+  string user_id = 1;
+  string role_name = 2;
+  string assigned_by = 3;
+}
+message AssignRoleResponse { bool success = 1; }
+
+message RevokeRoleRequest {
+  string user_id = 1;
+  string role_name = 2;
+}
+message RevokeRoleResponse { bool success = 1; }
+
+message GetUserRolesRequest { string user_id = 1; }
+message GetUserRolesResponse { repeated string roles = 1; }
+
 service UserServiceProto {
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
@@ -96,4 +112,7 @@ service UserServiceProto {
   rpc GetUserByEmail(GetUserByEmailRequest) returns (GetUserByEmailResponse);
   rpc VerifyUserEmail(VerifyUserEmailRequest) returns (VerifyUserEmailResponse);
   rpc UpdateUserPassword(UpdateUserPasswordRequest) returns (UpdateUserPasswordResponse);
+  rpc AssignRole(AssignRoleRequest) returns (AssignRoleResponse);
+  rpc RevokeRole(RevokeRoleRequest) returns (RevokeRoleResponse);
+  rpc GetUserRoles(GetUserRolesRequest) returns (GetUserRolesResponse);
 }

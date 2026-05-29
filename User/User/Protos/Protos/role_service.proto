@@ -24,3 +24,23 @@ message RevokeRoleResponse { bool success = 1; }
 
 message GetUserRolesRequest  { string user_id = 1; }
 message GetUserRolesResponse { repeated RoleProto roles = 1; }
+
+message CreateRoleRequest { string name = 1; }
+message CreateRoleResponse { RoleProto role = 1; }
+
+message GetRoleRequest { string id = 1; }
+message GetRoleResponse { RoleProto role = 1; }
+
+message UpdateRoleRequest { string id = 1; string name = 2; }
+message UpdateRoleResponse { RoleProto role = 1; }
+
+message DeleteRoleRequest { string id = 1; }
+message DeleteRoleResponse {}
+
+service RoleService {
+    rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse);
+    rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse);
+    rpc GetRole(GetRoleRequest) returns (GetRoleResponse);
+    rpc GetAllRoles(GetAllRolesRequest) returns (GetAllRolesResponse);
+    rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse);
+}
