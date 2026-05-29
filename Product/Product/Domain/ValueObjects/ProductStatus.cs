@@ -9,6 +9,8 @@ public sealed class ProductStatus
     public static readonly ProductStatus Inactive = new("Inactive", 2);
     public static readonly ProductStatus OutOfStock = new("OutOfStock", 3);
     public static readonly ProductStatus Deleted = new("Deleted", 4);
+    public static readonly ProductStatus PendingReview = new("PendingReview", 5);
+    public static readonly ProductStatus Rejected = new("Rejected", 6);
 
     public string Name { get; }
     public int Value { get; }
@@ -30,6 +32,8 @@ public sealed class ProductStatus
         Inactive.AllowsTransitionTo(Active, Deleted);
         OutOfStock.AllowsTransitionTo(Active, Deleted);
         Deleted.AllowsTransitionTo();
+        PendingReview.AllowsTransitionTo(Active, Rejected, Deleted);
+        Rejected.AllowsTransitionTo(PendingReview, Deleted);
     }
 
     private void AllowsTransitionTo(params ProductStatus[] targets)
@@ -55,6 +59,8 @@ public sealed class ProductStatus
         2 => Inactive,
         3 => OutOfStock,
         4 => Deleted,
+        5 => PendingReview,
+        6 => Rejected,
         _ => throw new InvalidValueException($"Unknown ProductStatus value: {value}")
     };
 
@@ -65,6 +71,8 @@ public sealed class ProductStatus
         "Inactive" => Inactive,
         "OutOfStock" => OutOfStock,
         "Deleted" => Deleted,
+        "PendingReview" => PendingReview,
+        "Rejected" => Rejected,
         _ => throw new InvalidValueException($"Unknown ProductStatus name: {name}")
     };
 

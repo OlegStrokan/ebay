@@ -20,6 +20,7 @@ public sealed class Product : AggregateRoot<ProductId>
     private int _stockQuantity;
     private DateTime _createdAt;
     private DateTime? _updatedAt;
+    private string? _reviewNotes;
 
     public string Name => _name;
     public string Description => _description;
@@ -30,6 +31,7 @@ public sealed class Product : AggregateRoot<ProductId>
     public int StockQuantity => _stockQuantity;
     public DateTime CreatedAt => _createdAt;
     public DateTime? UpdatedAt => _updatedAt;
+    public string? ReviewNotes => _reviewNotes;
     public IReadOnlyList<ProductAttribute> Attributes => _attributes.AsReadOnly();
     public IReadOnlyList<string> ImageUrls  => _imageUrls.AsReadOnly();
 
@@ -62,7 +64,7 @@ public sealed class Product : AggregateRoot<ProductId>
             _stockQuantity = initialStock,
             _attributes = attributes ?? [],
             _imageUrls = imageUrls ?? [],
-            _status = ProductStatus.Draft,
+            _status = ProductStatus.PendingReview,
             _createdAt = DateTime.UtcNow,
         };
 
@@ -172,6 +174,26 @@ public sealed class Product : AggregateRoot<ProductId>
         _status.ValidateTransitionTo(ProductStatus.Deleted);
         ChangeStatus(ProductStatus.Deleted);
         AddDomainEvent(new ProductDeletedEvent(Id, _updatedAt!.Value));
+    }
+
+    public void Approve()
+    {
+        _status.ValidateTransitionTo(ProductStatus.Active);
+        _status = ProductStatus.Active;
+        _reviewNotes = null;
+        _updatedAt = DateTime.UtcNow;
+        AddDomainEvent(new ProductApprovedEvent(Id, _updatedAt.Value));
+    }
+
+    public void Reject(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("Rejection reason cannot be empty");
+        _status.ValidateTransitionTo(ProductStatus.Rejected);
+        _status = ProductStatus.Rejected;
+        _reviewNotes = reason.Trim();
+        _updatedAt = DateTime.UtcNow;
+        AddDomainEvent(new ProductRejectedEvent(Id, _reviewNotes, _updatedAt.Value));
     }
     
     
