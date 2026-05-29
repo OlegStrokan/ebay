@@ -48,6 +48,28 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
             .Where(c => categoryIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
 
+    public async Task<PagedResult<ProductDetailDto>> GetPendingReviewAsync(int page, int size, CancellationToken ct = default)
+    {
+        var query = dbContext.Products.AsNoTracking()
+            .Where(p => p.Status == ProductStatus.PendingReview)
+            .OrderBy(p => p.CreatedAt);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var products = await query
+            .Skip((page - 1) * size)
+            .Take(size)
+            .ToListAsync(ct);
+
+        var categoryNames = await GetCategoryNamesAsync(
+            products.Select(p => p.CategoryId.Value).Distinct().ToList(), ct);
+
+        var items = products.Select(p =>
+            MapToDetail(p, categoryNames.GetValueOrDefault(p.CategoryId.Value, string.Empty))).ToList();
+
+        return new PagedResult<ProductDetailDto>(items, totalCount, page, size);
+    }
+
     private static ProductDetailDto MapToDetail(Domain.Entities.Product product, string categoryName)
         => new(
             product.Id.Value,
@@ -67,5 +89,6 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
             Guid.Empty,
             null,
             "New",
-            null);
+            null,
+            product.ReviewNotes);
 }

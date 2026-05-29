@@ -18,6 +18,12 @@ service ProductService {
   rpc DeactivateProduct (DeactivateProductRequest) returns (DeactivateProductResponse);
   rpc UpdateProductStock (UpdateProductStockRequest) returns (UpdateProductStockResponse);
 
+  // ─── eBay-style: moderation (admin-only) ────────────────────────────────
+  rpc ApproveProduct (ApproveProductRequest) returns (ApproveProductResponse);
+  rpc RejectProduct (RejectProductRequest) returns (RejectProductResponse);
+  rpc GetPendingProducts (GetPendingProductsRequest) returns (GetPendingProductsResponse);
+  rpc GetProductStatus (GetProductStatusRequest) returns (GetProductStatusResponse);
+
   // ─── Amazon-style: catalog items (canonical product definition) ─────────
   rpc CreateCatalogItem (CreateCatalogItemRequest) returns (CreateCatalogItemResponse);
   rpc UpdateCatalogItem (UpdateCatalogItemRequest) returns (UpdateCatalogItemResponse);
@@ -70,6 +76,7 @@ message ProductDetail {
   repeated string image_urls = 10;
   string seller_id = 11;
   string status = 12;
+  string review_notes = 13;
 }
 
 message ProductAttributeProto { string key = 1; string value = 2; }
@@ -86,7 +93,7 @@ message CreateProductRequest {
   repeated string image_urls = 9;
 }
 
-message CreateProductResponse { string product_id = 1; }
+message CreateProductResponse { string product_id = 1; string status = 2; }
 
 message UpdateProductRequest {
   string product_id = 1;
@@ -241,3 +248,20 @@ message GetListingsForCatalogItemResponse {
   repeated ListingDetail listings = 1;
   int32 total_count = 2;
 }
+
+// ─── Moderation messages ──────────────────────────────────────────────────
+
+message ApproveProductRequest { string product_id = 1; }
+message ApproveProductResponse {}
+
+message RejectProductRequest { string product_id = 1; string reason = 2; }
+message RejectProductResponse {}
+
+message GetPendingProductsRequest { int32 page = 1; int32 size = 2; }
+message GetPendingProductsResponse {
+  repeated ProductDetail products = 1;
+  int32 total_count = 2;
+}
+
+message GetProductStatusRequest { string product_id = 1; string seller_id = 2; }
+message GetProductStatusResponse { string status = 1; string review_notes = 2; }

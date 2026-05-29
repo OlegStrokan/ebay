@@ -34,6 +34,9 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.Property(x => x.UpdatedAt);
 
+        builder.Property(x => x.ReviewNotes)
+            .HasMaxLength(500);
+
         builder.Property(x => x.SellerId)
             .HasConversion(id => id.Value, value => SellerId.From(value))
             .HasColumnName("SellerId")

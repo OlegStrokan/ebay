@@ -31,15 +31,19 @@ gRPC service that owns product, listing, and catalog-item aggregates. Uses Domai
 ## Domain Model
 
 **Product Aggregate Root** with status state machine:
-- Draft → Active | Deleted
+- PendingReview → Active | Rejected | Deleted
+- Rejected → PendingReview | Deleted
 - Active → Inactive | OutOfStock | Deleted
 - Inactive → Active | Deleted
 - OutOfStock → Active | Deleted
 - Deleted → (terminal, no transitions)
 
-**Value Objects**: `ProductId` (Guid), `CategoryId`, `SellerId`, `Money` (decimal + currency), `ProductStatus` (enum with state machine), `ProductAttribute` (key-value)
+Products start as **PendingReview** on creation. Admin must `Approve()` (→Active) or `Reject(reason)` (→Rejected). Rejected products can be resubmitted (→PendingReview).
 
-**Domain Events**: `ProductCreatedEvent`, `ProductUpdatedEvent`, `ProductDeletedEvent`, `ProductStatusChangedEvent`, `ProductStockUpdatedEvent`
+- **Value Objects**: `ProductId` (Guid), `CategoryId`, `SellerId`, `Money` (decimal + currency), `ProductStatus` (enum with state machine), `ProductAttribute` (key-value)
+- **ReviewNotes**: Optional string on Product aggregate, set on Reject(), cleared on Approve()
+
+**Domain Events**: `ProductCreatedEvent`, `ProductUpdatedEvent`, `ProductDeletedEvent`, `ProductStatusChangedEvent`, `ProductStockUpdatedEvent`, `ProductApprovedEvent`, `ProductRejectedEvent`
 
 ## Code Patterns
 
@@ -72,6 +76,12 @@ gRPC service that owns product, listing, and catalog-item aggregates. Uses Domai
 - **Unit**: NUnit + NSubstitute — domain logic, command handlers, aggregate behavior
 - **Integration**: Database tests with actual PostgreSQL
 - Test structure mirrors source: `Domain.Tests/`, `Application.Tests/`, `Api.Tests/`, `Infrastructure.Tests/`
+
+## gRPC RPCs
+
+- Product CRUD: CreateProduct, UpdateProduct, DeleteProduct, GetProduct, GetProducts, GetProductsByCategory
+- Moderation: ApproveProduct, RejectProduct, GetPendingProducts, GetProductStatus
+- Listing & CatalogItem: CRUD operations for seller listings and admin catalog items
 
 ## Key Rules
 
