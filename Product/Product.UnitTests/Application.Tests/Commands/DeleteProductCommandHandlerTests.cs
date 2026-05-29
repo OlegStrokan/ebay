@@ -26,7 +26,7 @@ public class DeleteProductCommandHandlerTests
             SellerId.CreateUnique(), "Name", "Desc",
             CategoryId.CreateUnique(), Money.Create(10m, "USD"), 5, [], []);
         product.ClearDomainEvents();
-        product.Activate();
+        product.Approve();
         product.ClearDomainEvents();
         return product;
     }

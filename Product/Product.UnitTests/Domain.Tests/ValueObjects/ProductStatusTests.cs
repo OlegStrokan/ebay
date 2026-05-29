@@ -44,6 +44,26 @@ public class ProductStatusTests
     public void OutOfStock_CanTransitionTo_Deleted() =>
         Assert.That(ProductStatus.OutOfStock.CanTransitionTo(ProductStatus.Deleted), Is.True);
 
+    [Test]
+    public void PendingReview_CanTransitionTo_Active() =>
+        Assert.That(ProductStatus.PendingReview.CanTransitionTo(ProductStatus.Active), Is.True);
+
+    [Test]
+    public void PendingReview_CanTransitionTo_Rejected() =>
+        Assert.That(ProductStatus.PendingReview.CanTransitionTo(ProductStatus.Rejected), Is.True);
+
+    [Test]
+    public void PendingReview_CanTransitionTo_Deleted() =>
+        Assert.That(ProductStatus.PendingReview.CanTransitionTo(ProductStatus.Deleted), Is.True);
+
+    [Test]
+    public void Rejected_CanTransitionTo_PendingReview() =>
+        Assert.That(ProductStatus.Rejected.CanTransitionTo(ProductStatus.PendingReview), Is.True);
+
+    [Test]
+    public void Rejected_CanTransitionTo_Deleted() =>
+        Assert.That(ProductStatus.Rejected.CanTransitionTo(ProductStatus.Deleted), Is.True);
+
     #endregion
 
     #region Invalid Transitions
@@ -63,6 +83,8 @@ public class ProductStatusTests
         Assert.That(ProductStatus.Deleted.CanTransitionTo(ProductStatus.Active), Is.False);
         Assert.That(ProductStatus.Deleted.CanTransitionTo(ProductStatus.Inactive), Is.False);
         Assert.That(ProductStatus.Deleted.CanTransitionTo(ProductStatus.OutOfStock), Is.False);
+        Assert.That(ProductStatus.Deleted.CanTransitionTo(ProductStatus.PendingReview), Is.False);
+        Assert.That(ProductStatus.Deleted.CanTransitionTo(ProductStatus.Rejected), Is.False);
     }
 
     [Test]
@@ -72,6 +94,22 @@ public class ProductStatusTests
     [Test]
     public void Inactive_CannotTransitionTo_OutOfStock() =>
         Assert.That(ProductStatus.Inactive.CanTransitionTo(ProductStatus.OutOfStock), Is.False);
+
+    [Test]
+    public void PendingReview_CannotTransitionTo_Inactive() =>
+        Assert.That(ProductStatus.PendingReview.CanTransitionTo(ProductStatus.Inactive), Is.False);
+
+    [Test]
+    public void PendingReview_CannotTransitionTo_Draft() =>
+        Assert.That(ProductStatus.PendingReview.CanTransitionTo(ProductStatus.Draft), Is.False);
+
+    [Test]
+    public void Rejected_CannotTransitionTo_Active() =>
+        Assert.That(ProductStatus.Rejected.CanTransitionTo(ProductStatus.Active), Is.False);
+
+    [Test]
+    public void Rejected_CannotTransitionTo_Inactive() =>
+        Assert.That(ProductStatus.Rejected.CanTransitionTo(ProductStatus.Inactive), Is.False);
 
     #endregion
 
@@ -110,6 +148,8 @@ public class ProductStatusTests
     [TestCase(2, "Inactive")]
     [TestCase(3, "OutOfStock")]
     [TestCase(4, "Deleted")]
+    [TestCase(5, "PendingReview")]
+    [TestCase(6, "Rejected")]
     public void FromValue_ShouldReturnCorrectStatus(int value, string expectedName)
     {
         var status = ProductStatus.FromValue(value);
@@ -128,6 +168,8 @@ public class ProductStatusTests
     [TestCase("Inactive")]
     [TestCase("OutOfStock")]
     [TestCase("Deleted")]
+    [TestCase("PendingReview")]
+    [TestCase("Rejected")]
     public void FromName_ShouldReturnCorrectStatus(string name)
     {
         var status = ProductStatus.FromName(name);

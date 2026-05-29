@@ -24,14 +24,14 @@ public class ProductTests
         _imageUrls  = ["https://example.com/img1.jpg", "https://example.com/img2.jpg"];
     }
 
-    private Product CreateDraftProduct(int stock = 10) =>
+    private Product CreateProduct(int stock = 10) =>
         Product.Create(_sellerId, "Test Product", "A great product", _categoryId, _price, stock, _attributes, _imageUrls);
 
     private Product CreateActiveProduct(int stock = 10)
     {
-        var product = CreateDraftProduct(stock);
+        var product = CreateProduct(stock);
         product.ClearDomainEvents();
-        product.Activate();
+        product.Approve();
         product.ClearDomainEvents();
         return product;
     }
@@ -39,17 +39,17 @@ public class ProductTests
     #region Create
 
     [Test]
-    public void Create_ShouldReturnProductWithDraftStatus()
+    public void Create_ShouldReturnProductWithPendingReviewStatus()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Draft));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingReview));
     }
 
     [Test]
     public void Create_ShouldSetAllProperties()
     {
-        var product = CreateDraftProduct(5);
+        var product = CreateProduct(5);
 
         Assert.That(product.Id, Is.Not.Null);
         Assert.That(product.SellerId, Is.EqualTo(_sellerId));
@@ -65,7 +65,7 @@ public class ProductTests
     [Test]
     public void Create_ShouldRaiseProductCreatedEvent()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
 
         Assert.That(product.DomainEvents, Has.Count.EqualTo(1));
         var evt = product.DomainEvents[0] as ProductCreatedEvent;
@@ -100,10 +100,10 @@ public class ProductTests
     [Test]
     public void Create_WithZeroStock_ShouldSucceed()
     {
-        var product = CreateDraftProduct(0);
+        var product = CreateProduct(0);
 
         Assert.That(product.StockQuantity, Is.EqualTo(0));
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Draft));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingReview));
     }
 
     [Test]
@@ -125,7 +125,7 @@ public class ProductTests
     [Test]
     public void Create_ShouldStoreAttributesAndImageUrls()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
 
         Assert.That(product.Attributes, Has.Count.EqualTo(2));
         Assert.That(product.ImageUrls,  Has.Count.EqualTo(2));
@@ -138,7 +138,7 @@ public class ProductTests
     [Test]
     public void Update_ShouldUpdateAllProperties()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
         var newCategoryId = CategoryId.CreateUnique();
         var newPrice = Money.Create(199.99m, "USD");
         product.ClearDomainEvents();
@@ -155,7 +155,7 @@ public class ProductTests
     [Test]
     public void Update_ShouldRaiseProductUpdatedEvent()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
         product.ClearDomainEvents();
 
         product.Update("New Name", "New Desc", _categoryId, _price, [], []);
@@ -170,7 +170,7 @@ public class ProductTests
     [TestCase("   ")]
     public void Update_WithEmptyName_ShouldThrowDomainException(string name)
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
 
         Assert.Throws<DomainException>(() => product.Update(name, "desc", _categoryId, _price, [], []));
     }
@@ -192,7 +192,7 @@ public class ProductTests
     [Test]
     public void UpdateStock_ShouldUpdateQuantity()
     {
-        var product = CreateDraftProduct(10);
+        var product = CreateProduct(10);
         product.ClearDomainEvents();
 
         product.UpdateStock(25);
@@ -204,7 +204,7 @@ public class ProductTests
     [Test]
     public void UpdateStock_ShouldRaiseProductStockUpdatedEvent()
     {
-        var product = CreateDraftProduct(10);
+        var product = CreateProduct(10);
         product.ClearDomainEvents();
 
         product.UpdateStock(20);
@@ -217,7 +217,7 @@ public class ProductTests
     [Test]
     public void UpdateStock_WithNegativeQuantity_ShouldThrowDomainException()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
 
         var ex = Assert.Throws<DomainException>(() => product.UpdateStock(-1));
 
@@ -270,14 +270,14 @@ public class ProductTests
     }
 
     [Test]
-    public void UpdateStock_DraftProduct_SetToZero_ShouldNotChangeStatus()
+    public void UpdateStock_PendingReviewProduct_SetToZero_ShouldNotChangeStatus()
     {
-        var product = CreateDraftProduct(10);
+        var product = CreateProduct(10);
         product.ClearDomainEvents();
 
         product.UpdateStock(0);
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Draft));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingReview));
         Assert.That(product.DomainEvents, Has.Count.EqualTo(1)); // only stock event, no status event
     }
 
@@ -286,9 +286,9 @@ public class ProductTests
     #region Activate
 
     [Test]
-    public void Activate_FromDraft_ShouldChangeStatusToActive()
+    public void Activate_FromPendingReview_ShouldChangeStatusToActive()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
         product.ClearDomainEvents();
 
         product.Activate();
@@ -297,9 +297,9 @@ public class ProductTests
     }
 
     [Test]
-    public void Activate_FromDraft_ShouldRaiseProductStatusChangedEvent()
+    public void Activate_FromPendingReview_ShouldRaiseProductStatusChangedEvent()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
         product.ClearDomainEvents();
 
         product.Activate();
@@ -307,7 +307,7 @@ public class ProductTests
         Assert.That(product.DomainEvents, Has.Count.EqualTo(1));
         var evt = product.DomainEvents[0] as ProductStatusChangedEvent;
         Assert.That(evt, Is.Not.Null);
-        Assert.That(evt!.PreviousStatus, Is.EqualTo("Draft"));
+        Assert.That(evt!.PreviousStatus, Is.EqualTo("PendingReview"));
         Assert.That(evt.NewStatus,       Is.EqualTo("Active"));
     }
 
@@ -367,9 +367,9 @@ public class ProductTests
     }
 
     [Test]
-    public void Deactivate_FromDraft_ShouldThrowInvalidOperationException()
+    public void Deactivate_FromPendingReview_ShouldThrowInvalidOperationException()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
 
         Assert.Throws<DomainException>(() => product.Deactivate());
     }
@@ -436,9 +436,9 @@ public class ProductTests
     }
 
     [Test]
-    public void Delete_FromDraft_ShouldSucceed()
+    public void Delete_FromPendingReview_ShouldSucceed()
     {
-        var product = CreateDraftProduct();
+        var product = CreateProduct();
         product.ClearDomainEvents();
 
         product.Delete();
@@ -564,7 +564,7 @@ public class ProductTests
     [Test]
     public void ClearDomainEvents_ShouldRemoveAllEvents()
     {
-        var product = CreateDraftProduct(); // raises ProductCreatedEvent
+        var product = CreateProduct(); // raises ProductCreatedEvent
 
         product.ClearDomainEvents();
 
@@ -574,12 +574,150 @@ public class ProductTests
     [Test]
     public void Create_ThenActivate_ThenDelete_ShouldAccumulateEvents()
     {
-        var product = CreateDraftProduct(); // +1 = ProductCreatedEvent
+        var product = CreateProduct(); // +1 = ProductCreatedEvent
 
         product.Activate();                // +1 = ProductStatusChangedEvent
         product.Delete();                  // +2 = ProductStatusChangedEvent + ProductDeletedEvent
 
         Assert.That(product.DomainEvents, Has.Count.EqualTo(4));
+    }
+
+    #endregion
+
+    #region Approve
+
+    [Test]
+    public void Approve_FromPendingReview_ShouldChangeStatusToActive()
+    {
+        var product = CreateProduct();
+        product.ClearDomainEvents();
+
+        product.Approve();
+
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+    }
+
+    [Test]
+    public void Approve_ShouldRaiseProductApprovedEvent()
+    {
+        var product = CreateProduct();
+        product.ClearDomainEvents();
+
+        product.Approve();
+
+        var evt = product.DomainEvents.OfType<ProductApprovedEvent>().Single();
+        Assert.That(evt.ProductId.Value, Is.EqualTo(product.Id.Value));
+    }
+
+    [Test]
+    public void Approve_ShouldClearReviewNotes()
+    {
+        var product = CreateProduct();
+        product.ClearDomainEvents();
+
+        product.Approve();
+
+        Assert.That(product.ReviewNotes, Is.Null);
+    }
+
+    [Test]
+    public void Approve_FromActive_ShouldThrowDomainException()
+    {
+        var product = CreateActiveProduct();
+
+        Assert.Throws<DomainException>(() => product.Approve());
+    }
+
+    [Test]
+    public void Approve_ShouldSetUpdatedAt()
+    {
+        var product = CreateProduct();
+
+        product.Approve();
+
+        Assert.That(product.UpdatedAt, Is.Not.Null);
+    }
+
+    #endregion
+
+    #region Reject
+
+    [Test]
+    public void Reject_FromPendingReview_ShouldChangeStatusToRejected()
+    {
+        var product = CreateProduct();
+        product.ClearDomainEvents();
+
+        product.Reject("Bad images");
+
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Rejected));
+    }
+
+    [Test]
+    public void Reject_ShouldSetReviewNotes()
+    {
+        var product = CreateProduct();
+
+        product.Reject("Inappropriate content");
+
+        Assert.That(product.ReviewNotes, Is.EqualTo("Inappropriate content"));
+    }
+
+    [Test]
+    public void Reject_ShouldTrimReasonWhitespace()
+    {
+        var product = CreateProduct();
+
+        product.Reject("  bad images  ");
+
+        Assert.That(product.ReviewNotes, Is.EqualTo("bad images"));
+    }
+
+    [Test]
+    public void Reject_ShouldRaiseProductRejectedEvent()
+    {
+        var product = CreateProduct();
+        product.ClearDomainEvents();
+
+        product.Reject("reason");
+
+        var evt = product.DomainEvents.OfType<ProductRejectedEvent>().Single();
+        Assert.That(evt.ProductId.Value, Is.EqualTo(product.Id.Value));
+        Assert.That(evt.Reason, Is.EqualTo("reason"));
+    }
+
+    [Test]
+    public void Reject_WithEmptyReason_ShouldThrowDomainException()
+    {
+        var product = CreateProduct();
+
+        Assert.Throws<DomainException>(() => product.Reject(""));
+    }
+
+    [Test]
+    public void Reject_WithWhitespaceReason_ShouldThrowDomainException()
+    {
+        var product = CreateProduct();
+
+        Assert.Throws<DomainException>(() => product.Reject("   "));
+    }
+
+    [Test]
+    public void Reject_FromActive_ShouldThrowDomainException()
+    {
+        var product = CreateActiveProduct();
+
+        Assert.Throws<DomainException>(() => product.Reject("reason"));
+    }
+
+    [Test]
+    public void Reject_ShouldSetUpdatedAt()
+    {
+        var product = CreateProduct();
+
+        product.Reject("reason");
+
+        Assert.That(product.UpdatedAt, Is.Not.Null);
     }
 
     #endregion

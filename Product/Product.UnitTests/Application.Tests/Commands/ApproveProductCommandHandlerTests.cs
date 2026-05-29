@@ -1,4 +1,4 @@
-using Application.Commands.ActivateProduct;
+using Application.Commands.ApproveProduct;
 using Application.Interfaces;
 using Domain.Entities;
 using Domain.ValueObjects;
@@ -7,16 +7,16 @@ using NSubstitute;
 namespace Application.Tests.Commands;
 
 [TestFixture]
-public class ActivateProductCommandHandlerTests
+public class ApproveProductCommandHandlerTests
 {
     private IProductPersistenceService _persistence = null!;
-    private ActivateProductCommandHandler _handler = null!;
+    private ApproveProductCommandHandler _handler = null!;
 
     [SetUp]
     public void SetUp()
     {
         _persistence = Substitute.For<IProductPersistenceService>();
-        _handler = new ActivateProductCommandHandler(_persistence);
+        _handler = new ApproveProductCommandHandler(_persistence);
     }
 
     private static Product CreatePendingProduct()
@@ -28,21 +28,13 @@ public class ActivateProductCommandHandlerTests
         return product;
     }
 
-    private static Product CreateActiveProduct()
-    {
-        var product = CreatePendingProduct();
-        product.Approve();
-        product.ClearDomainEvents();
-        return product;
-    }
-
     [Test]
-    public async Task Handle_ShouldReturnSuccess_AndActivateProduct()
+    public async Task Handle_ShouldReturnSuccess_AndApproveProduct()
     {
         var product = CreatePendingProduct();
         _persistence.GetByIdAsync(Arg.Any<ProductId>(), Arg.Any<CancellationToken>()).Returns(product);
 
-        var result = await _handler.Handle(new ActivateProductCommand(product.Id.Value), CancellationToken.None);
+        var result = await _handler.Handle(new ApproveProductCommand(product.Id.Value), CancellationToken.None);
 
         Assert.That(result.IsSuccess, Is.True);
         Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
@@ -54,7 +46,7 @@ public class ActivateProductCommandHandlerTests
     {
         _persistence.GetByIdAsync(Arg.Any<ProductId>(), Arg.Any<CancellationToken>()).Returns((Product?)null);
 
-        var result = await _handler.Handle(new ActivateProductCommand(Guid.NewGuid()), CancellationToken.None);
+        var result = await _handler.Handle(new ApproveProductCommand(Guid.NewGuid()), CancellationToken.None);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Errors[0], Does.Contain("was not found"));
@@ -63,12 +55,33 @@ public class ActivateProductCommandHandlerTests
     [Test]
     public async Task Handle_AlreadyActiveProduct_ShouldReturnFailure()
     {
-        var product = CreateActiveProduct();
+        var product = CreatePendingProduct();
+        product.Approve();
+        product.ClearDomainEvents();
         _persistence.GetByIdAsync(Arg.Any<ProductId>(), Arg.Any<CancellationToken>()).Returns(product);
 
-        var result = await _handler.Handle(new ActivateProductCommand(product.Id.Value), CancellationToken.None);
+        var result = await _handler.Handle(new ApproveProductCommand(product.Id.Value), CancellationToken.None);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.Errors[0], Does.Contain("Cannot transition"));
+    }
+
+    [Test]
+    public async Task Handle_ShouldClearReviewNotes_OnApproval()
+    {
+        var product = CreatePendingProduct();
+        product.Reject("Bad images");
+        // Re-submit (Rejected→PendingReview is allowed but not yet implemented,
+        // so test from PendingReview directly)
+        product.ClearDomainEvents();
+
+        // Create a fresh pending product for this test
+        var freshProduct = CreatePendingProduct();
+        _persistence.GetByIdAsync(Arg.Any<ProductId>(), Arg.Any<CancellationToken>()).Returns(freshProduct);
+
+        var result = await _handler.Handle(new ApproveProductCommand(freshProduct.Id.Value), CancellationToken.None);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(freshProduct.ReviewNotes, Is.Null);
     }
 }

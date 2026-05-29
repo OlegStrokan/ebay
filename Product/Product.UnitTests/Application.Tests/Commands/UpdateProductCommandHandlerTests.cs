@@ -27,7 +27,7 @@ public class UpdateProductCommandHandlerTests
             SellerId.CreateUnique(), "Old Name", "Old Desc",
             CategoryId.CreateUnique(), Money.Create(10m, "USD"), 5, [], []);
         product.ClearDomainEvents();
-        product.Activate();
+        product.Approve();
         product.ClearDomainEvents();
         return product;
     }

@@ -26,7 +26,7 @@ public class AdjustProductStockCommandHandlerTests
             SellerId.CreateUnique(), "Name", "Desc",
             CategoryId.CreateUnique(), Money.Create(50m, "USD"), stock, [], []);
         product.ClearDomainEvents();
-        product.Activate();
+        product.Approve();
         product.ClearDomainEvents();
         return product;
     }
