@@ -18,4 +18,5 @@ public sealed record ProductDetailDto(
     Guid CatalogItemId,
     string? Gtin,
     string Condition,
-    string? SellerNotes);
+    string? SellerNotes,
+    string? ReviewNotes = null);
