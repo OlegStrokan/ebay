@@ -44,6 +44,22 @@ public sealed class ProductGrpcService(
         UpdateProductStockRequest request, ServerCallContext context)
         => productHandler.UpdateProductStock(request, context.CancellationToken);
 
+    public override Task<ApproveProductResponse> ApproveProduct(
+        ApproveProductRequest request, ServerCallContext context)
+        => productHandler.ApproveProduct(request, context.CancellationToken);
+
+    public override Task<RejectProductResponse> RejectProduct(
+        RejectProductRequest request, ServerCallContext context)
+        => productHandler.RejectProduct(request, context.CancellationToken);
+
+    public override Task<GetPendingProductsResponse> GetPendingProducts(
+        GetPendingProductsRequest request, ServerCallContext context)
+        => productHandler.GetPendingProducts(request, context.CancellationToken);
+
+    public override Task<GetProductStatusResponse> GetProductStatus(
+        GetProductStatusRequest request, ServerCallContext context)
+        => productHandler.GetProductStatus(request, context.CancellationToken);
+
     public override Task<GetListingPricesResponse> GetListingPrices(
         GetListingPricesRequest request, ServerCallContext context)
         => listingHandler.GetListingPrices(request, context.CancellationToken);

@@ -1,15 +1,19 @@
 using Api.Mappers;
 using Application.Commands.ActivateProduct;
 using Application.Commands.AdjustProductStock;
+using Application.Commands.ApproveProduct;
 using Application.Commands.CreateProduct;
 using Application.Commands.DeactivateProduct;
 using Application.Commands.DeleteProduct;
+using Application.Commands.RejectProduct;
 using Application.Commands.UpdateProduct;
 using Application.Commands.UpdateProductStock;
 using Application.DTOs;
+using Application.Queries.GetPendingProducts;
 using Application.Queries.GetProduct;
 using Application.Queries.GetProductPrices;
 using Application.Queries.GetProducts;
+using Application.Queries.GetProductStatus;
 using Grpc.Core;
 using MediatR;
 using Protos.Product;
@@ -87,9 +91,73 @@ public sealed class ProductGrpcHandler(IMediator mediator, ILogger<ProductGrpcHa
 
             if (!result.IsSuccess)
                 throw new RpcException(new Status(StatusCode.InvalidArgument, result.Errors[0]));
-            return new CreateProductResponse { ProductId = result.Value!.ToString() };
+            return new CreateProductResponse { ProductId = result.Value!.ToString(), Status = "PendingReview" };
         }
         catch (Exception ex) when (ex is not RpcException) { HandleException(ex, nameof(CreateProduct)); throw; }
+    }
+
+    public async Task<ApproveProductResponse> ApproveProduct(
+        ApproveProductRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await mediator.Send(
+                new ApproveProductCommand(Guid.Parse(request.ProductId)), ct);
+            if (!result.IsSuccess)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, result.Errors[0]));
+            return new ApproveProductResponse();
+        }
+        catch (Exception ex) when (ex is not RpcException) { HandleException(ex, nameof(ApproveProduct)); throw; }
+    }
+
+    public async Task<RejectProductResponse> RejectProduct(
+        RejectProductRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await mediator.Send(
+                new RejectProductCommand(Guid.Parse(request.ProductId), request.Reason), ct);
+            if (!result.IsSuccess)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, result.Errors[0]));
+            return new RejectProductResponse();
+        }
+        catch (Exception ex) when (ex is not RpcException) { HandleException(ex, nameof(RejectProduct)); throw; }
+    }
+
+    public async Task<GetPendingProductsResponse> GetPendingProducts(
+        GetPendingProductsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await mediator.Send(
+                new GetPendingProductsQuery(request.Page, request.Size), ct);
+            if (!result.IsSuccess)
+                throw new RpcException(new Status(StatusCode.Internal, result.Errors[0]));
+
+            var response = new GetPendingProductsResponse { TotalCount = result.Value!.TotalCount };
+            response.Products.AddRange(result.Value!.Items.Select(MapToProductDetail));
+            return response;
+        }
+        catch (Exception ex) when (ex is not RpcException) { HandleException(ex, nameof(GetPendingProducts)); throw; }
+    }
+
+    public async Task<GetProductStatusResponse> GetProductStatus(
+        GetProductStatusRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await mediator.Send(
+                new GetProductStatusQuery(Guid.Parse(request.ProductId), Guid.Parse(request.SellerId)), ct);
+            if (!result.IsSuccess)
+                throw new RpcException(new Status(StatusCode.InvalidArgument, result.Errors[0]));
+
+            return new GetProductStatusResponse
+            {
+                Status = result.Value!.Status,
+                ReviewNotes = result.Value!.ReviewNotes ?? string.Empty
+            };
+        }
+        catch (Exception ex) when (ex is not RpcException) { HandleException(ex, nameof(GetProductStatus)); throw; }
     }
 
     public async Task<UpdateProductResponse> UpdateProduct(
@@ -190,7 +258,8 @@ public sealed class ProductGrpcHandler(IMediator mediator, ILogger<ProductGrpcHa
             Currency = dto.Currency,
             Stock = dto.StockQuantity,
             SellerId = dto.SellerId.ToString(),
-            Status = dto.Status
+            Status = dto.Status,
+            ReviewNotes = dto.ReviewNotes ?? string.Empty
         };
         detail.Attributes.AddRange(
             dto.Attributes.Select(a => new ProductAttributeProto { Key = a.Key, Value = a.Value }));
