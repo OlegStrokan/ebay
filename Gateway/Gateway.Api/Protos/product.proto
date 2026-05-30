@@ -10,7 +10,20 @@ service ProductService {
   rpc GetProductPrices (GetProductPricesRequest) returns (GetProductPricesResponse);
   rpc GetProducts(GetProductsRequest) returns(GetProductsResponse);
   rpc GetProduct(GetProductRequest) returns(GetProductResponse);
+  rpc CreateProduct (CreateProductRequest) returns (CreateProductResponse);
+  rpc GetProductStatus (GetProductStatusRequest) returns (GetProductStatusResponse);
   rpc GetListingsForCatalogItem (GetListingsForCatalogItemRequest) returns (GetListingsForCatalogItemResponse);
+  rpc CreateListing (CreateListingRequest) returns (CreateListingResponse);
+  rpc UpdateCatalogItemAndListing (UpdateCatalogItemAndListingRequest) returns (UpdateCatalogItemAndListingResponse);
+  rpc ActivateListing (ActivateListingRequest) returns (ActivateListingResponse);
+  rpc DeactivateListing (DeactivateListingRequest) returns (DeactivateListingResponse);
+  rpc DeleteListing (DeleteListingRequest) returns (DeleteListingResponse);
+  rpc UpdateListingStock (UpdateListingStockRequest) returns (UpdateListingStockResponse);
+  rpc ChangeListingPrice (ChangeListingPriceRequest) returns (ChangeListingPriceResponse);
+  rpc GetSellerListings (GetSellerListingsRequest) returns (GetSellerListingsResponse);
+  rpc GetListing (GetListingRequest) returns (GetListingResponse);
+  rpc GetListings (GetListingsRequest) returns (GetListingsResponse);
+  rpc GetListingPrices (GetListingPricesRequest) returns (GetListingPricesResponse);
 }
 
 message GetProductPricesRequest {
@@ -56,12 +69,36 @@ message ProductDetail {
   int32  stock        = 8;
   repeated ProductAttributeProto attributes = 9;
   repeated string image_urls = 10;
+  string seller_id = 11;
+  string status = 12;
+  string review_notes = 13;
 }
 
 message ProductAttributeProto {
   string key = 1;
   string value = 2;
 }
+
+// CreateProduct messages
+
+message CreateProductRequest {
+  string seller_id = 1;
+  string name = 2;
+  string description = 3;
+  string category_id = 4;
+  common.DecimalValue price = 5;
+  string currency = 6;
+  int32 initial_stock = 7;
+  repeated ProductAttributeProto attributes = 8;
+  repeated string image_urls = 9;
+}
+
+message CreateProductResponse { string product_id = 1; string status = 2; }
+
+// GetProductStatus messages
+
+message GetProductStatusRequest { string product_id = 1; string seller_id = 2; }
+message GetProductStatusResponse { string status = 1; string review_notes = 2; }
 
 // Listing messages for GetListingsForCatalogItem
 
@@ -95,4 +132,63 @@ message ListingDetail {
   string condition = 14;
   string gtin = 15;
   string seller_notes = 16;
+}
+
+// Listing write messages
+
+message CreateListingRequest {
+  string catalog_item_id = 1;
+  string seller_id = 2;
+  common.DecimalValue price = 3;
+  string currency = 4;
+  int32 initial_stock = 5;
+  string condition = 6;
+  string seller_notes = 7;
+}
+message CreateListingResponse { string listing_id = 1; }
+
+message UpdateCatalogItemAndListingRequest {
+  string listing_id = 1;
+  string name = 2;
+  string description = 3;
+  string category_id = 4;
+  common.DecimalValue price = 5;
+  string currency = 6;
+  repeated ProductAttributeProto attributes = 7;
+  repeated string image_urls = 8;
+  string gtin = 9;
+  string condition = 10;
+  string seller_notes = 11;
+}
+message UpdateCatalogItemAndListingResponse {}
+
+message ActivateListingRequest { string listing_id = 1; }
+message ActivateListingResponse {}
+message DeactivateListingRequest { string listing_id = 1; }
+message DeactivateListingResponse {}
+message DeleteListingRequest { string listing_id = 1; }
+message DeleteListingResponse {}
+message UpdateListingStockRequest { string listing_id = 1; int32 new_quantity = 2; }
+message UpdateListingStockResponse {}
+message ChangeListingPriceRequest { string listing_id = 1; common.DecimalValue price = 2; string currency = 3; }
+message ChangeListingPriceResponse {}
+
+// Listing query messages
+
+message GetSellerListingsRequest { string seller_id = 1; int32 page = 2; int32 size = 3; }
+message GetSellerListingsResponse { repeated ListingDetail listings = 1; int32 total_count = 2; }
+
+message GetListingRequest { string listing_id = 1; }
+message GetListingResponse { ListingDetail listing = 1; }
+
+message GetListingsRequest { repeated string listing_ids = 1; }
+message GetListingsResponse { repeated ListingDetail listings = 1; repeated string not_found_ids = 2; }
+
+message GetListingPricesRequest { repeated string listing_ids = 1; }
+message GetListingPricesResponse { repeated ListingPrice prices = 1; }
+
+message ListingPrice {
+  string listing_id = 1;
+  common.DecimalValue price = 2;
+  string currency = 3;
 }

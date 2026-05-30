@@ -13,7 +13,10 @@ public sealed record ProductDetailResponse(
     string Currency,
     int Stock,
     IReadOnlyList<ProductAttributeResponse> Attributes,
-    IReadOnlyList<string> ImageUrls);
+    IReadOnlyList<string> ImageUrls,
+    string? SellerId = null,
+    string? Status = null,
+    string? ReviewNotes = null);
 
 public sealed record ProductAttributeResponse(string Key, string Value);
 
@@ -26,3 +29,21 @@ public sealed record GetProductsResponse(
 public sealed record GetProductPricesResponse(
     IReadOnlyList<ProductPriceResponse> Prices,
     IReadOnlyList<string> NotFoundIds);
+
+public sealed record CreateProductRequest(
+    string SellerId,
+    string Name,
+    string Description,
+    string CategoryId,
+    decimal Price,
+    string Currency,
+    int InitialStock,
+    List<ProductAttributeRequest> Attributes,
+    List<string> ImageUrls);
+
+public sealed record ProductAttributeRequest(string Key, string Value);
+
+public sealed record CreateProductResponse(string ProductId, string Status);
+
+public sealed record GetProductStatusRequest(string ProductId, string SellerId);
+public sealed record ProductStatusResponse(string Status, string? ReviewNotes);
