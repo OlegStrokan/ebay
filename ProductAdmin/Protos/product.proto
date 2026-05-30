@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+import "common.proto";
+
+option csharp_namespace = "Protos.Product";
+
+package product;
+
+service ProductService {
+  // Moderation
+  rpc ApproveProduct (ApproveProductRequest) returns (ApproveProductResponse);
+  rpc RejectProduct (RejectProductRequest) returns (RejectProductResponse);
+  rpc GetPendingProducts (GetPendingProductsRequest) returns (GetPendingProductsResponse);
+
+  // Admin product management
+  rpc UpdateProduct (UpdateProductRequest) returns (UpdateProductResponse);
+  rpc DeleteProduct (DeleteProductRequest) returns (DeleteProductResponse);
+  rpc ActivateProduct (ActivateProductRequest) returns (ActivateProductResponse);
+  rpc DeactivateProduct (DeactivateProductRequest) returns (DeactivateProductResponse);
+  rpc UpdateProductStock (UpdateProductStockRequest) returns (UpdateProductStockResponse);
+
+  // CatalogItem management
+  rpc CreateCatalogItem (CreateCatalogItemRequest) returns (CreateCatalogItemResponse);
+  rpc UpdateCatalogItem (UpdateCatalogItemRequest) returns (UpdateCatalogItemResponse);
+  rpc CreateCatalogItemWithListing (CreateCatalogItemWithListingRequest) returns (CreateCatalogItemWithListingResponse);
+}
+
+// Moderation messages
+
+message ApproveProductRequest { string product_id = 1; }
+message ApproveProductResponse {}
+
+message RejectProductRequest { string product_id = 1; string reason = 2; }
+message RejectProductResponse {}
+
+message GetPendingProductsRequest { int32 page = 1; int32 size = 2; }
+message GetPendingProductsResponse {
+  repeated ProductDetail products = 1;
+  int32 total_count = 2;
+}
+
+message ProductDetail {
+  string product_id = 1;
+  string name = 2;
+  string description = 3;
+  string category_id = 4;
+  string category_name = 5;
+  common.DecimalValue price = 6;
+  string currency = 7;
+  int32 stock = 8;
+  repeated ProductAttributeProto attributes = 9;
+  repeated string image_urls = 10;
+  string seller_id = 11;
+  string status = 12;
+  string review_notes = 13;
+}
+
+message ProductAttributeProto { string key = 1; string value = 2; }
+
+// Admin product management messages
+
+message UpdateProductRequest {
+  string product_id = 1;
+  string name = 2;
+  string description = 3;
+  string category_id = 4;
+  common.DecimalValue price = 5;
+  string currency = 6;
+  repeated ProductAttributeProto attributes = 7;
+  repeated string image_urls = 8;
+}
+message UpdateProductResponse {}
+
+message DeleteProductRequest { string product_id = 1; }
+message DeleteProductResponse {}
+
+message ActivateProductRequest { string product_id = 1; }
+message ActivateProductResponse {}
+
+message DeactivateProductRequest { string product_id = 1; }
+message DeactivateProductResponse {}
+
+message UpdateProductStockRequest { string product_id = 1; int32 new_quantity = 2; }
+message UpdateProductStockResponse {}
+
+// CatalogItem messages
+
+message CreateCatalogItemRequest {
+  string name = 1;
+  string description = 2;
+  string category_id = 3;
+  string gtin = 4;
+  repeated ListingAttributeProto attributes = 5;
+  repeated string image_urls = 6;
+}
+message CreateCatalogItemResponse { string catalog_item_id = 1; }
+
+message UpdateCatalogItemRequest {
+  string catalog_item_id = 1;
+  string name = 2;
+  string description = 3;
+  string category_id = 4;
+  string gtin = 5;
+  repeated ListingAttributeProto attributes = 6;
+  repeated string image_urls = 7;
+}
+message UpdateCatalogItemResponse {}
+
+message CreateCatalogItemWithListingRequest {
+  string seller_id = 1;
+  string name = 2;
+  string description = 3;
+  string category_id = 4;
+  common.DecimalValue price = 5;
+  string currency = 6;
+  int32 initial_stock = 7;
+  repeated ListingAttributeProto attributes = 8;
+  repeated string image_urls = 9;
+  string gtin = 10;
+  string condition = 11;
+  string seller_notes = 12;
+}
+message CreateCatalogItemWithListingResponse { string listing_id = 1; }
+
+message ListingAttributeProto { string key = 1; string value = 2; }
