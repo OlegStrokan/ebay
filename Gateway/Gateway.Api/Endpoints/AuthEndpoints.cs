@@ -42,7 +42,7 @@ public static class AuthEndpoints
                 RefreshToken = request.RefreshToken
             });
 
-            return Results.Ok(new ApiResponse<RefreshTokenResponse>(new RefreshTokenResponse(response.AccessToken, response.ExpiresIn)));
+            return Results.Ok(new ApiResponse<RefreshTokenResponse>(new RefreshTokenResponse(response.AccessToken, response.ExpiresIn, response.RefreshToken)));
         });
 
         group.MapPost("/revoke", async (RevokeTokenRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>

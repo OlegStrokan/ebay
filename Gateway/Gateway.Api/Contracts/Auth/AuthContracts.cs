@@ -7,7 +7,7 @@ public sealed record LoginRequest(string Email, string Password);
 public sealed record LoginResponse(string AccessToken, string RefreshToken, int ExpiresIn, string TokenType);
 
 public sealed record RefreshTokenRequest(string RefreshToken);
-public sealed record RefreshTokenResponse(string AccessToken, int ExpiresIn);
+public sealed record RefreshTokenResponse(string AccessToken, int ExpiresIn, string RefreshToken);
 
 public sealed record RevokeTokenRequest(string RefreshToken);
 public sealed record MessageResponse(bool Success, string Message);
