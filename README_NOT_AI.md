@@ -23,7 +23,10 @@ saga based transaction with sprinkle of outbox transactions with stop/resume sag
 kinda complex. use stripe api, handle dual path finalization: sync (stripe return response), async (webhook push + reconciliation pull for pending/require-shit payments). something like 'effectively-once' semantic: at-least-once delivery + idempotency + db constraints + outbox + reconciliation
 
 ### product service: 
-internal kafka cqrs service. used by order (kafka) + REST APIcko for product-guy ( rest api currently not implemented because it's boring)
+internal kafka cqrs service. used by order (kafka)
+
+### product-admin service:
+REST APIcko for product-guy
 
 ### inventory service:
 simple. saga participant. serializable reservation. nothing cool about this service. junior level shit
