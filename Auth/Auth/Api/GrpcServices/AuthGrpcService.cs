@@ -109,6 +109,7 @@ public class AuthGrpcService(
             {
                 AccessToken = response.AccessToken,
                 ExpiresIn = response.ExpiresIn,
+                RefreshToken = response.RefreshToken,
             };
         }
         catch (UnauthorizedAccessException ex)
