@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Gateway.Api.Endpoints;
 using Gateway.Api.Extensions;
 using Gateway.Api.Middleware;
@@ -46,6 +47,37 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("Admin", "SuperAdmin"));
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    // 5 attempts per minute per IP — login and password-reset
+    options.AddPolicy("auth-strict", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 4,
+                PermitLimit = 5,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
+    // 30 requests per 10 seconds per IP — search
+    options.AddPolicy("search", httpContext =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromSeconds(10),
+                SegmentsPerWindow = 2,
+                PermitLimit = 30,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
+
 builder.Services.AddGrpcClients(builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
@@ -73,6 +105,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

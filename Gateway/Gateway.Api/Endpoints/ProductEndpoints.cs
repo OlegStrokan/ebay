@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Products;
 using Gateway.Api.Mappers;
@@ -44,8 +45,12 @@ public static class ProductEndpoints
                 response.NotFoundIds.ToList())));
         });
 
-        group.MapPost("/", async (CreateProductRequest request, GrpcProduct.ProductService.ProductServiceClient client) =>
+        group.MapPost("/", async (CreateProductRequest request, ClaimsPrincipal user, GrpcProduct.ProductService.ProductServiceClient client) =>
         {
+            var tokenSellerId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(tokenSellerId) || tokenSellerId != request.SellerId)
+                return Results.Forbid();
+
             var grpcRequest = new GrpcProduct.CreateProductRequest
             {
                 SellerId = request.SellerId,
@@ -63,7 +68,7 @@ public static class ProductEndpoints
             var response = await client.CreateProductAsync(grpcRequest);
             return Results.Created($"/api/v1/products/{response.ProductId}",
                 new ApiResponse<CreateProductResponse>(new CreateProductResponse(response.ProductId, response.Status)));
-        });
+        }).RequireAuthorization();
 
         group.MapPost("/{id}/status", async (string id, GetProductStatusRequest request, GrpcProduct.ProductService.ProductServiceClient client) =>
         {
