@@ -31,6 +31,7 @@ public class UserGatewayDto
     public bool IsEmailVerified { get; set; }
     public UserStatus Status { get; set; }
     public IReadOnlyList<string> Roles { get; set; } = [];
+    public string? CompanyId { get; set; }
 }
 
 public enum UserStatus
