@@ -33,7 +33,7 @@ public static class AuthEndpoints
 
             return Results.Ok(new ApiResponse<LoginResponse>(new LoginResponse(
                 response.AccessToken, response.RefreshToken, response.ExpiresIn, response.TokenType)));
-        });
+        }).RequireRateLimiting("auth-strict");
 
         group.MapPost("/refresh", async (RefreshTokenRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
         {
@@ -99,7 +99,7 @@ public static class AuthEndpoints
             });
 
             return Results.Ok(new ApiResponse<MessageResponse>(new MessageResponse(response.Success, response.Message)));
-        });
+        }).RequireRateLimiting("auth-strict");
 
         group.MapPost("/password-reset/confirm", async ([Microsoft.AspNetCore.Mvc.FromQuery] string token, ResetPasswordRequest request, Protos.Auth.AuthService.AuthServiceClient client) =>
         {

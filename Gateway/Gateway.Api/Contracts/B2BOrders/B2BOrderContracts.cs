@@ -12,8 +12,7 @@ public sealed record B2BOrderActionResponse(bool Success, string B2BOrderId, str
 
 public sealed record UpdateQuoteDraftRequest(
     IReadOnlyList<QuoteItemChangeDto> Changes,
-    string Comment,
-    string CommentAuthor);
+    string Comment);
 
 public sealed record QuoteItemChangeDto(
     string ChangeType,
@@ -31,6 +30,7 @@ public sealed record B2BOrderDetailsResponse(
     string Id,
     string CustomerId,
     string CompanyName,
+    string? CompanyId,
     string Status,
     decimal TotalPrice,
     string Currency,

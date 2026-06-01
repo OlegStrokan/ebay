@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Gateway.Api.Contracts.B2BOrders;
 using Gateway.Api.Contracts.Common;
 using Gateway.Api.Mappers;
@@ -13,15 +14,21 @@ public static class B2BOrderEndpoints
             .WithTags("B2B Orders")
             .RequireAuthorization();
 
-        group.MapPost("/", async (StartB2BOrderRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
+        group.MapPost("/", async (StartB2BOrderRequest request, ClaimsPrincipal user, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
         {
-            var response = await client.StartB2BOrderAsync(new GrpcOrder.StartB2BOrderRequest
+            var companyId = user.FindFirstValue("company_id");
+
+            var grpcRequest = new GrpcOrder.StartB2BOrderRequest
             {
                 CustomerId = request.CustomerId,
                 CompanyName = request.CompanyName,
                 DeliveryAddress = OrderEndpoints.MapAddressToProto(request.DeliveryAddress),
                 IdempotencyKey = request.IdempotencyKey
-            });
+            };
+            if (!string.IsNullOrEmpty(companyId))
+                grpcRequest.CompanyId = companyId;
+
+            var response = await client.StartB2BOrderAsync(grpcRequest);
 
             return response.Success
                 ? Results.Created($"/api/v1/b2b-orders/{response.B2BOrderId}",
@@ -36,13 +43,24 @@ public static class B2BOrderEndpoints
             return Results.Ok(new ApiResponse<B2BOrderDetailsResponse>(MapB2BOrderDetails(response.B2BOrder)));
         });
 
-        group.MapPatch("/{id}/quote", async (string id, UpdateQuoteDraftRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
+        group.MapPatch("/{id}/quote", async (string id, UpdateQuoteDraftRequest request, ClaimsPrincipal user, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
         {
+            var commentAuthor = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(commentAuthor))
+                return Results.Unauthorized();
+
+            var orderResponse = await client.GetB2BOrderAsync(new GrpcOrder.GetB2BOrderRequest { B2BOrderId = id });
+            if (!orderResponse.Success)
+                return Results.NotFound();
+
+            if (!IsAuthorizedForOrder(orderResponse.B2BOrder, user))
+                return Results.Forbid();
+
             var grpcRequest = new GrpcOrder.UpdateQuoteDraftRequest
             {
                 B2BOrderId = id,
                 Comment = request.Comment,
-                CommentAuthor = request.CommentAuthor
+                CommentAuthor = commentAuthor
             };
             grpcRequest.Changes.AddRange(request.Changes.Select(c => new GrpcOrder.QuoteItemChange
             {
@@ -58,8 +76,15 @@ public static class B2BOrderEndpoints
             return Results.Ok(new ApiResponse<B2BOrderActionResponse>(new B2BOrderActionResponse(response.Success, response.B2BOrderId, response.ErrorMessage)));
         });
 
-        group.MapPost("/{id}/finalize", async (string id, FinalizeQuoteRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
+        group.MapPost("/{id}/finalize", async (string id, FinalizeQuoteRequest request, ClaimsPrincipal user, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
         {
+            var orderResponse = await client.GetB2BOrderAsync(new GrpcOrder.GetB2BOrderRequest { B2BOrderId = id });
+            if (!orderResponse.Success)
+                return Results.NotFound();
+
+            if (!IsAuthorizedForOrder(orderResponse.B2BOrder, user))
+                return Results.Forbid();
+
             var response = await client.FinalizeQuoteAsync(new GrpcOrder.FinalizeQuoteRequest
             {
                 B2BOrderId = id,
@@ -73,8 +98,15 @@ public static class B2BOrderEndpoints
                     new ApiResponse<FinalizeQuoteResponse>(new FinalizeQuoteResponse(false, response.B2BOrderId, response.OrderId, response.ErrorMessage)));
         });
 
-        group.MapPost("/{id}/cancel", async (string id, CancelB2BOrderRequest request, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
+        group.MapPost("/{id}/cancel", async (string id, CancelB2BOrderRequest request, ClaimsPrincipal user, GrpcOrder.B2BOrderService.B2BOrderServiceClient client) =>
         {
+            var orderResponse = await client.GetB2BOrderAsync(new GrpcOrder.GetB2BOrderRequest { B2BOrderId = id });
+            if (!orderResponse.Success)
+                return Results.NotFound();
+
+            if (!IsAuthorizedForOrder(orderResponse.B2BOrder, user))
+                return Results.Forbid();
+
             var grpcRequest = new GrpcOrder.CancelB2BOrderRequest { B2BOrderId = id };
             grpcRequest.Reasons.AddRange(request.Reasons);
 
@@ -90,6 +122,7 @@ public static class B2BOrderEndpoints
         o.Id,
         o.CustomerId,
         o.CompanyName,
+        o.HasCompanyId ? o.CompanyId : null,
         o.Status,
         DecimalValueMapper.ToDecimal(o.TotalPrice),
         o.Currency,
@@ -107,4 +140,18 @@ public static class B2BOrderEndpoints
         o.RequestedDeliveryDate,
         o.FinalizedOrderId,
         o.Version);
+
+    // Access control: company members can touch their company's orders;
+    // fall back to creator-only check if either side has no CompanyId yet.
+    private static bool IsAuthorizedForOrder(GrpcOrder.B2BOrderDetails order, ClaimsPrincipal user)
+    {
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userCompanyId = user.FindFirstValue("company_id");
+
+        if (order.HasCompanyId && !string.IsNullOrEmpty(userCompanyId))
+            return string.Equals(order.CompanyId, userCompanyId, StringComparison.OrdinalIgnoreCase);
+
+        // fallback: only the creator can mutate
+        return string.Equals(order.CustomerId, userId, StringComparison.OrdinalIgnoreCase);
+    }
 }

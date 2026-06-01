@@ -12,7 +12,7 @@ public static class SearchEndpoints
 
     public static RouteGroupBuilder MapSearchEndpoints(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/v1/search").WithTags("Search");
+        var group = routes.MapGroup("/api/v1/search").WithTags("Search").RequireRateLimiting("search");
 
         group.MapGet("/", async (
             string q,
