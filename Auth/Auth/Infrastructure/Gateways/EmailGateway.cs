@@ -6,16 +6,36 @@ using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Gateways;
 
-public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> logger) : IEmailGateway
+public class EmailGateway : IEmailGateway, IDisposable
 {
     private const string VerificationEventType = "EmailVerificationRequested";
     private const string PasswordResetEventType = "PasswordResetRequested";
 
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<EmailGateway> _logger;
+    private readonly string _topic;
+    private readonly IProducer<string, string> _producer;
+
+    public EmailGateway(IConfiguration configuration, ILogger<EmailGateway> logger)
+    {
+        _configuration = configuration;
+        _logger = logger;
+        _topic = configuration["Kafka:EmailEventsTopic"] ?? "email.events";
+        var bootstrapServers = configuration["Kafka:BootstrapServers"] ?? "localhost:9092";
+
+        var config = new ProducerConfig { BootstrapServers = bootstrapServers };
+        _producer = new ProducerBuilder<string, string>(config)
+            .SetErrorHandler((_, error) => logger.LogError("Kafka producer error: {Reason}", error.Reason))
+            .Build();
+    }
+
+    public void Dispose() => _producer.Dispose();
+
     public async Task SendVerificationEmailAsync(string recipientEmail, string verificationToken, CancellationToken cancellationToken = default)
     {
-        var frontendUrl = configuration["App:FrontendUrl"] ?? "http://localhost:3000";
+        var frontendUrl = _configuration["App:FrontendUrl"] ?? "http://localhost:3000";
         var verificationLink = $"{frontendUrl}/verify-email?token={verificationToken}";
-        var fromAddress = configuration["Email:FromAddress"] ?? "no-reply@free-ebay.com";
+        var fromAddress = _configuration["Email:FromAddress"] ?? "no-reply@free-ebay.com";
 
         var payload = new EmailVerificationRequested(
             Guid.NewGuid(),
@@ -28,14 +48,14 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
 
         await PublishAsync(VerificationEventType, recipientEmail, payload, cancellationToken);
 
-        logger.LogInformation("Published verification email event for {Email}", recipientEmail);
+        _logger.LogInformation("Published verification email event for {Email}", recipientEmail);
     }
 
     public async Task SendPasswordResetEmailAsync(string recipientEmail, string resetToken, CancellationToken cancellationToken = default)
     {
-        var frontendUrl = configuration["App:FrontendUrl"] ?? "http://localhost:3000";
+        var frontendUrl = _configuration["App:FrontendUrl"] ?? "http://localhost:3000";
         var resetLink = $"{frontendUrl}/password-reset/confirm?token={resetToken}";
-        var fromAddress = configuration["Email:FromAddress"] ?? "no-reply@free-ebay.com";
+        var fromAddress = _configuration["Email:FromAddress"] ?? "no-reply@free-ebay.com";
 
         var payload = new PasswordResetRequested(
             Guid.NewGuid(),
@@ -48,14 +68,11 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
 
         await PublishAsync(PasswordResetEventType, recipientEmail, payload, cancellationToken);
 
-        logger.LogInformation("Published password reset email event for {Email}", recipientEmail);
+        _logger.LogInformation("Published password reset email event for {Email}", recipientEmail);
     }
 
     private async Task PublishAsync<T>(string eventType, string key, T payload, CancellationToken cancellationToken)
     {
-        var bootstrapServers = configuration["Kafka:BootstrapServers"] ?? "localhost:9092";
-        var topic = configuration["Kafka:EmailEventsTopic"] ?? "email.events";
-
         var wrapper = new
         {
             EventId = Guid.NewGuid(),
@@ -64,15 +81,9 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
             OccurredOn = DateTime.UtcNow
         };
 
-        var config = new ProducerConfig { BootstrapServers = bootstrapServers };
-
-        using var producer = new ProducerBuilder<string, string>(config)
-            .SetErrorHandler((_, error) => logger.LogError("Kafka producer error: {Reason}", error.Reason))
-            .Build();
-
         try
         {
-            await producer.ProduceAsync(topic, new Message<string, string>
+            await _producer.ProduceAsync(_topic, new Message<string, string>
             {
                 Key = key,
                 Value = JsonSerializer.Serialize(wrapper)
@@ -81,7 +92,7 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
         catch (Exception ex)
         {
             // Email dispatch must never fail the primary flow - log and swallow
-            logger.LogError(ex, "Failed to publish {EventType} email event for {Key}", eventType, key);
+            _logger.LogError(ex, "Failed to publish {EventType} email event for {Key}", eventType, key);
         }
     }
 
@@ -92,7 +103,7 @@ public class EmailGateway(IConfiguration configuration, ILogger<EmailGateway> lo
         <p><a href="{verificationLink}" style="padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:4px;">Verify Email</a></p>
         <p>Or copy this link into your browser:<br/><code>{verificationLink}</code></p>
         <p>If you didn't register, you can safely ignore this email.</p>
-        """;  
+        """;
 
     private static string BuildPasswordResetBody(string resetLink) =>
         $"""
