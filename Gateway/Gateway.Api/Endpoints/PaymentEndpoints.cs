@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Payments;
 using Gateway.Api.Mappers;
@@ -13,18 +14,24 @@ public static class PaymentEndpoints
             .WithTags("Payments")
             .RequireAuthorization();
 
-        group.MapGet("/{id}", async (string id, GrpcPayment.PaymentService.PaymentServiceClient client) =>
+        group.MapGet("/{id}", async (string id, HttpContext httpContext, GrpcPayment.PaymentService.PaymentServiceClient client) =>
         {
             var response = await client.GetPaymentAsync(new GrpcPayment.GetPaymentRequest { PaymentId = id });
 
-            return response.Success
-                ? Results.Ok(new ApiResponse<PaymentDetailsResponse>(MapPaymentDetails(response.Payment)))
-                : Results.NotFound(response.ErrorMessage);
+            if (!response.Success)
+                return Results.NotFound(response.ErrorMessage);
+
+            var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (response.Payment.CustomerId != userId)
+                return Results.Forbid();
+
+            return Results.Ok(new ApiResponse<PaymentDetailsResponse>(MapPaymentDetails(response.Payment)));
         });
 
         group.MapGet("/order/{orderId}", async (
             string orderId,
             string idempotencyKey,
+            HttpContext httpContext,
             GrpcPayment.PaymentService.PaymentServiceClient client) =>
         {
             var response = await client.GetPaymentByOrderAndIdempotencyAsync(
@@ -34,9 +41,14 @@ public static class PaymentEndpoints
                     IdempotencyKey = idempotencyKey
                 });
 
-            return response.Success
-                ? Results.Ok(new ApiResponse<PaymentDetailsResponse>(MapPaymentDetails(response.Payment)))
-                : Results.NotFound(response.ErrorMessage);
+            if (!response.Success)
+                return Results.NotFound(response.ErrorMessage);
+
+            var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (response.Payment.CustomerId != userId)
+                return Results.Forbid();
+
+            return Results.Ok(new ApiResponse<PaymentDetailsResponse>(MapPaymentDetails(response.Payment)));
         });
 
         return group;
