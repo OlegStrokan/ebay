@@ -39,12 +39,27 @@ public sealed class GrpcExceptionHandler : IExceptionHandler
             _ => (StatusCodes.Status502BadGateway, "Bad Gateway")
         };
 
+        // Only surface the gRPC detail for explicit client-error codes where the backend
+        // sets a user-facing message. Infrastructure / server-side codes could leak
+        // internal topology, stack traces, or service names to callers.
+        var safeDetail = rpcException.StatusCode switch
+        {
+            StatusCode.NotFound or
+            StatusCode.InvalidArgument or
+            StatusCode.AlreadyExists or
+            StatusCode.PermissionDenied or
+            StatusCode.Unauthenticated or
+            StatusCode.FailedPrecondition or
+            StatusCode.ResourceExhausted => rpcException.Status.Detail,
+            _ => null
+        };
+
         httpContext.Response.StatusCode = statusCode;
         await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
         {
             Status = statusCode,
             Title = title,
-            Detail = rpcException.Status.Detail,
+            Detail = safeDetail,
         }, cancellationToken);
 
         return true;

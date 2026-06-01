@@ -1,6 +1,6 @@
 ---
 applyTo: "Gateway/**"
-description: "Use when working on the Gateway — REST-to-gRPC API gateway with Minimal API endpoints, JWT auth, Swagger, typed gRPC client factory for all backend services, and Kafka user event publishing."
+description: "Use when working on the Gateway — REST-to-gRPC API gateway with Minimal API endpoints, JWT auth, Swagger, rate limiting, typed gRPC client factory for all backend services, and Kafka user event publishing."
 ---
 
 # Gateway Service
@@ -25,6 +25,7 @@ REST API gateway that translates HTTP requests to gRPC calls against backend ser
 - gRPC: Grpc.Net.ClientFactory (typed client pool)
 - Kafka: Confluent.Kafka (user event publishing to `user.events` topic)
 - Auth: JWT Bearer (Microsoft.AspNetCore.Authentication.JwtBearer)
+- Rate limiting: ASP.NET Core built-in `AddRateLimiter` / `SlidingWindowLimiter` (two named policies)
 - API docs: Swashbuckle/Swagger (dev only)
 - Observability: OpenTelemetry
 - Nullable reference types enabled globally
@@ -39,6 +40,7 @@ REST API gateway that translates HTTP requests to gRPC calls against backend ser
 - **DecimalValue mapping**: `units` (int64) + `nanos` (int32) ↔ decimal — shared mapper handles both `Protos.Common.DecimalValue` and `Protos.Product.DecimalValue`
 - **SSE streaming**: `/api/v1/search/stream` sends progressive results as Server-Sent Events (keyword phase → merged)
 - **OpenAPI metadata**: `WithName()`, `WithTags()`, `WithOpenApi()` on every endpoint
+- **Rate limiting**: `RequireRateLimiting("auth-strict")` on `/login` and `/password-reset/request`; `RequireRateLimiting("search")` on the whole search group. Policies are `SlidingWindowLimiter` keyed by remote IP. Registered once in `Program.cs` via `AddRateLimiter`. Rejected requests receive `429 Too Many Requests`. Never add a new sensitive endpoint without attaching an appropriate policy.
 
 ## Authentication
 
@@ -58,6 +60,7 @@ REST API gateway that translates HTTP requests to gRPC calls against backend ser
 - `Kafka` section: `BootstrapServers`, `UserEventsTopic`
 - JWT: Authority, SecretKey (dev)
 - Health: `/health/live`, `/health/ready`
+- Rate limiting policies are defined in code (no config knobs); adjust `PermitLimit` / `Window` values in `Program.cs` if limits need tuning
 
 ## Key Rules
 
@@ -67,3 +70,4 @@ REST API gateway that translates HTTP requests to gRPC calls against backend ser
 - `DecimalValue` conversion is shared — always use the mapper, don't inline nanos math
 - `RpcException` must be caught and translated — never leak gRPC errors to REST clients
 - No test projects exist — the service is thin mapping; test backend services instead
+- Any endpoint that accepts credentials, triggers emails, or is computationally expensive must have a rate limiting policy attached
