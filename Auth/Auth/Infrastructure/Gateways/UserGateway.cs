@@ -1,5 +1,6 @@
 using Domain.Gateways;
 using Grpc.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Protos.User;
 
@@ -8,7 +9,7 @@ namespace Infrastructure.Gateways;
 
 
 public class UserGateway
-    (UserServiceProto.UserServiceProtoClient userClient, ILogger<UserGateway> logger) : IUserGateway
+    (UserServiceProto.UserServiceProtoClient userClient, IConfiguration configuration, ILogger<UserGateway> logger) : IUserGateway
 {
     public async Task<string> CreateUserAsync(string email, string hashedPassword, string fullName, string phone)
     {
@@ -48,8 +49,11 @@ public class UserGateway
         {
             logger.LogInformation("Getting user email via User microservice: {Email}", email);
 
+            var internalKey = configuration["InternalServices:ApiKey"] ?? string.Empty;
+            var headers = new Metadata { { "x-internal-api-key", internalKey } };
+
             var request = new GetUserByEmailRequest { Email = email };
-            var response = await userClient.GetUserByEmailAsync(request);
+            var response = await userClient.GetUserByEmailAsync(request, headers);
 
 
             if (response.Data == null)
@@ -183,7 +187,8 @@ public class UserGateway
             Phone = user.Phone,
             Status = MapUserStatus(user.Status),
             IsEmailVerified = user.IsEmailVerified,
-            Roles = [.. user.Roles]
+            Roles = [.. user.Roles],
+            CompanyId = user.HasCompanyId ? user.CompanyId : null
         };
     }
 
