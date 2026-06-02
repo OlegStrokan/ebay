@@ -14,8 +14,9 @@ internal static class StripeWebhookSignatureVerifier
     {
         error = null;
 
-        // for tests
-        if (options.UseFakeProvider)
+        // Bypass signature verification for the in-memory Fake provider (tests only).
+        // MockFintech and real Stripe must always pass a valid signature.
+        if (options.ProviderType == Infrastructure.Options.PaymentProviderType.Fake)
         {
             return true;
         }
