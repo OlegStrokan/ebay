@@ -181,16 +181,20 @@ public sealed class Payment : AggregateRoot<PaymentId>
 
     public void MarkRefunded(RefundId refundId, ProviderRefundId? providerRefundId = null, Money? amountRefunded = null, DateTime? refundedAt = null)
     {
-        PaymentStateMachine.EnsureCanTransition(Status, PaymentStatus.Refunded);
-
         var now = refundedAt ?? DateTime.UtcNow;
-        Status = PaymentStatus.Refunded;
         ProviderRefundId = providerRefundId ?? ProviderRefundId;
         FailureReason = null;
+
         if (amountRefunded is not null)
         {
             TotalRefundedAmount += amountRefunded.Amount;
         }
+
+        var isFullyRefunded = amountRefunded is null || TotalRefundedAmount >= Amount.Amount;
+        var targetStatus = isFullyRefunded ? PaymentStatus.Refunded : PaymentStatus.Succeeded;
+
+        PaymentStateMachine.EnsureCanTransition(Status, targetStatus);
+        Status = targetStatus;
         UpdatedAt = now;
 
         AddDomainEvent(new RefundSucceededEvent(Id, refundId, ProviderRefundId, now));
