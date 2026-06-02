@@ -11,6 +11,7 @@ builder.Services.AddSingleton<IProcessedMessageStore, PostgresProcessedMessageSt
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddHostedService<KafkaEmailConsumer>();
 builder.Services.AddHostedService<KafkaEmailDlqReplayWorker>();
+builder.Services.AddHostedService<ProcessedMessageCleanupWorker>();
 
 var host = builder.Build();
 host.Run();

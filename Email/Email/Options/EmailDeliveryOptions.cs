@@ -10,4 +10,5 @@ public sealed class EmailDeliveryOptions
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string DefaultFromAddress { get; set; } = "no-reply@free-ebay.com";
+    public int SmtpTimeoutSeconds { get; set; } = 30;
 }

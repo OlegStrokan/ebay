@@ -18,6 +18,8 @@ public sealed class PostgresProcessedMessageStore(
                 message_id uuid PRIMARY KEY,
                 processed_at_utc timestamp without time zone NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS idx_email_processed_messages_processed_at
+                ON email_processed_messages (processed_at_utc);
             """;
 
         await using var connection = new NpgsqlConnection(_connectionString);
@@ -57,5 +59,26 @@ public sealed class PostgresProcessedMessageStore(
         command.Parameters.AddWithValue("processed_at_utc", DateTime.UtcNow);
 
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task DeleteOldEntriesAsync(TimeSpan retention, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DELETE FROM email_processed_messages
+            WHERE processed_at_utc < @cutoff;
+            """;
+
+        var cutoff = DateTime.UtcNow - retention;
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("cutoff", cutoff);
+
+        var deleted = await command.ExecuteNonQueryAsync(cancellationToken);
+        logger.LogInformation(
+            "Cleaned up {Deleted} processed-message record(s) older than {Cutoff:u}",
+            deleted, cutoff);
     }
 }

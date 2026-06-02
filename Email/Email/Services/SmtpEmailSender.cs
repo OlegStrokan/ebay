@@ -25,7 +25,10 @@ public sealed class SmtpEmailSender(
             IsBodyHtml = true
         };
 
-        await _client.SendMailAsync(message, cancellationToken);
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.SmtpTimeoutSeconds));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        await _client.SendMailAsync(message, linkedCts.Token);
 
         logger.LogInformation("Email sent to {Recipient} with subject '{Subject}'", to, subject);
     }

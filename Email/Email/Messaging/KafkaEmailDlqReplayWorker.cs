@@ -33,6 +33,7 @@ public sealed class KafkaEmailDlqReplayWorker(
         {
             BootstrapServers = _options.BootstrapServers,
             Acks = Acks.All,
+            EnableIdempotence = true,
             MessageSendMaxRetries = 5
         };
 
