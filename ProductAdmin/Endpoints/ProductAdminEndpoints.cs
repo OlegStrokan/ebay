@@ -1,3 +1,4 @@
+using Protos.Common;
 using Protos.Product;
 
 namespace ProductAdmin.Endpoints;
@@ -17,6 +18,11 @@ public static class ProductAdminEndpoints
                 Description = body.Description,
                 CategoryId = body.CategoryId,
                 Currency = body.Currency,
+                Price = new DecimalValue
+                {
+                    Units = (long)body.Price,
+                    Nanos = (int)((body.Price - (long)body.Price) * 1_000_000_000)
+                },
             };
             request.Attributes.AddRange(body.Attributes.Select(a => new ProductAttributeProto { Key = a.Key, Value = a.Value }));
             request.ImageUrls.AddRange(body.ImageUrls);
@@ -54,6 +60,7 @@ public static class ProductAdminEndpoints
         string Description,
         string CategoryId,
         string Currency,
+        decimal Price,
         List<AttributeItem> Attributes,
         List<string> ImageUrls);
 
