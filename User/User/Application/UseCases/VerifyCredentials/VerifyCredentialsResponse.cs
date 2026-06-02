@@ -16,4 +16,5 @@ public record VerifyCredentialsResponse(
     DateTime UpdatedAt,
     bool IsEmailVerified,
     IReadOnlyList<DeliveryInfoDto>? DeliveryInfos = null,
-    IReadOnlyList<string>? Roles = null);
+    IReadOnlyList<string>? Roles = null,
+    string? CompanyId = null);

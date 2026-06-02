@@ -104,6 +104,7 @@ message UpdateUserRequest {
   string phone = 4;
   string country_code = 5;
   CustomerTierProto customer_tier = 6;
+  optional string company_id = 7;
 }
 
 message UpdateUserResponse {

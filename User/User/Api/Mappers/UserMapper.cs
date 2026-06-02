@@ -155,6 +155,8 @@ public static class UserMapper
             CustomerTier = entity.CustomerTier.ToProto(),
             IsEmailVerified = entity.IsEmailVerified,
         };
+        if (entity.CompanyId is not null)
+            proto.CompanyId = entity.CompanyId;
         proto.DeliveryInfo.AddRange(entity.DeliveryInfos.Select(d => d.ToProto()));
         proto.Roles.AddRange(entity.UserRoles.Select(ur => ur.Role.Name));
         return proto;
@@ -228,6 +230,8 @@ public static class UserMapper
             CustomerTier = r.CustomerTier.ToProto(),
             IsEmailVerified = r.IsEmailVerified,
         };
+        if (r.CompanyId is not null)
+            proto.CompanyId = r.CompanyId;
         if (r.DeliveryInfos != null)
             proto.DeliveryInfo.AddRange(r.DeliveryInfos.Select(d => d.ToProto()));
         if (r.Roles != null)
@@ -272,6 +276,8 @@ public static class UserMapper
             CustomerTier = r.CustomerTier.ToProto(),
             IsEmailVerified = r.IsEmailVerified,
         };
+        if (r.CompanyId is not null)
+            proto.CompanyId = r.CompanyId;
         if (r.DeliveryInfos != null)
             proto.DeliveryInfo.AddRange(r.DeliveryInfos.Select(d => d.ToProto()));
         if (r.Roles != null)

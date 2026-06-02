@@ -16,4 +16,5 @@ public record UpdateUserResponse(
     DateTime UpdatedAt,
     bool IsEmailVerified = false,
     IReadOnlyList<DeliveryInfoDto>? DeliveryInfos = null,
-    IReadOnlyList<string>? Roles = null);
+    IReadOnlyList<string>? Roles = null,
+    string? CompanyId = null);

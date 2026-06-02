@@ -42,6 +42,13 @@ public class UpdateUserUseCase (IUserRepository repository) : IUpdateUserUseCase
             existingUser.CustomerTier = command.CustomerTier.Value;
         }
 
+        if (command.CompanyId is not null)
+        {
+            existingUser.CompanyId = string.IsNullOrWhiteSpace(command.CompanyId)
+                ? null
+                : command.CompanyId;
+        }
+
         var user = await repository.UpdateUser(existingUser);
         
         return new UpdateUserResponse(
@@ -56,7 +63,8 @@ public class UpdateUserUseCase (IUserRepository repository) : IUpdateUserUseCase
             user.UpdatedAt,
             user.IsEmailVerified,
             user.DeliveryInfos.ToDtos(),
-            user.UserRoles.Select(ur => ur.Role.Name).ToList());
+            user.UserRoles.Select(ur => ur.Role.Name).ToList(),
+            user.CompanyId);
     }
 
     private static void Validate(UpdateUserCommand command)

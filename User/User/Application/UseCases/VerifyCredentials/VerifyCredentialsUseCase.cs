@@ -50,6 +50,7 @@ public class VerifyCredentialsUseCase(
             user.UpdatedAt,
             user.IsEmailVerified,
             user.DeliveryInfos.ToDtos(),
-            user.UserRoles.Select(ur => ur.Role.Name).ToList());
+            user.UserRoles.Select(ur => ur.Role.Name).ToList(),
+            user.CompanyId);
     }
 }

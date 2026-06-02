@@ -8,4 +8,5 @@ public record UpdateUserCommand(
     string Fullname,
     string Phone,
     string CountryCode = "",
-    CustomerTier? CustomerTier = null);
+    CustomerTier? CustomerTier = null,
+    string? CompanyId = null);

@@ -87,7 +87,8 @@ public class UserGrpcService(
                 request.FullName,
                 request.Phone,
                 request.CountryCode,
-                request.CustomerTier.ToEntity()));
+                request.CustomerTier.ToEntity(),
+                request.HasCompanyId ? request.CompanyId : null));
 
             return result.ToProto();
         }
@@ -218,6 +219,11 @@ public class UserGrpcService(
     {
         try
         {
+            var expectedKey = configuration["InternalServices:ApiKey"];
+            var providedKey = context.RequestHeaders.GetValue("x-internal-api-key");
+            if (!string.IsNullOrEmpty(expectedKey) && providedKey != expectedKey)
+                throw new RpcException(new Status(StatusCode.PermissionDenied, "Caller not authorized."));
+
             var user = await getUserByEmailUseCase.ExecuteAsync(request.Email);
             return user.ToProto();
         }

@@ -33,6 +33,8 @@ public class UserEntity
     public CustomerTier CustomerTier { get; set; } = CustomerTier.Standard;
     public UserStatus Status { get; set; } = UserStatus.Active;
 
+    public string? CompanyId { get; set; }
+
     public required DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
