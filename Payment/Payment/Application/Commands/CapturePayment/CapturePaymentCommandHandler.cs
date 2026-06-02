@@ -47,15 +47,30 @@ internal sealed class CapturePaymentCommandHandler(
 
             var amount = Money.Create(request.Amount, request.Currency);
 
-            var payment = Payment.Create(
-                PaymentId.CreateUnique(),
-                request.OrderId,
-                request.CustomerId,
-                amount,
-                // @todo: dont use hardcode value
-                PaymentMethod.Card,
-                idempotencyKey,
-                clock.UtcNow);
+            // Look up the existing pre-auth payment by ProviderPaymentIntentId instead of creating a duplicate
+            var providerIntentIdValue = ProviderPaymentIntentId.From(request.ProviderPaymentIntentId);
+            var existingPayment = await paymentRepository.GetByProviderPaymentIntentIdAsync(
+                providerIntentIdValue,
+                cancellationToken);
+
+            Payment payment;
+
+            if (existingPayment is null)
+            {
+                // No pre-auth payment found — direct capture without prior authorization.
+                payment = Payment.Create(
+                    PaymentId.CreateUnique(),
+                    request.OrderId,
+                    request.CustomerId,
+                    amount,
+                    PaymentMethod.Card,
+                    idempotencyKey,
+                    clock.UtcNow);
+            }
+            else
+            {
+                payment = existingPayment;
+            }
 
             var providerResult = await stripePaymentProvider.CapturePaymentAsync(
                 new CapturePaymentProviderRequest(
@@ -90,7 +105,14 @@ internal sealed class CapturePaymentCommandHandler(
                 responseStatus = ProcessPaymentStatus.Failed;
             }
 
-            await paymentRepository.AddAsync(payment, cancellationToken);
+            if (existingPayment is null)
+            {
+                await paymentRepository.AddAsync(payment, cancellationToken);
+            }
+            else
+            {
+                await paymentRepository.UpdateAsync(payment, cancellationToken);
+            }
 
             try
             {
