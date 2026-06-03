@@ -31,6 +31,25 @@ public class ReturnPolicyServiceTests
     [InlineData("PL")]
     [InlineData("CZ")]
     [InlineData("de")] // case-insensitive
+    [InlineData("BE")]
+    [InlineData("BG")]
+    [InlineData("HR")]
+    [InlineData("CY")]
+    [InlineData("DK")]
+    [InlineData("EE")]
+    [InlineData("FI")]
+    [InlineData("GR")]
+    [InlineData("HU")]
+    [InlineData("IE")]
+    [InlineData("LV")]
+    [InlineData("LT")]
+    [InlineData("LU")]
+    [InlineData("MT")]
+    [InlineData("PT")]
+    [InlineData("RO")]
+    [InlineData("SK")]
+    [InlineData("SI")]
+    [InlineData("SE")]
     public void CalculateReturnWindow_ShouldReturn14Days_ForEuCountry(string countryCode)
     {
         var ctx = Build(countryCode: countryCode);
@@ -121,5 +140,31 @@ public class ReturnPolicyServiceTests
         var window = _sut.CalculateReturnWindow(ctx);
 
         Assert.Equal(TimeSpan.FromDays(35), window);
+    }
+
+    [Theory]
+    [InlineData(2026, 11, 15)] // Nov 15 — start of holiday season
+    [InlineData(2026, 11, 30)]
+    [InlineData(2026, 12, 1)]
+    [InlineData(2026, 12, 25)]
+    [InlineData(2026, 12, 31)]
+    [InlineData(2027, 1, 1)]
+    [InlineData(2027, 1, 15)] // Jan 15 — last day of holiday season
+    public void IsHolidaySeason_ShouldReturnTrue_DuringHolidayPeriod(int year, int month, int day)
+    {
+        var date = new DateTime(year, month, day, 12, 0, 0, DateTimeKind.Utc);
+        Assert.True(ReturnPolicyService.IsHolidaySeason(date));
+    }
+
+    [Theory]
+    [InlineData(2026, 1, 16)] // Jan 16 — first day after holiday season
+    [InlineData(2026, 2, 14)]
+    [InlineData(2026, 6, 1)]
+    [InlineData(2026, 10, 31)]
+    [InlineData(2026, 11, 14)] // Nov 14 — last day before holiday season
+    public void IsHolidaySeason_ShouldReturnFalse_OutsideHolidayPeriod(int year, int month, int day)
+    {
+        var date = new DateTime(year, month, day, 12, 0, 0, DateTimeKind.Utc);
+        Assert.False(ReturnPolicyService.IsHolidaySeason(date));
     }
 }

@@ -10,13 +10,18 @@ public record ReturnPolicyContext(
 
 public class ReturnPolicyService
 {
-    private static readonly HashSet<string> EuCountries = new() { "DE", "FR", "PL", "ES", "IT", "CZ", "NL", "AT" };
+    private static readonly HashSet<string> EuCountries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
+        "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL",
+        "PL", "PT", "RO", "SK", "SI", "ES", "SE"
+    };
 
     public TimeSpan CalculateReturnWindow(ReturnPolicyContext context)
     {
         var window = TimeSpan.FromDays(7);
 
-        if (EuCountries.Contains(context.CountryCode.ToUpper()))
+        if (EuCountries.Contains(context.CountryCode))
             window = Max(window, TimeSpan.FromDays(14));
 
         if (context.CustomerTier == "Subscriber")
@@ -29,6 +34,14 @@ public class ReturnPolicyService
             window = Add(window, TimeSpan.FromDays(14));
 
         return window;
+    }
+
+    public static bool IsHolidaySeason(DateTime utcNow)
+    {
+        var month = utcNow.Month;
+        var day = utcNow.Day;
+        // Holiday season: November 15 – January 15
+        return month == 12 || (month == 11 && day >= 15) || (month == 1 && day <= 15);
     }
 
     private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
