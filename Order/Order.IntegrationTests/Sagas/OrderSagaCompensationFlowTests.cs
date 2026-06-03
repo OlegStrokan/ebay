@@ -388,6 +388,12 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             CancellationToken cancellationToken)
             => Task.FromResult(CompensationRefundRetry.Create(orderId, paymentId, amount, currency, reason));
 
+        public Task<CompensationRefundRetry?> GetPendingByOrderAndPaymentAsync(
+            Guid orderId,
+            string paymentId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<CompensationRefundRetry?>(null);
+
         public Task<IReadOnlyList<CompensationRefundRetry>> GetDuePendingAsync(
             DateTime nowUtc,
             int batchSize,

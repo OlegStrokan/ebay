@@ -42,6 +42,7 @@ public class B2BOrderReadModelUpdater(ReadDbContext dbContext, ILogger<B2BOrderR
         {
             Id = evt.B2BOrderId.Value,
             CustomerId = evt.CustomerId.Value,
+            CompanyId = evt.CompanyId,
             CompanyName = evt.CompanyName,
             Status = "Draft",
             TotalPrice = 0,

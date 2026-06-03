@@ -74,6 +74,22 @@ public sealed class CompensationRefundRetryRepository(
         }
     }
 
+    public async Task<CompensationRefundRetry?> GetPendingByOrderAndPaymentAsync(
+        Guid orderId,
+        string paymentId,
+        CancellationToken cancellationToken)
+    {
+        var normalizedPaymentId = paymentId.Trim();
+
+        return await dbContext.CompensationRefundRetries
+            .FirstOrDefaultAsync(
+                x => x.OrderId == orderId
+                     && x.PaymentId == normalizedPaymentId
+                     && (x.Status == CompensationRefundRetryStatus.Pending
+                         || x.Status == CompensationRefundRetryStatus.InProgress),
+                cancellationToken);
+    }
+
     public async Task<IReadOnlyList<CompensationRefundRetry>> GetDuePendingAsync(
         DateTime nowUtc,
         int batchSize,

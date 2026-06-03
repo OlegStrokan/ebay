@@ -4,6 +4,7 @@ public class B2BOrderReadModel
 {
     public Guid Id { get; set; }
     public Guid CustomerId { get; set; }
+    public Guid? CompanyId { get; set; }
     public string CompanyName { get; set; } = null!;
     public string Status { get; set; } = null!;
 
