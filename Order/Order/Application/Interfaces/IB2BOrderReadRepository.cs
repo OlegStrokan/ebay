@@ -23,7 +23,8 @@ public sealed record B2BOrderDetail(
     List<string> Comments,
     DateTime StartedAt,
     DateTime? UpdatedAt,
-    int Version);
+    int Version,
+    Guid? CompanyId = null);
 
 public sealed record B2BOrderSummary(
     Guid Id,

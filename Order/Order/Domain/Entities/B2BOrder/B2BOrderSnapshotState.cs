@@ -16,4 +16,5 @@ public record B2BOrderSnapshotState(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     List<QuoteLineItemSnapshotState> Items,
-    List<string> Comments);
+    List<string> Comments,
+    Guid? CompanyId = null);

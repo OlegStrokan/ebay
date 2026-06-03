@@ -82,7 +82,8 @@ public class B2BOrderReadRepository(ReadDbContext dbContext) : IB2BOrderReadRepo
             Comments: comments,
             StartedAt: model.StartedAt,
             UpdatedAt: model.UpdatedAt,
-            Version: model.Version);
+            Version: model.Version,
+            CompanyId: model.CompanyId);
     }
 
     private static B2BOrderSummary MapToSummary(B2BOrderReadModel model) =>

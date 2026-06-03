@@ -38,7 +38,8 @@ public class B2BOrderGrpcService(
                 CustomerId: Guid.Parse(request.CustomerId),
                 CompanyName: request.CompanyName,
                 DeliveryAddress: MapAddress(request.DeliveryAddress),
-                IdempotencyKey: request.IdempotencyKey);
+                IdempotencyKey: request.IdempotencyKey,
+                CompanyId: request.HasCompanyId && Guid.TryParse(request.CompanyId, out var cid) ? cid : null);
 
             var result = await mediator.Send(command, context.CancellationToken);
 
@@ -179,6 +180,8 @@ public class B2BOrderGrpcService(
                 FinalizedOrderId = s.FinalizedOrderId?.ToString() ?? string.Empty,
                 Version = s.Version
             };
+            if (s.CompanyId.HasValue)
+                details.CompanyId = s.CompanyId.Value.ToString();
             details.Comments.AddRange(s.Comments);
             details.Items.AddRange(s.Items.Select(i =>
             {

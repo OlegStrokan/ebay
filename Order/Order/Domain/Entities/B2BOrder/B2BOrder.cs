@@ -13,6 +13,7 @@ public sealed class B2BOrder : AggregateRoot<B2BOrderId>
 {
     private CustomerId _customerId;
     private string _companyName = string.Empty;
+    private Guid? _companyId;
     private B2BOrderStatus _status = null!;
     private Address _deliveryAddress = null!;
     private decimal _discountPercent;
@@ -25,6 +26,7 @@ public sealed class B2BOrder : AggregateRoot<B2BOrderId>
 
     public CustomerId CustomerId => _customerId;
     public string CompanyName => _companyName;
+    public Guid? CompanyId => _companyId;
     public B2BOrderStatus Status => _status;
     public Address DeliveryAddress => _deliveryAddress;
     public decimal DiscountPercent => _discountPercent;
@@ -61,6 +63,7 @@ public sealed class B2BOrder : AggregateRoot<B2BOrderId>
         Id = B2BOrderId.From(state.Id);
         _customerId = CustomerId.From(state.CustomerId);
         _companyName = state.CompanyName;
+        _companyId = state.CompanyId;
         _status = B2BOrderStatus.FromName(state.Status);
         _deliveryAddress = Address.Create(state.Street, state.City, state.Country, state.PostalCode);
         _discountPercent = state.DiscountPercent;
@@ -89,18 +92,19 @@ public sealed class B2BOrder : AggregateRoot<B2BOrderId>
         CreatedAt: _createdAt,
         UpdatedAt: _updatedAt,
         Items: _items.Select(i => i.ToSnapshotState()).ToList(),
-        Comments: _comments.ToList());
+        Comments: _comments.ToList(),
+        CompanyId: _companyId);
 
     public static B2BOrder FromSnapshot(B2BOrderSnapshotState state) => new(state);
     
-    public static B2BOrder Start(CustomerId customerId, string companyName, Address deliveryAddress)
+    public static B2BOrder Start(CustomerId customerId, string companyName, Address deliveryAddress, Guid? companyId = null)
     {
         if (string.IsNullOrWhiteSpace(companyName))
             throw new DomainException("Company name is required");
 
         var order = new B2BOrder();
         var evt = new B2BOrderStartedEvent(
-            B2BOrderId.CreateUnique(), customerId, companyName, deliveryAddress, DateTime.UtcNow);
+            B2BOrderId.CreateUnique(), customerId, companyName, deliveryAddress, DateTime.UtcNow, companyId);
         order.RaiseEvent(evt);
         return order;
     }
@@ -203,6 +207,7 @@ public sealed class B2BOrder : AggregateRoot<B2BOrderId>
         Id = evt.B2BOrderId;
         _customerId = evt.CustomerId;
         _companyName = evt.CompanyName;
+        _companyId = evt.CompanyId;
         _deliveryAddress = evt.DeliveryAddress;
         _status = B2BOrderStatus.Draft;
         _discountPercent = 0;

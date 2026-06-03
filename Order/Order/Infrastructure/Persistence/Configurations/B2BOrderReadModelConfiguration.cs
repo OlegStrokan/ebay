@@ -14,6 +14,7 @@ public class B2BOrderReadModelConfiguration : IEntityTypeConfiguration<B2BOrderR
         builder.Property(b => b.Id).IsRequired().ValueGeneratedNever();
 
         builder.Property(b => b.CustomerId).IsRequired();
+        builder.Property(b => b.CompanyId);
         builder.Property(b => b.CompanyName).IsRequired().HasMaxLength(200);
         builder.Property(b => b.Status).IsRequired().HasMaxLength(50);
 

@@ -44,7 +44,7 @@ public class StartB2BOrderCommandHandler(
                 request.DeliveryAddress.Country,
                 request.DeliveryAddress.PostalCode);
 
-            var b2BOrder = Domain.Entities.B2BOrder.B2BOrder.Start(customerId, request.CompanyName, address);
+            var b2BOrder = Domain.Entities.B2BOrder.B2BOrder.Start(customerId, request.CompanyName, address, request.CompanyId);
 
             await persistenceService.StartB2BOrderAsync(b2BOrder, request.IdempotencyKey, cancellationToken);
 

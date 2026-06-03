@@ -139,6 +139,7 @@ message StartB2BOrderRequest {
   string company_name = 2;
   Address delivery_address = 3;
   string idempotency_key = 4;
+  optional string company_id = 5;
 }
 
 message QuoteItemChange {
@@ -206,6 +207,7 @@ message B2BOrderDetails {
   string requested_delivery_date = 11;
   string finalized_order_id = 12;
   int32 version = 13;
+  optional string company_id = 14;
 }
 
 message B2BLineItemDetail {
