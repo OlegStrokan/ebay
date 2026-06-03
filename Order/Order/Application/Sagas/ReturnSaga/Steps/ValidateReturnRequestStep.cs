@@ -1,3 +1,4 @@
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas.Steps;
 using Domain.Entities.Order;
@@ -11,6 +12,7 @@ namespace Application.Sagas.ReturnSaga.Steps;
 public sealed class ValidateReturnRequestStep(
     IOrderPersistenceService orderPersistenceService,
     IReturnRequestPersistenceService returnRequestPersistenceService,
+    IUserGateway userGateway,
     ReturnPolicyService returnPolicyService,
     ILogger<ValidateReturnRequestStep> logger
     ) : ISagaStep<ReturnSagaData, ReturnSagaContext>
@@ -84,17 +86,14 @@ public sealed class ValidateReturnRequestStep(
 
             var refundAmount = Money.Create(data.RefundAmount, data.Currency);
             
-            /* @todo: integrate user service
-             * to make it correct i need to update user proto and 
-             * take all needed info as countryCode, CustomerTier
-             * in addition i need one more integration to product to get
-             * list of categories which products have from current order
-            */
+            var customerProfile = await userGateway.GetUserProfileAsync(
+                data.CustomerId, cancellationToken);
+
             var policyContext = new ReturnPolicyContext(
-                CountryCode: "US",
+                CountryCode: customerProfile.CountryCode,
                 ProductCategories: new List<string>(), 
-                CustomerTier: "Standard", 
-                IsHolidaySeason: false 
+                CustomerTier: customerProfile.CustomerTier, 
+                IsHolidaySeason: ReturnPolicyService.IsHolidaySeason(DateTime.UtcNow) 
             );
             
             var returnWindow = returnPolicyService.CalculateReturnWindow(policyContext);

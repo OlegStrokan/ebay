@@ -100,7 +100,7 @@ public class RequestReturnCommandHandler(
                     CountryCode: customerProfile.CountryCode,
                     ProductCategories: new List<string>(), 
                     CustomerTier: customerProfile.CustomerTier,
-                    IsHolidaySeason: false 
+                    IsHolidaySeason: ReturnPolicyService.IsHolidaySeason(DateTime.UtcNow) 
                 );
                 
                 var returnWindow = returnPolicyService.CalculateReturnWindow(policyContext);
