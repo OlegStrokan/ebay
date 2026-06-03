@@ -12,6 +12,11 @@ public interface ICompensationRefundRetryRepository
         string reason,
         CancellationToken cancellationToken);
 
+    Task<CompensationRefundRetry?> GetPendingByOrderAndPaymentAsync(
+        Guid orderId,
+        string paymentId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CompensationRefundRetry>> GetDuePendingAsync(
         DateTime nowUtc,
         int batchSize,

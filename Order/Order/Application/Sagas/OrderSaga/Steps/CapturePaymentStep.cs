@@ -304,10 +304,21 @@ public sealed class CapturePaymentStep(
             if (refundResult.Status == RefundProcessingStatus.Pending)
             {
                 logger.LogWarning(
-                    "Refund {RefundId} for payment {PaymentId} is pending provider confirmation during compensation for order {OrderId}",
+                    "Refund {RefundId} for payment {PaymentId} is pending provider confirmation during compensation for order {OrderId}. Enqueueing follow-up verification.",
                     refundResult.RefundId,
                     context.PaymentId,
                     data.CorrelationId);
+
+                // Enqueue a follow-up so the retry worker can verify the refund completes.
+                // If the RefundSucceededEvent arrives from Payment before the worker picks this up,
+                // the RefundSucceededEventHandler will mark it completed.
+                await compensationRefundRetryRepository.EnqueueIfNotExistsAsync(
+                    orderId: data.CorrelationId,
+                    paymentId: context.PaymentId,
+                    amount: data.TotalAmount,
+                    currency: data.Currency,
+                    reason: "Pending refund verification - saga compensation",
+                    cancellationToken);
             }
             else
             {
