@@ -5,11 +5,11 @@ namespace Domain.ValueObjects;
 public sealed class ProductStatus
 {
     public static readonly ProductStatus Draft = new("Draft", 0);
-    public static readonly ProductStatus Active = new("Active", 1);
+    public static readonly ProductStatus Approved = new("Approved", 1);
     public static readonly ProductStatus Inactive = new("Inactive", 2);
     public static readonly ProductStatus OutOfStock = new("OutOfStock", 3);
     public static readonly ProductStatus Deleted = new("Deleted", 4);
-    public static readonly ProductStatus PendingReview = new("PendingReview", 5);
+    public static readonly ProductStatus PendingApproval = new("PendingApproval", 5);
     public static readonly ProductStatus Rejected = new("Rejected", 6);
 
     public string Name { get; }
@@ -27,13 +27,13 @@ public sealed class ProductStatus
 
     static ProductStatus()
     {
-        Draft.AllowsTransitionTo(Active, Deleted);
-        Active.AllowsTransitionTo(Inactive, OutOfStock, Deleted);
-        Inactive.AllowsTransitionTo(Active, Deleted);
-        OutOfStock.AllowsTransitionTo(Active, Deleted);
+        Draft.AllowsTransitionTo(PendingApproval, Deleted);
+        PendingApproval.AllowsTransitionTo(Approved, Rejected, Deleted);
+        Rejected.AllowsTransitionTo(PendingApproval, Deleted);
+        Approved.AllowsTransitionTo(Inactive, OutOfStock, Deleted);
+        Inactive.AllowsTransitionTo(Approved, Deleted);
+        OutOfStock.AllowsTransitionTo(Approved, Deleted);
         Deleted.AllowsTransitionTo();
-        PendingReview.AllowsTransitionTo(Active, Rejected, Deleted);
-        Rejected.AllowsTransitionTo(PendingReview, Deleted);
     }
 
     private void AllowsTransitionTo(params ProductStatus[] targets)
@@ -55,11 +55,11 @@ public sealed class ProductStatus
     public static ProductStatus FromValue(int value) => value switch
     {
         0 => Draft,
-        1 => Active,
+        1 => Approved,
         2 => Inactive,
         3 => OutOfStock,
         4 => Deleted,
-        5 => PendingReview,
+        5 => PendingApproval,
         6 => Rejected,
         _ => throw new InvalidValueException($"Unknown ProductStatus value: {value}")
     };
@@ -67,11 +67,11 @@ public sealed class ProductStatus
     public static ProductStatus FromName(string name) => name switch
     {
         "Draft" => Draft,
-        "Active" => Active,
+        "Approved" => Approved,
         "Inactive" => Inactive,
         "OutOfStock" => OutOfStock,
         "Deleted" => Deleted,
-        "PendingReview" => PendingReview,
+        "PendingApproval" => PendingApproval,
         "Rejected" => Rejected,
         _ => throw new InvalidValueException($"Unknown ProductStatus name: {name}")
     };

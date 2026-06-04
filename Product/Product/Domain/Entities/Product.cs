@@ -64,7 +64,7 @@ public sealed class Product : AggregateRoot<ProductId>
             _stockQuantity = initialStock,
             _attributes = attributes ?? [],
             _imageUrls = imageUrls ?? [],
-            _status = ProductStatus.PendingReview,
+            _status = categoryId.IsPlaceholder() ? ProductStatus.Draft : ProductStatus.PendingApproval,
             _createdAt = DateTime.UtcNow,
         };
 
@@ -105,6 +105,12 @@ public sealed class Product : AggregateRoot<ProductId>
         _imageUrls = imageUrls ?? [];
         _updatedAt = DateTime.UtcNow;
 
+        if (!_categoryId.IsPlaceholder() && (_status == ProductStatus.Draft || _status == ProductStatus.Rejected))
+        {
+            _reviewNotes = null;
+            ChangeStatus(ProductStatus.PendingApproval);
+        }
+
         AddDomainEvent(new ProductUpdatedEvent(
             ProductId: Id,
             Name: _name,
@@ -131,11 +137,11 @@ public sealed class Product : AggregateRoot<ProductId>
         AddDomainEvent(new ProductStockUpdatedEvent(Id, previousQuantity, newQuantity, _updatedAt.Value));
 
         // i don't want to use switch for 2 cases
-        if (newQuantity == 0 && _status == ProductStatus.Active)
+        if (newQuantity == 0 && _status == ProductStatus.Approved)
             ChangeStatus(ProductStatus.OutOfStock);
         
         else if (newQuantity > 0 && _status == ProductStatus.OutOfStock)
-            ChangeStatus(ProductStatus.Active);
+            ChangeStatus(ProductStatus.Approved);
     }
 
     public void AdjustStock(int delta)
@@ -150,17 +156,17 @@ public sealed class Product : AggregateRoot<ProductId>
 
         AddDomainEvent(new ProductStockUpdatedEvent(Id, previousQuantity, newQuantity, _updatedAt.Value));
 
-        if (newQuantity == 0 && _status == ProductStatus.Active)
+        if (newQuantity == 0 && _status == ProductStatus.Approved)
             ChangeStatus(ProductStatus.OutOfStock);
 
         else if (newQuantity > 0 && _status == ProductStatus.OutOfStock)
-            ChangeStatus(ProductStatus.Active);
+            ChangeStatus(ProductStatus.Approved);
     }
 
     public void Activate()
     {
-        _status.ValidateTransitionTo(ProductStatus.Active);
-        ChangeStatus(ProductStatus.Active);
+        _status.ValidateTransitionTo(ProductStatus.Approved);
+        ChangeStatus(ProductStatus.Approved);
     }
 
     public void Deactivate()
@@ -178,8 +184,11 @@ public sealed class Product : AggregateRoot<ProductId>
 
     public void Approve()
     {
-        _status.ValidateTransitionTo(ProductStatus.Active);
-        _status = ProductStatus.Active;
+        if (_categoryId.IsPlaceholder())
+            throw new DomainException("Category must be assigned before approval");
+
+        _status.ValidateTransitionTo(ProductStatus.Approved);
+        _status = ProductStatus.Approved;
         _reviewNotes = null;
         _updatedAt = DateTime.UtcNow;
         AddDomainEvent(new ProductApprovedEvent(Id, _updatedAt.Value));
