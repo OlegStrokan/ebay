@@ -11,7 +11,7 @@ internal sealed class GetPendingProductsQueryHandler(IProductReadRepository repo
     public async Task<Result<PagedResult<ProductDetailDto>>> Handle(
         GetPendingProductsQuery request, CancellationToken cancellationToken)
     {
-        var result = await repository.GetPendingReviewAsync(request.Page, request.Size, cancellationToken);
+        var result = await repository.GetPendingApprovalAsync(request.Page, request.Size, cancellationToken);
         return Result<PagedResult<ProductDetailDto>>.Success(result);
     }
 }

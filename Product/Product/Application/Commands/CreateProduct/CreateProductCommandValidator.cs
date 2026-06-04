@@ -9,9 +9,6 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
         RuleFor(x => x.SellerId)
             .NotEmpty().WithMessage("Seller ID is required.");
 
-        RuleFor(x => x.CategoryId)
-            .NotEmpty().WithMessage("Category ID is required.");
-
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Product name is required.")
             .MaximumLength(200).WithMessage("Product name must not exceed 200 characters.");

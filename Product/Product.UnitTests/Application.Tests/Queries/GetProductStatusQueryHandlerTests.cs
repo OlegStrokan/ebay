@@ -40,7 +40,7 @@ public class GetProductStatusQueryHandlerTests
             new GetProductStatusQuery(product.Id.Value, sellerId), CancellationToken.None);
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(result.Value!.Status, Is.EqualTo("PendingReview"));
+        Assert.That(result.Value!.Status, Is.EqualTo("PendingApproval"));
         Assert.That(result.Value.ReviewNotes, Is.Null);
     }
 

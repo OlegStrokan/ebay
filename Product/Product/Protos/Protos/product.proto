@@ -63,6 +63,17 @@ message ProductPrice {
   string currency = 3;
 }
 
+enum ProductStatus {
+  Unspecified = 0;
+  Draft = 1;
+  PendingApproval = 2;
+  Approved = 3;
+  Rejected = 4;
+  Inactive = 5;
+  OutOfStock = 6;
+  Deleted = 7;
+}
+
 message ProductDetail {
   string product_id = 1;
   string name = 2;
@@ -75,7 +86,7 @@ message ProductDetail {
   repeated ProductAttributeProto attributes = 9;
   repeated string image_urls = 10;
   string seller_id = 11;
-  string status = 12;
+  ProductStatus status = 12;
   string review_notes = 13;
 }
 
@@ -85,7 +96,7 @@ message CreateProductRequest {
   string seller_id = 1;
   string name = 2;
   string description = 3;
-  string category_id = 4;
+  reserved 4;
   common.DecimalValue price = 5;
   string currency = 6;
   int32 initial_stock = 7;
@@ -93,7 +104,7 @@ message CreateProductRequest {
   repeated string image_urls = 9;
 }
 
-message CreateProductResponse { string product_id = 1; string status = 2; }
+message CreateProductResponse { string product_id = 1; ProductStatus status = 2; }
 
 message UpdateProductRequest {
   string product_id = 1;
@@ -264,4 +275,4 @@ message GetPendingProductsResponse {
 }
 
 message GetProductStatusRequest { string product_id = 1; string seller_id = 2; }
-message GetProductStatusResponse { string status = 1; string review_notes = 2; }
+message GetProductStatusResponse { ProductStatus status = 1; string review_notes = 2; }

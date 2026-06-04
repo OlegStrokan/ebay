@@ -103,7 +103,7 @@ public sealed class ProductPersistenceServiceTests : IClassFixture<IntegrationFi
             .Where(m => m.AggregateId == productId.Value.ToString())
             .ToListAsync();
 
-        updatedProduct!.Status.Should().Be(ProductStatus.Active,
+        updatedProduct!.Status.Should().Be(ProductStatus.Approved,
             "Activate() must be reflected in the database");
 
         outboxMessages.Should().HaveCount(2,

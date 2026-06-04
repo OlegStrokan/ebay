@@ -1,8 +1,10 @@
 using Application.Commands.ActivateProduct;
 using Application.Commands.CreateProduct;
 using Application.Commands.DeactivateProduct;
+using Application.Commands.UpdateProduct;
 using Application.Commands.UpdateProductStock;
 using Application.DTOs;
+using Domain.ValueObjects;
 using Confluent.Kafka;
 using Infrastructure.Persistence.DbContext;
 using Infrastructure.Persistence.ReadModels;
@@ -25,6 +27,9 @@ public static class E2ETestServerExtensions
         await db.CatalogItems.ExecuteDeleteAsync();
         await db.Products.ExecuteDeleteAsync();
         await db.Categories.ExecuteDeleteAsync();
+
+        db.Categories.Add(new Category { Id = CategoryId.PlaceholderGuid, Name = "Uncategorized" });
+        await db.SaveChangesAsync();
     }
 
     public static async Task<Guid> SeedCategoryAsync(
@@ -59,7 +64,6 @@ public static class E2ETestServerExtensions
             sellerId,
             name,
             description,
-            categoryId,
             price,
             currency,
             stock,
@@ -71,6 +75,20 @@ public static class E2ETestServerExtensions
         if (!result.IsSuccess)
             throw new InvalidOperationException(
                 $"CreateProduct failed: {string.Join(", ", result.Errors)}");
+
+        var assignCategory = await mediator.Send(new UpdateProductCommand(
+            ProductId: result.Value!,
+            Name: name,
+            Description: description,
+            CategoryId: categoryId,
+            Price: price,
+            Currency: currency,
+            Attributes: attributes ?? [],
+            ImageUrls: imageUrls ?? []));
+
+        if (!assignCategory.IsSuccess)
+            throw new InvalidOperationException(
+                $"Assign category failed: {string.Join(", ", assignCategory.Errors)}");
 
         return result.Value!;
     }
@@ -84,7 +102,8 @@ public static class E2ETestServerExtensions
 
         if (!result.IsSuccess)
         {
-            if (result.Errors.Any(e => e.Contains("Cannot transition from Active to Active")))
+            if (result.Errors.Any(e => e.Contains("Cannot transition from Approved to Approved")
+                                       || e.Contains("Cannot transition from Active to Active")))
                 return;
 
             throw new InvalidOperationException(

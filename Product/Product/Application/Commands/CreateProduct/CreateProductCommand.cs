@@ -7,7 +7,6 @@ public sealed record CreateProductCommand(
     Guid SellerId,
     string Name,
     string Description,
-    Guid CategoryId,
     decimal Price,
     string Currency,
     int InitialStock,

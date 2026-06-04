@@ -15,7 +15,6 @@ public class CreateProductCommandValidatorTests
         SellerId: Guid.NewGuid(),
         Name: "Valid Product Name",
         Description: "A description",
-        CategoryId: Guid.NewGuid(),
         Price: 10m,
         Currency: "USD",
         InitialStock: 0,
@@ -35,14 +34,6 @@ public class CreateProductCommandValidatorTests
         var result = _validator.TestValidate(ValidCommand() with { SellerId = Guid.Empty });
         result.ShouldHaveValidationErrorFor(x => x.SellerId)
             .WithErrorMessage("Seller ID is required.");
-    }
-
-    [Test]
-    public void Validate_EmptyCategoryId_ShouldHaveError()
-    {
-        var result = _validator.TestValidate(ValidCommand() with { CategoryId = Guid.Empty });
-        result.ShouldHaveValidationErrorFor(x => x.CategoryId)
-            .WithErrorMessage("Category ID is required.");
     }
 
     [TestCase("")]

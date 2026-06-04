@@ -364,7 +364,7 @@ public class ProductGrpcServiceTests
         Price: 19.99m,
         Currency: "USD",
         StockQuantity: 50,
-        Status: "Active",
+        Status: "Approved",
         SellerId: Guid.NewGuid(),
         Attributes: [],
         ImageUrls: [],

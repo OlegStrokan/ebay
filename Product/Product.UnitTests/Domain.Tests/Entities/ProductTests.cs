@@ -27,6 +27,9 @@ public class ProductTests
     private Product CreateProduct(int stock = 10) =>
         Product.Create(_sellerId, "Test Product", "A great product", _categoryId, _price, stock, _attributes, _imageUrls);
 
+    private Product CreateDraftProduct(int stock = 10) =>
+        Product.Create(_sellerId, "Draft Product", "A draft", CategoryId.Placeholder, _price, stock, _attributes, _imageUrls);
+
     private Product CreateActiveProduct(int stock = 10)
     {
         var product = CreateProduct(stock);
@@ -39,11 +42,20 @@ public class ProductTests
     #region Create
 
     [Test]
-    public void Create_ShouldReturnProductWithPendingReviewStatus()
+    public void Create_ShouldReturnProductWithPendingApprovalStatus()
     {
         var product = CreateProduct();
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingReview));
+            Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingApproval));
+    }
+
+    [Test]
+    public void Create_WithPlaceholderCategory_ShouldReturnDraftStatus()
+    {
+        var product = CreateDraftProduct();
+
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Draft));
+        Assert.That(product.CategoryId, Is.EqualTo(CategoryId.Placeholder));
     }
 
     [Test]
@@ -103,7 +115,7 @@ public class ProductTests
         var product = CreateProduct(0);
 
         Assert.That(product.StockQuantity, Is.EqualTo(0));
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingReview));
+            Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingApproval));
     }
 
     [Test]
@@ -256,7 +268,7 @@ public class ProductTests
     }
 
     [Test]
-    public void UpdateStock_OutOfStockProduct_SetToPositive_ShouldChangeStatusToActive()
+    public void UpdateStock_OutOfStockProduct_SetToPositive_ShouldChangeStatusToApproved()
     {
         var product = CreateActiveProduct(10);
         product.UpdateStock(0); // becomes OutOfStock
@@ -264,20 +276,20 @@ public class ProductTests
 
         product.UpdateStock(5);
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
         var statusEvent = product.DomainEvents.OfType<ProductStatusChangedEvent>().Single();
-        Assert.That(statusEvent.NewStatus, Is.EqualTo("Active"));
+        Assert.That(statusEvent.NewStatus, Is.EqualTo("Approved"));
     }
 
     [Test]
-    public void UpdateStock_PendingReviewProduct_SetToZero_ShouldNotChangeStatus()
+    public void UpdateStock_PendingApprovalProduct_SetToZero_ShouldNotChangeStatus()
     {
         var product = CreateProduct(10);
         product.ClearDomainEvents();
 
         product.UpdateStock(0);
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingReview));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.PendingApproval));
         Assert.That(product.DomainEvents, Has.Count.EqualTo(1)); // only stock event, no status event
     }
 
@@ -286,18 +298,18 @@ public class ProductTests
     #region Activate
 
     [Test]
-    public void Activate_FromPendingReview_ShouldChangeStatusToActive()
+    public void Activate_FromPendingApproval_ShouldChangeStatusToApproved()
     {
         var product = CreateProduct();
         product.ClearDomainEvents();
 
         product.Activate();
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
     }
 
     [Test]
-    public void Activate_FromPendingReview_ShouldRaiseProductStatusChangedEvent()
+    public void Activate_FromPendingApproval_ShouldRaiseProductStatusChangedEvent()
     {
         var product = CreateProduct();
         product.ClearDomainEvents();
@@ -307,8 +319,8 @@ public class ProductTests
         Assert.That(product.DomainEvents, Has.Count.EqualTo(1));
         var evt = product.DomainEvents[0] as ProductStatusChangedEvent;
         Assert.That(evt, Is.Not.Null);
-        Assert.That(evt!.PreviousStatus, Is.EqualTo("PendingReview"));
-        Assert.That(evt.NewStatus,       Is.EqualTo("Active"));
+        Assert.That(evt!.PreviousStatus, Is.EqualTo("PendingApproval"));
+        Assert.That(evt.NewStatus,       Is.EqualTo("Approved"));
     }
 
     [Test]
@@ -320,7 +332,7 @@ public class ProductTests
 
         product.Activate();
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
     }
 
     [Test]
@@ -362,12 +374,12 @@ public class ProductTests
         product.Deactivate();
 
         var evt = product.DomainEvents.OfType<ProductStatusChangedEvent>().Single();
-        Assert.That(evt.PreviousStatus, Is.EqualTo("Active"));
+        Assert.That(evt.PreviousStatus, Is.EqualTo("Approved"));
         Assert.That(evt.NewStatus,      Is.EqualTo("Inactive"));
     }
 
     [Test]
-    public void Deactivate_FromPendingReview_ShouldThrowInvalidOperationException()
+    public void Deactivate_FromPendingApproval_ShouldThrowInvalidOperationException()
     {
         var product = CreateProduct();
 
@@ -419,7 +431,7 @@ public class ProductTests
         product.Delete();
 
         var statusEvt = product.DomainEvents.OfType<ProductStatusChangedEvent>().Single();
-        Assert.That(statusEvt.PreviousStatus, Is.EqualTo("Active"));
+        Assert.That(statusEvt.PreviousStatus, Is.EqualTo("Approved"));
         Assert.That(statusEvt.NewStatus,      Is.EqualTo("Deleted"));
     }
 
@@ -436,7 +448,7 @@ public class ProductTests
     }
 
     [Test]
-    public void Delete_FromPendingReview_ShouldSucceed()
+    public void Delete_FromPendingApproval_ShouldSucceed()
     {
         var product = CreateProduct();
         product.ClearDomainEvents();
@@ -527,7 +539,7 @@ public class ProductTests
     }
 
     [Test]
-    public void AdjustStock_OutOfStockProduct_WhenPositiveDelta_ShouldChangeStatusToActive()
+    public void AdjustStock_OutOfStockProduct_WhenPositiveDelta_ShouldChangeStatusToApproved()
     {
         var product = CreateActiveProduct(5);
         product.AdjustStock(-5); // becomes OutOfStock
@@ -535,7 +547,7 @@ public class ProductTests
 
         product.AdjustStock(3);
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
     }
 
     [Test]
@@ -587,14 +599,24 @@ public class ProductTests
     #region Approve
 
     [Test]
-    public void Approve_FromPendingReview_ShouldChangeStatusToActive()
+    public void Approve_FromPendingApproval_ShouldChangeStatusToApproved()
     {
         var product = CreateProduct();
         product.ClearDomainEvents();
 
         product.Approve();
 
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
+    }
+
+    [Test]
+    public void Approve_WithPlaceholderCategory_ShouldThrowDomainException()
+    {
+        var product = CreateDraftProduct();
+
+        var ex = Assert.Throws<DomainException>(() => product.Approve());
+
+        Assert.That(ex!.Message, Does.Contain("Category must be assigned before approval"));
     }
 
     [Test]
@@ -643,7 +665,7 @@ public class ProductTests
     #region Reject
 
     [Test]
-    public void Reject_FromPendingReview_ShouldChangeStatusToRejected()
+    public void Reject_FromPendingApproval_ShouldChangeStatusToRejected()
     {
         var product = CreateProduct();
         product.ClearDomainEvents();

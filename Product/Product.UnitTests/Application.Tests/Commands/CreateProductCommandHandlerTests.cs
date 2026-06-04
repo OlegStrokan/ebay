@@ -25,7 +25,6 @@ public class CreateProductCommandHandlerTests
         SellerId: Guid.NewGuid(),
         Name: "Test Product",
         Description: "A description",
-        CategoryId: Guid.NewGuid(),
         Price: 99.99m,
         Currency: "USD",
         InitialStock: 10,

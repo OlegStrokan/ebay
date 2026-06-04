@@ -1,6 +1,7 @@
 using Infrastructure.Persistence.ReadModels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Domain.ValueObjects;
 
 namespace Infrastructure.Persistence.Configurations;
 
@@ -19,5 +20,12 @@ public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(x => x.ParentId);
 
         builder.HasIndex(x => x.ParentId);
+
+        builder.HasData(new Category
+        {
+            Id = CategoryId.PlaceholderGuid,
+            Name = "Uncategorized",
+            ParentId = null
+        });
     }
 }

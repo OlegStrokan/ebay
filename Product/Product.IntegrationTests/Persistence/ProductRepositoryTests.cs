@@ -90,7 +90,7 @@ public sealed class ProductRepositoryTests : IClassFixture<IntegrationFixture>
 
         var updated = await repo.GetByIdAsync(product.Id);
 
-        updated!.Status.Should().Be(ProductStatus.Active,
+        updated!.Status.Should().Be(ProductStatus.Approved,
             "Activate() must be reflected after UpdateAsync + SaveChanges");
     }
 

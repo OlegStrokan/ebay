@@ -45,7 +45,7 @@ public class ActivateProductCommandHandlerTests
         var result = await _handler.Handle(new ActivateProductCommand(product.Id.Value), CancellationToken.None);
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
         await _persistence.Received(1).UpdateProductAsync(product, Arg.Any<CancellationToken>());
     }
 

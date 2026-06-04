@@ -14,8 +14,10 @@ using Application.Queries.GetProduct;
 using Application.Queries.GetProductPrices;
 using Application.Queries.GetProducts;
 using Application.Queries.GetProductStatus;
+using DomainProductStatus = Domain.ValueObjects.ProductStatus;
 using Grpc.Core;
 using MediatR;
+using ProtoProductStatus = Protos.Product.ProductStatus;
 using Protos.Product;
 
 namespace Api.GrpcServices;
@@ -82,7 +84,6 @@ public sealed class ProductGrpcHandler(IMediator mediator, ILogger<ProductGrpcHa
                 SellerId: Guid.Parse(request.SellerId),
                 Name: request.Name,
                 Description: request.Description,
-                CategoryId: Guid.Parse(request.CategoryId),
                 Price: request.Price.ToDecimal(),
                 Currency: request.Currency,
                 InitialStock: request.InitialStock,
@@ -91,7 +92,11 @@ public sealed class ProductGrpcHandler(IMediator mediator, ILogger<ProductGrpcHa
 
             if (!result.IsSuccess)
                 throw new RpcException(new Status(StatusCode.InvalidArgument, result.Errors[0]));
-            return new CreateProductResponse { ProductId = result.Value!.ToString(), Status = "PendingReview" };
+            return new CreateProductResponse
+            {
+                ProductId = result.Value!.ToString(),
+                Status = ProtoProductStatus.Draft
+            };
         }
         catch (Exception ex) when (ex is not RpcException) { HandleException(ex, nameof(CreateProduct)); throw; }
     }
@@ -153,7 +158,7 @@ public sealed class ProductGrpcHandler(IMediator mediator, ILogger<ProductGrpcHa
 
             return new GetProductStatusResponse
             {
-                Status = result.Value!.Status,
+                Status = MapToProtoProductStatus(result.Value!.Status),
                 ReviewNotes = result.Value!.ReviewNotes ?? string.Empty
             };
         }
@@ -252,18 +257,34 @@ public sealed class ProductGrpcHandler(IMediator mediator, ILogger<ProductGrpcHa
             ProductId = dto.ProductId.ToString(),
             Name = dto.Name,
             Description = dto.Description,
-            CategoryId = dto.CategoryId.ToString(),
+            CategoryId = dto.CategoryId == Guid.Empty ? string.Empty : dto.CategoryId.ToString(),
             CategoryName = dto.CategoryName,
             Price = dto.Price.ToDecimalValue(),
             Currency = dto.Currency,
             Stock = dto.StockQuantity,
             SellerId = dto.SellerId.ToString(),
-            Status = dto.Status,
+            Status = MapToProtoProductStatus(dto.Status),
             ReviewNotes = dto.ReviewNotes ?? string.Empty
         };
         detail.Attributes.AddRange(
             dto.Attributes.Select(a => new ProductAttributeProto { Key = a.Key, Value = a.Value }));
         detail.ImageUrls.AddRange(dto.ImageUrls);
         return detail;
+    }
+
+    private static ProtoProductStatus MapToProtoProductStatus(string status)
+    {
+        var domainStatus = DomainProductStatus.FromName(status);
+        return domainStatus.Value switch
+        {
+            0 => ProtoProductStatus.Draft,
+            1 => ProtoProductStatus.Approved,
+            2 => ProtoProductStatus.Inactive,
+            3 => ProtoProductStatus.OutOfStock,
+            4 => ProtoProductStatus.Deleted,
+            5 => ProtoProductStatus.PendingApproval,
+            6 => ProtoProductStatus.Rejected,
+            _ => ProtoProductStatus.Unspecified
+        };
     }
 }

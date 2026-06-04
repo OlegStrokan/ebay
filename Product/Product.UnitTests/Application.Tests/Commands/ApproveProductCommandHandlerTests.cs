@@ -37,7 +37,7 @@ public class ApproveProductCommandHandlerTests
         var result = await _handler.Handle(new ApproveProductCommand(product.Id.Value), CancellationToken.None);
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(product.Status, Is.EqualTo(ProductStatus.Active));
+        Assert.That(product.Status, Is.EqualTo(ProductStatus.Approved));
         await _persistence.Received(1).UpdateProductAsync(product, Arg.Any<CancellationToken>());
     }
 
@@ -71,8 +71,8 @@ public class ApproveProductCommandHandlerTests
     {
         var product = CreatePendingProduct();
         product.Reject("Bad images");
-        // Re-submit (Rejected→PendingReview is allowed but not yet implemented,
-        // so test from PendingReview directly)
+        // Re-submit (Rejected->PendingApproval is allowed but not yet implemented,
+        // so test from PendingApproval directly)
         product.ClearDomainEvents();
 
         // Create a fresh pending product for this test

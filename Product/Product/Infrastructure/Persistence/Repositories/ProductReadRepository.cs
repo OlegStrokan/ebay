@@ -14,8 +14,13 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
         var product = await dbContext.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null) return null;
 
-        var categoryNames = await GetCategoryNamesAsync([product.CategoryId.Value], ct);
-        return MapToDetail(product, categoryNames.GetValueOrDefault(product.CategoryId.Value, string.Empty));
+        var categoryId = product.CategoryId.Value;
+        var categoryNames = await GetCategoryNamesAsync([categoryId], ct);
+        return MapToDetail(
+            product,
+            CategoryId.IsPlaceholder(product.CategoryId)
+                ? string.Empty
+                : categoryNames.GetValueOrDefault(categoryId, string.Empty));
     }
 
     public async Task<List<ProductDetailDto>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken ct = default)
@@ -25,10 +30,19 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
             .Where(p => productIds.Contains(p.Id))
             .ToListAsync(ct);
 
-        var categoryNames = await GetCategoryNamesAsync(
-            products.Select(p => p.CategoryId.Value).Distinct().ToList(), ct);
+        var categoryIds = products
+            .Select(p => p.CategoryId.Value)
+            .Distinct()
+            .ToList();
 
-        return products.Select(p => MapToDetail(p, categoryNames.GetValueOrDefault(p.CategoryId.Value, string.Empty)))
+        var categoryNames = await GetCategoryNamesAsync(categoryIds, ct);
+
+        return products.Select(p =>
+            MapToDetail(
+                p,
+                CategoryId.IsPlaceholder(p.CategoryId)
+                    ? string.Empty
+                    : categoryNames.GetValueOrDefault(p.CategoryId.Value, string.Empty)))
             .ToList();
     }
 
@@ -45,13 +59,13 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
     private Task<Dictionary<Guid, string>> GetCategoryNamesAsync(List<Guid> categoryIds, CancellationToken ct)
         => dbContext.Categories
             .AsNoTracking()
-            .Where(c => categoryIds.Contains(c.Id))
+            .Where(c => categoryIds.Contains(c.Id) && c.Id != CategoryId.PlaceholderGuid)
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
 
-    public async Task<PagedResult<ProductDetailDto>> GetPendingReviewAsync(int page, int size, CancellationToken ct = default)
+    public async Task<PagedResult<ProductDetailDto>> GetPendingApprovalAsync(int page, int size, CancellationToken ct = default)
     {
         var query = dbContext.Products.AsNoTracking()
-            .Where(p => p.Status == ProductStatus.PendingReview)
+            .Where(p => p.Status == ProductStatus.PendingApproval)
             .OrderBy(p => p.CreatedAt);
 
         var totalCount = await query.CountAsync(ct);
@@ -61,11 +75,19 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
             .Take(size)
             .ToListAsync(ct);
 
-        var categoryNames = await GetCategoryNamesAsync(
-            products.Select(p => p.CategoryId.Value).Distinct().ToList(), ct);
+        var categoryIds = products
+            .Select(p => p.CategoryId.Value)
+            .Distinct()
+            .ToList();
+
+        var categoryNames = await GetCategoryNamesAsync(categoryIds, ct);
 
         var items = products.Select(p =>
-            MapToDetail(p, categoryNames.GetValueOrDefault(p.CategoryId.Value, string.Empty))).ToList();
+            MapToDetail(
+                p,
+                CategoryId.IsPlaceholder(p.CategoryId)
+                    ? string.Empty
+                    : categoryNames.GetValueOrDefault(p.CategoryId.Value, string.Empty))).ToList();
 
         return new PagedResult<ProductDetailDto>(items, totalCount, page, size);
     }
@@ -75,7 +97,7 @@ internal sealed class ProductReadRepository(ProductDbContext dbContext) : IProdu
             product.Id.Value,
             product.Name,
             product.Description,
-            product.CategoryId.Value,
+            CategoryId.IsPlaceholder(product.CategoryId) ? Guid.Empty : product.CategoryId.Value,
             categoryName,
             product.Price.Amount,
             product.Price.Currency,
