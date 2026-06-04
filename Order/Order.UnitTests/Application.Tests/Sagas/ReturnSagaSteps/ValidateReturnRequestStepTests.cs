@@ -1,5 +1,6 @@
 using Application.Sagas.Steps;
 using Application.DTOs;
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas.ReturnSaga;
 using Application.Sagas.ReturnSaga.Steps;
@@ -22,6 +23,9 @@ public class ValidateReturnRequestStepTests
     private readonly IReturnRequestPersistenceService _returnRequestPersistenceService =
         Substitute.For<IReturnRequestPersistenceService>();
 
+    private readonly IUserGateway _userGateway =
+        Substitute.For<IUserGateway>();
+
     private readonly ReturnPolicyService _returnPolicyService = new();
     private readonly ILogger<ValidateReturnRequestStep> _logger =
         Substitute.For<ILogger<ValidateReturnRequestStep>>();
@@ -29,6 +33,7 @@ public class ValidateReturnRequestStepTests
     private ValidateReturnRequestStep BuildStep() => new(
         _orderPersistenceService,
         _returnRequestPersistenceService,
+        _userGateway,
         _returnPolicyService,
         _logger);
         
@@ -46,6 +51,8 @@ public class ValidateReturnRequestStepTests
         _returnRequestPersistenceService
             .LoadByOrderIdAsync(data.CorrelationId, Arg.Any<CancellationToken>())
             .Returns((RequestReturn?)null);
+
+        SetupUserGateway(data.CustomerId);
 
         var context = new ReturnSagaContext();
         var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
@@ -180,6 +187,19 @@ public class ValidateReturnRequestStepTests
             .LoadOrderAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _returnRequestPersistenceService.DidNotReceive()
             .UpdateReturnRequestAsync(Arg.Any<Guid>(), Arg.Any<Func<RequestReturn, Task>>(), Arg.Any<CancellationToken>());
+    }
+
+    private void SetupUserGateway(Guid customerId, string countryCode = "US", string customerTier = "Standard")
+    {
+        _userGateway
+            .GetUserProfileAsync(customerId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new UserProfileDto(
+                customerId,
+                $"{customerId}@test.local",
+                "Test Customer",
+                countryCode,
+                customerTier,
+                true)));
     }
 
     private static ReturnSagaData CreateSampleData(Guid correlationId, Guid? productId = null) => new()

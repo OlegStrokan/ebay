@@ -346,7 +346,7 @@ public class CapturePaymentStepTests
     }
 
     [Fact]
-    public async Task CompensateAsync_ShouldTreatPendingRefundAsAccepted_WithoutEnqueue()
+    public async Task CompensateAsync_ShouldEnqueueVerification_WhenRefundIsPending()
     {
         var data = CreateSampleData();
         var context = new OrderSagaContext
@@ -368,11 +368,12 @@ public class CapturePaymentStepTests
 
         Assert.Null(exception);
 
-        await _compensationRefundRetryRepository.DidNotReceive().EnqueueIfNotExistsAsync(
-            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-
-        await _incidentReporter.DidNotReceive().SendAlertAsync(
-            Arg.Any<IncidentAlert>(),
+        await _compensationRefundRetryRepository.Received(1).EnqueueIfNotExistsAsync(
+            data.CorrelationId,
+            "PAY-123",
+            data.TotalAmount,
+            data.Currency,
+            Arg.Is<string>(s => s.Contains("Pending refund verification")),
             Arg.Any<CancellationToken>());
     }
 
