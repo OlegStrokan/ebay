@@ -21,6 +21,7 @@ public static class InfrastructureModule
     {
         services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.SectionName));
         services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
+        services.Configure<MockFintechOptions>(configuration.GetSection(MockFintechOptions.SectionName));
         services.Configure<OrderCallbackOptions>(configuration.GetSection(OrderCallbackOptions.SectionName));
         services.Configure<ReconciliationWorkerOptions>(configuration.GetSection(ReconciliationWorkerOptions.SectionName));
 
@@ -38,7 +39,30 @@ public static class InfrastructureModule
         services.AddSingleton<IClock, SystemClock>();
 
         services.AddScoped<IOrderCallbackPayloadSerializer, OrderCallbackPayloadSerializer>();
-        services.AddScoped<IStripePaymentProvider, StripePaymentProvider>();
+
+        services.AddScoped<StripePaymentProvider>();
+        services.AddScoped<FakePaymentProvider>();
+        services.AddScoped<MockFintechPaymentProvider>();
+
+        var providerTypeRaw = configuration.GetSection(StripeOptions.SectionName)
+            .GetValue<string>("ProviderType")
+            ?? throw new InvalidOperationException(
+                "Stripe:ProviderType is required. Valid values: Stripe, MockFintech, Fake.");
+
+        if (!Enum.TryParse<PaymentProviderType>(providerTypeRaw, ignoreCase: true, out var providerType))
+        {
+            throw new InvalidOperationException(
+                $"Stripe:ProviderType '{providerTypeRaw}' is not valid. Valid values: Stripe, MockFintech, Fake.");
+        }
+
+        services.AddScoped<IStripePaymentProvider>(sp => providerType switch
+        {
+            PaymentProviderType.Stripe      => sp.GetRequiredService<StripePaymentProvider>(),
+            PaymentProviderType.MockFintech => sp.GetRequiredService<MockFintechPaymentProvider>(),
+            PaymentProviderType.Fake        => sp.GetRequiredService<FakePaymentProvider>(),
+            _ => throw new InvalidOperationException($"Unhandled PaymentProviderType: {providerType}")
+        });
+
         services.AddSingleton<IOrderCallbackDispatcher, OrderCallbackKafkaDispatcher>();
 
         services.AddHostedService<OrderCallbackDeliveryWorker>();

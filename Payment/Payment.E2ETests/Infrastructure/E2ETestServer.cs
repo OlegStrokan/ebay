@@ -54,7 +54,7 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
             configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] = _postgres.GetConnectionString(),
-                ["Stripe:UseFakeProvider"] = "true",
+                ["Stripe:ProviderType"] = "Fake",
                 ["Stripe:SecretKey"] = string.Empty,
                 ["Stripe:WebhookSecret"] = string.Empty,
                 ["Stripe:DefaultCurrency"] = "USD",
