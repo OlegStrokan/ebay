@@ -367,8 +367,74 @@ public class PaymentTests
     #region MarkRefunded
 
     [Fact]
-    public void MarkRefunded_FromRefundPending_ShouldChangeStatusToRefunded()
+    public void MarkRefunded_FullRefund_ShouldChangeStatusToRefunded()
     {
+        var payment = CreateSucceededPayment();     // Amount = $100
+        var refundId = RefundId.CreateUnique();
+        payment.StartRefund(refundId, Money.Create(100, "USD"), "reason");
+        payment.ClearDomainEvents();
+
+        payment.MarkRefunded(refundId, amountRefunded: Money.Create(100, "USD"));
+
+        Assert.Equal(PaymentStatus.Refunded, payment.Status);
+        Assert.Equal(100m, payment.TotalRefundedAmount);
+    }
+
+    [Fact]
+    public void MarkRefunded_PartialRefund_ShouldReturnToSucceeded()
+    {
+        var payment = CreateSucceededPayment();     // Amount = $100
+        var refundId = RefundId.CreateUnique();
+        payment.StartRefund(refundId, Money.Create(40, "USD"), "reason");
+        payment.ClearDomainEvents();
+
+        payment.MarkRefunded(refundId, amountRefunded: Money.Create(40, "USD"));
+
+        Assert.Equal(PaymentStatus.Succeeded, payment.Status);
+        Assert.Equal(40m, payment.TotalRefundedAmount);
+    }
+
+    [Fact]
+    public void MarkRefunded_TwoPartialRefunds_ShouldAllowSecondRefund()
+    {
+        var payment = CreateSucceededPayment();     // Amount = $100
+
+        var refundId1 = RefundId.CreateUnique();
+        payment.StartRefund(refundId1, Money.Create(30, "USD"), "first");
+        payment.MarkRefunded(refundId1, amountRefunded: Money.Create(30, "USD"));
+
+        Assert.Equal(PaymentStatus.Succeeded, payment.Status);
+        Assert.Equal(30m, payment.TotalRefundedAmount);
+
+        var refundId2 = RefundId.CreateUnique();
+        payment.StartRefund(refundId2, Money.Create(30, "USD"), "second");
+        payment.MarkRefunded(refundId2, amountRefunded: Money.Create(30, "USD"));
+
+        Assert.Equal(PaymentStatus.Succeeded, payment.Status);
+        Assert.Equal(60m, payment.TotalRefundedAmount);
+    }
+
+    [Fact]
+    public void MarkRefunded_FinalPartialRefundExhaustsAmount_ShouldBeFullyRefunded()
+    {
+        var payment = CreateSucceededPayment();     // Amount = $100
+
+        var refundId1 = RefundId.CreateUnique();
+        payment.StartRefund(refundId1, Money.Create(60, "USD"), "first");
+        payment.MarkRefunded(refundId1, amountRefunded: Money.Create(60, "USD"));
+
+        var refundId2 = RefundId.CreateUnique();
+        payment.StartRefund(refundId2, Money.Create(40, "USD"), "second");
+        payment.MarkRefunded(refundId2, amountRefunded: Money.Create(40, "USD"));
+
+        Assert.Equal(PaymentStatus.Refunded, payment.Status);
+        Assert.Equal(100m, payment.TotalRefundedAmount);
+    }
+
+    [Fact]
+    public void MarkRefunded_WithNoAmount_ShouldDefaultToRefunded()
+    {
+        // When no amount is supplied (backward compat / unknown amount), always go terminal.
         var payment = CreateSucceededPayment();
         var refundId = RefundId.CreateUnique();
         payment.StartRefund(refundId, Money.Create(50, "USD"), "reason");

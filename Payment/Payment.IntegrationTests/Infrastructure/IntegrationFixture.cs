@@ -40,7 +40,7 @@ public sealed class IntegrationFixture : IAsyncLifetime
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] = _postgres.GetConnectionString(),
-                ["Stripe:UseFakeProvider"] = "true",
+                ["Stripe:ProviderType"] = "Fake",
                 ["Stripe:DefaultCurrency"] = "USD",
                 ["Stripe:SecretKey"] = "",
                 ["Kafka:BootstrapServers"] = "localhost:9092",

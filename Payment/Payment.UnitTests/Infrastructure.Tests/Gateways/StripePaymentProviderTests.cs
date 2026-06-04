@@ -8,20 +8,13 @@ namespace Infrastructure.Tests.Gateways;
 
 public class StripePaymentProviderTests
 {
-    private static StripePaymentProvider BuildFakeProvider() =>
-        new(
-            Microsoft.Extensions.Options.Options.Create(new StripeOptions
-            {
-                UseFakeProvider = true,
-                DefaultCurrency = "USD",
-            }),
-            NullLogger<StripePaymentProvider>.Instance);
+    private static FakePaymentProvider BuildFakeProvider() => new();
 
     private static StripePaymentProvider BuildRealWithoutSecret() =>
         new(
             Microsoft.Extensions.Options.Options.Create(new StripeOptions
             {
-                UseFakeProvider = false,
+                ProviderType = PaymentProviderType.Stripe,
                 SecretKey = "",
                 DefaultCurrency = "USD",
             }),

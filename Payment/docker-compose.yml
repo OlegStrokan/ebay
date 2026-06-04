@@ -35,7 +35,7 @@ services:
   #     ASPNETCORE_ENVIRONMENT: Development
   #     ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=payment_db;Username=postgres;Password=postgres"
   #     Kafka__BootstrapServers: "kafka:9092"
-  #     Stripe__UseFakeProvider: "true"
+  #     Stripe__ProviderType: "Fake"
   #     Stripe__SecretKey: "sk_test_placeholder"
   #     Stripe__WebhookSecret: "dev_webhook_secret"
   #     OrderCallback__SharedSecret: "dev_shared_secret"
