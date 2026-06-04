@@ -31,16 +31,17 @@ gRPC service that owns product, listing, and catalog-item aggregates. Uses Domai
 ## Domain Model
 
 **Product Aggregate Root** with status state machine:
-- PendingReview → Active | Rejected | Deleted
-- Rejected → PendingReview | Deleted
-- Active → Inactive | OutOfStock | Deleted
-- Inactive → Active | Deleted
-- OutOfStock → Active | Deleted
+- Draft → PendingApproval | Deleted
+- PendingApproval → Approved | Rejected | Deleted
+- Rejected → PendingApproval | Deleted
+- Approved → Inactive | OutOfStock | Deleted
+- Inactive → Approved | Deleted
+- OutOfStock → Approved | Deleted
 - Deleted → (terminal, no transitions)
 
-Products start as **PendingReview** on creation. Admin must `Approve()` (→Active) or `Reject(reason)` (→Rejected). Rejected products can be resubmitted (→PendingReview).
+Products are created with a system placeholder category and start as **Draft**. Assigning a real category via update moves Draft/Rejected products to **PendingApproval**. Admin must `Approve()` (→Approved) or `Reject(reason)` (→Rejected). Approval is blocked while placeholder category is assigned.
 
-- **Value Objects**: `ProductId` (Guid), `CategoryId`, `SellerId`, `Money` (decimal + currency), `ProductStatus` (enum with state machine), `ProductAttribute` (key-value)
+- **Value Objects**: `ProductId` (Guid), `CategoryId` (includes placeholder helper/constant), `SellerId`, `Money` (decimal + currency), `ProductStatus` (state machine value object), `ProductAttribute` (key-value)
 - **ReviewNotes**: Optional string on Product aggregate, set on Reject(), cleared on Approve()
 
 **Domain Events**: `ProductCreatedEvent`, `ProductUpdatedEvent`, `ProductDeletedEvent`, `ProductStatusChangedEvent`, `ProductStockUpdatedEvent`, `ProductApprovedEvent`, `ProductRejectedEvent`
@@ -79,14 +80,21 @@ Products start as **PendingReview** on creation. Admin must `Approve()` (→Acti
 
 ## gRPC RPCs
 
-- Product CRUD: CreateProduct, UpdateProduct, DeleteProduct, GetProduct, GetProducts, GetProductsByCategory
+- Product CRUD: CreateProduct, UpdateProduct, DeleteProduct, GetProduct, GetProducts, GetProductPrices
 - Moderation: ApproveProduct, RejectProduct, GetPendingProducts, GetProductStatus
 - Listing & CatalogItem: CRUD operations for seller listings and admin catalog items
+
+## Proto Contract Notes
+
+- Product status is exposed as `ProductStatus` enum in product-facing responses (`ProductDetail`, `CreateProductResponse`, `GetProductStatusResponse`).
+- `CreateProductRequest` no longer accepts `category_id` (field 4 is reserved).
+- `UpdateProductRequest.category_id` is required and used to move products from placeholder draft flow into moderation.
+- Customer-facing product category output should hide the internal placeholder category (empty id/name).
 
 ## Key Rules
 
 - Status transitions are enforced by `ProductStatus` state machine — never set status directly
-- `UpdateStock(0)` auto-transitions to OutOfStock; `UpdateStock(>0)` reverts to Active
+- `UpdateStock(0)` auto-transitions to OutOfStock; `UpdateStock(>0)` reverts to Approved
 - `AdjustStock()` is delta-based and clamps to 0 minimum
 - All writes go through outbox — never publish to Kafka directly from a command handler
 - `DecimalValue` proto uses `units` (int64) + `nanos` (int32) for money — nanos = fractional * 1_000_000_000
