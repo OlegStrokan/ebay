@@ -94,6 +94,7 @@ builder.Services.AddExceptionHandler<GrpcExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 builder.Services.AddSingleton<IUserEventPublisher, KafkaUserEventPublisher>();
+builder.Services.AddSingleton<IOrderSagaEventPublisher, KafkaOrderSagaEventPublisher>();
 
 var app = builder.Build();
 
@@ -122,6 +123,7 @@ app.MapPaymentEndpoints();
 app.MapInventoryEndpoints();
 app.MapSearchEndpoints();
 app.MapUserEventEndpoints();
+app.MapShippingWebhookEndpoints();
 
 app.Run();
 
