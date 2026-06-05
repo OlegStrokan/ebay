@@ -33,6 +33,8 @@ public static class InfrastructureModule
         services.Configure<ShippingApiOptions>(configuration.GetSection("Shipping"));
         services.Configure<DpdApiOptions>(configuration.GetSection("Shipping:Dpd"));
         services.Configure<PplApiOptions>(configuration.GetSection("Shipping:Ppl"));
+        services.Configure<TelegramIncidentReporterOptions>(
+            configuration.GetSection(TelegramIncidentReporterOptions.SectionName));
         services.Configure<WriteRoutingOptions>(configuration.GetSection("WriteRouting"));
 
         services.AddGrpcGatewayClients(configuration);
@@ -119,7 +121,8 @@ public static class InfrastructureModule
         services.AddScoped<IShippingGateway, ShippingGatewayRouter>();
         services.AddScoped<IAccountingGateway, AccountingGateway>();
         services.AddScoped<IEmailGateway, EmailGateway>();
-        services.AddScoped<IIncidentReporter, HelpDeskIncidentReporter>();
+        services.AddHttpClient<TelegramIncidentReporter>();
+        services.AddScoped<IIncidentReporter, TelegramIncidentReporter>();
 
         // Background services
         services.AddHostedService<OutboxProcessor>();
