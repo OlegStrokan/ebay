@@ -19,6 +19,13 @@ internal sealed class UpdateProductCommandHandler(IProductPersistenceService per
                 return Result.Failure($"Product with ID {request.ProductId} was not found.");
 
             var categoryId = CategoryId.From(request.CategoryId);
+
+            if (product.Status == ProductStatus.Approved
+                && HasIdentityChanges(product, request, categoryId))
+            {
+                return Result.Failure("Identity updates require moderation and are temporarily disabled, available updates only for price and stock");
+            }
+
             var price      = Money.Create(request.Price, request.Currency);
             var attributes = request.Attributes
                 .Select(a => new Domain.ValueObjects.ProductAttribute(a.Key, a.Value)).ToList();
@@ -29,5 +36,20 @@ internal sealed class UpdateProductCommandHandler(IProductPersistenceService per
             return Result.Success();
         }
         catch (DomainException ex) { return Result.Failure(ex.Message); }
+    }
+
+    private static bool HasIdentityChanges(Domain.Entities.Product product, UpdateProductCommand request, CategoryId categoryId)
+    {
+        if (!string.Equals(product.Name, request.Name, StringComparison.Ordinal))
+            return true;
+
+        if (!string.Equals(product.Description, request.Description, StringComparison.Ordinal))
+            return true;
+
+        if (!product.CategoryId.Equals(categoryId))
+            return true;
+
+        var requestedImageUrls = request.ImageUrls ?? [];
+        return !product.ImageUrls.SequenceEqual(requestedImageUrls);
     }
 }
