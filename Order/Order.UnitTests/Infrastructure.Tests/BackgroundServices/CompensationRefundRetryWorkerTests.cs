@@ -63,9 +63,10 @@ public class CompensationRefundRetryWorkerTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_ShouldMarkCompleted_WhenRefundIsPending()
+    public async Task ExecuteAsync_ShouldKeepPendingAndScheduleVerification_WhenRefundIsPending()
     {
         var retry = CreateRetry();
+        var before = retry.NextAttemptAtUtc;
         ConfigureSingleDueRetry(retry);
 
         _paymentGateway.RefundWithStatusAsync(
@@ -84,7 +85,10 @@ public class CompensationRefundRetryWorkerTests
         var worker = BuildWorker();
         await RunUntilSignalAsync(worker, signal, "SaveAsync was not called for pending refund retry.");
 
-        Assert.Equal(CompensationRefundRetryStatus.Completed, retry.Status);
+        Assert.Equal(CompensationRefundRetryStatus.Pending, retry.Status);
+        Assert.Null(retry.CompletedAtUtc);
+        Assert.Equal(0, retry.RetryCount);
+        Assert.True(retry.NextAttemptAtUtc > before);
         await _incidentReporter.DidNotReceive().SendAlertAsync(Arg.Any<IncidentAlert>(), Arg.Any<CancellationToken>());
     }
 

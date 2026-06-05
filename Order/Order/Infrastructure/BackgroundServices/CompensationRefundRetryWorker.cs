@@ -86,27 +86,33 @@ public sealed class CompensationRefundRetryWorker(
                 retry.Reason,
                 cancellationToken);
 
+            if (refundResult.Status == RefundProcessingStatus.Pending)
+            {
+                var now = DateTime.UtcNow;
+                var nextAttemptAt = now.Add(CalculateRetryDelay(Math.Max(1, retry.RetryCount + 1)));
+                retry.MarkPendingVerification(nextAttemptAt, now);
+                await retryRepository.SaveAsync(retry, cancellationToken);
+
+                logger.LogWarning(
+                    "Compensation refund retry is still pending provider confirmation. RetryId={RetryId}, OrderId={OrderId}, PaymentId={PaymentId}, RefundId={RefundId}, NextAttemptAt={NextAttemptAt}",
+                    retry.Id,
+                    retry.OrderId,
+                    retry.PaymentId,
+                    refundResult.RefundId,
+                    retry.NextAttemptAtUtc);
+
+                return;
+            }
+
             retry.MarkCompleted(DateTime.UtcNow);
             await retryRepository.SaveAsync(retry, cancellationToken);
 
-            if (refundResult.Status == RefundProcessingStatus.Pending)
-            {
-                logger.LogWarning(
-                    "Compensation refund retry accepted as pending. RetryId={RetryId}, OrderId={OrderId}, PaymentId={PaymentId}, RefundId={RefundId}",
-                    retry.Id,
-                    retry.OrderId,
-                    retry.PaymentId,
-                    refundResult.RefundId);
-            }
-            else
-            {
-                logger.LogInformation(
-                    "Compensation refund retry succeeded. RetryId={RetryId}, OrderId={OrderId}, PaymentId={PaymentId}, RefundId={RefundId}",
-                    retry.Id,
-                    retry.OrderId,
-                    retry.PaymentId,
-                    refundResult.RefundId);
-            }
+            logger.LogInformation(
+                "Compensation refund retry succeeded. RetryId={RetryId}, OrderId={OrderId}, PaymentId={PaymentId}, RefundId={RefundId}",
+                retry.Id,
+                retry.OrderId,
+                retry.PaymentId,
+                refundResult.RefundId);
         }
         catch (Exception ex)
         {

@@ -97,6 +97,31 @@ public class CompensationRefundRetryTests
     }
 
     [Fact]
+    public void MarkPendingVerification_ShouldRescheduleWithoutIncrementingRetryCount()
+    {
+        var initial = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var rescheduledAt = initial.AddMinutes(5);
+        var updatedAt = initial.AddMinutes(1);
+
+        var retry = CompensationRefundRetry.Create(
+            Guid.NewGuid(),
+            "PAY-123",
+            25m,
+            "USD",
+            "test",
+            initial);
+
+        retry.MarkInProgress(updatedAt);
+        retry.MarkPendingVerification(rescheduledAt, updatedAt);
+
+        Assert.Equal(CompensationRefundRetryStatus.Pending, retry.Status);
+        Assert.Equal(0, retry.RetryCount);
+        Assert.Equal(rescheduledAt, retry.NextAttemptAtUtc);
+        Assert.Equal(updatedAt, retry.UpdatedAtUtc);
+        Assert.Null(retry.CompletedAtUtc);
+    }
+
+    [Fact]
     public void MarkExhausted_ShouldIncrementRetry_AndBecomeTerminal()
     {
         var initial = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);

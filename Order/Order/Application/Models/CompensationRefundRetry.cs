@@ -110,6 +110,20 @@ public sealed class CompensationRefundRetry
         UpdatedAtUtc = now;
     }
 
+    public void MarkPendingVerification(DateTime nextAttemptAtUtc, DateTime? updatedAtUtc = null)
+    {
+        if (Status != CompensationRefundRetryStatus.Pending
+            && Status != CompensationRefundRetryStatus.InProgress)
+        {
+            return;
+        }
+
+        var now = updatedAtUtc ?? DateTime.UtcNow;
+        NextAttemptAtUtc = nextAttemptAtUtc;
+        Status = CompensationRefundRetryStatus.Pending;
+        UpdatedAtUtc = now;
+    }
+
     public void MarkCompleted(DateTime? completedAtUtc = null)
     {
         if (Status != CompensationRefundRetryStatus.Pending
