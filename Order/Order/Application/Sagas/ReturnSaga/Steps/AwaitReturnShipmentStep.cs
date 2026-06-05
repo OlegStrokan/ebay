@@ -7,6 +7,7 @@ namespace Application.Sagas.ReturnSaga.Steps;
 
 public sealed class AwaitReturnShipmentStep(
     IShippingGateway shippingGateway,
+    IShippingWebhookUrlProvider shippingWebhookUrlProvider,
     IIncidentReporter incidentReporter,
     ILogger<AwaitReturnShipmentStep> logger
     ) : ISagaStep<ReturnSagaData, ReturnSagaContext>
@@ -54,11 +55,15 @@ public sealed class AwaitReturnShipmentStep(
                 "Return shipment created {ShipmentId} for order {OrderId}. Awaiting delivery...",
                 returnShipmentId,
                 data.CorrelationId);
+
+            var callbackUrl = BuildReturnDeliveredCallbackUrl(
+                shippingWebhookUrlProvider.GetReturnDeliveredCallbackUrl(),
+                data.CorrelationId,
+                returnShipmentId);
             
             await shippingGateway.RegisterWebhookAsync(
                 shipmentId: returnShipmentId,
-                // todo: add real link 
-                callbackUrl: "https://gateway.com ",
+                callbackUrl: callbackUrl,
                 events: ["return.delivered"],
                 cancellationToken);
 
@@ -120,5 +125,17 @@ public sealed class AwaitReturnShipmentStep(
                 cancellationToken);
         }
 
+    }
+
+    private static string BuildReturnDeliveredCallbackUrl(string baseUrl, Guid orderId, string shipmentId)
+    {
+        var normalizedBaseUrl = baseUrl.Trim();
+        var separator = normalizedBaseUrl.Contains('?') ? '&' : '?';
+
+        return string.Concat(
+            normalizedBaseUrl,
+            separator,
+            "orderId=", Uri.EscapeDataString(orderId.ToString()),
+            "&shipmentId=", Uri.EscapeDataString(shipmentId));
     }
 }

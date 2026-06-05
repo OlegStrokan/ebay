@@ -116,6 +116,7 @@ public static class InfrastructureModule
         services.AddScoped<IUserGateway, UserGateway>();
         services.AddScoped<IInventoryGateway, InventoryGateway>();
         services.AddScoped<IPaymentGateway, PaymentGateway>();
+        services.AddScoped<IShippingWebhookUrlProvider, ShippingWebhookUrlProvider>();
         services.AddHttpClient<DpdShippingAdapter>();
         services.AddHttpClient<PplShippingAdapter>();
         services.AddScoped<IShippingGateway, ShippingGatewayRouter>();

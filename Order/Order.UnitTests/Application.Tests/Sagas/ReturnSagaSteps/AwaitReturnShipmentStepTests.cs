@@ -14,13 +14,17 @@ namespace Application.Tests.Sagas.ReturnSagaSteps;
 public class AwaitReturnShipmentStepTests
 {
     private readonly IShippingGateway _shippingGateway = Substitute.For<IShippingGateway>();
+    private readonly IShippingWebhookUrlProvider _shippingWebhookUrlProvider = Substitute.For<IShippingWebhookUrlProvider>();
     private readonly IIncidentReporter _incidentReporter = Substitute.For<IIncidentReporter>();
     private readonly ILogger<AwaitReturnShipmentStep> _logger = Substitute.For<ILogger<AwaitReturnShipmentStep>>();
     private readonly AwaitReturnShipmentStep _step;
 
     public AwaitReturnShipmentStepTests()
     {
-        _step = new AwaitReturnShipmentStep(_shippingGateway, _incidentReporter, _logger);
+        _shippingWebhookUrlProvider.GetReturnDeliveredCallbackUrl()
+            .Returns("https://gateway.example.com/api/v1/webhooks/shipping/returns/delivered");
+
+        _step = new AwaitReturnShipmentStep(_shippingGateway, _shippingWebhookUrlProvider, _incidentReporter, _logger);
     }
 
     [Fact]
@@ -52,7 +56,9 @@ public class AwaitReturnShipmentStepTests
 
         await _shippingGateway.Received().RegisterWebhookAsync(
             expectedShipmentId,
-            Arg.Any<string>(),
+            Arg.Is<string>(url =>
+                url.Contains("https://gateway.example.com/api/v1/webhooks/shipping/returns/delivered")
+                && url.Contains($"orderId={data.CorrelationId}")),
             Arg.Is<string[]>(events => events.Contains("return.delivered")),
             Arg.Any<CancellationToken>());
     }
@@ -74,7 +80,9 @@ public class AwaitReturnShipmentStepTests
 
         await _shippingGateway.Received(1).RegisterWebhookAsync(
             "EXISTING-SHIP",
-            Arg.Any<string>(),
+            Arg.Is<string>(url =>
+                url.Contains("https://gateway.example.com/api/v1/webhooks/shipping/returns/delivered")
+                && url.Contains($"orderId={data.CorrelationId}")),
             Arg.Is<string[]>(events => events.Contains("return.delivered")),
             Arg.Any<CancellationToken>());
     }
