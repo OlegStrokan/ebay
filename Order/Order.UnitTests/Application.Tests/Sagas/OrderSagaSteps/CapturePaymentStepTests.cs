@@ -22,6 +22,12 @@ public class CapturePaymentStepTests
     public CapturePaymentStepTests()
     {
         _paymentGateway
+            .CancelAuthorizationAsync(
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        _paymentGateway
             .RefundWithStatusAsync(
                 Arg.Any<string>(),
                 Arg.Any<decimal>(),
@@ -290,6 +296,75 @@ public class CapturePaymentStepTests
         };
 
         await BuildStep().CompensateAsync(CreateSampleData(), context, CancellationToken.None);
+
+        await _paymentGateway.DidNotReceive().RefundWithStatusAsync(
+            Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CompensateAsync_ShouldEnqueueDeferredVerification_WhenPaymentStatusIsUncertain_AndPaymentIdExists()
+    {
+        var data = CreateSampleData();
+        var context = new OrderSagaContext
+        {
+            PaymentId = "PAY-UNCERTAIN",
+            PaymentStatus = OrderSagaPaymentStatus.Uncertain,
+        };
+
+        await BuildStep().CompensateAsync(data, context, CancellationToken.None);
+
+        await _compensationRefundRetryRepository.Received(1).EnqueueIfNotExistsAsync(
+            data.CorrelationId,
+            "PAY-UNCERTAIN",
+            data.TotalAmount,
+            data.Currency,
+            Arg.Is<string>(s => s.Contains("Uncertain payment verification")),
+            Arg.Any<CancellationToken>());
+
+        await _paymentGateway.DidNotReceive().RefundWithStatusAsync(
+            Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CompensateAsync_ShouldCancelAuthorization_WhenPaymentStatusIsUncertain_AndOnlyIntentIdExists()
+    {
+        var data = CreateSampleDataWithPaymentIntent("pi_uncertain_123");
+        var context = new OrderSagaContext
+        {
+            PaymentStatus = OrderSagaPaymentStatus.Uncertain,
+            PaymentId = null,
+            ProviderPaymentIntentId = "pi_uncertain_123",
+        };
+
+        await BuildStep().CompensateAsync(data, context, CancellationToken.None);
+
+        await _paymentGateway.Received(1).CancelAuthorizationAsync(
+            "pi_uncertain_123",
+            Arg.Any<CancellationToken>());
+
+        await _paymentGateway.DidNotReceive().RefundWithStatusAsync(
+            Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        await _compensationRefundRetryRepository.DidNotReceive().EnqueueIfNotExistsAsync(
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CompensateAsync_ShouldRaiseIncident_WhenPaymentStatusIsUncertain_AndNoIdentifiersExist()
+    {
+        var data = CreateSampleData();
+        var context = new OrderSagaContext
+        {
+            PaymentStatus = OrderSagaPaymentStatus.Uncertain,
+            PaymentId = null,
+            ProviderPaymentIntentId = null,
+        };
+
+        await BuildStep().CompensateAsync(data, context, CancellationToken.None);
+
+        await _incidentReporter.Received(1).SendAlertAsync(
+            Arg.Is<IncidentAlert>(a => a.AlertType == "PaymentCompensationUncertain"),
+            Arg.Any<CancellationToken>());
 
         await _paymentGateway.DidNotReceive().RefundWithStatusAsync(
             Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());

@@ -257,6 +257,82 @@ public sealed class CapturePaymentStep(
             context.PaymentStatus = OrderSagaPaymentStatus.Succeeded;
         }
 
+        if (context.PaymentStatus == OrderSagaPaymentStatus.Uncertain)
+        {
+            logger.LogWarning(
+                "Payment status is Uncertain during compensation for order {OrderId}. Executing deferred safety path.",
+                data.CorrelationId);
+
+            if (!string.IsNullOrWhiteSpace(context.PaymentId))
+            {
+                await compensationRefundRetryRepository.EnqueueIfNotExistsAsync(
+                    orderId: data.CorrelationId,
+                    paymentId: context.PaymentId,
+                    amount: data.TotalAmount,
+                    currency: data.Currency,
+                    reason: "Uncertain payment verification - saga compensation",
+                    cancellationToken);
+
+                logger.LogWarning(
+                    "Enqueued uncertain-payment compensation verification for order {OrderId}, payment {PaymentId}.",
+                    data.CorrelationId,
+                    context.PaymentId);
+
+                return;
+            }
+
+            var providerPaymentIntentId = string.IsNullOrWhiteSpace(context.ProviderPaymentIntentId)
+                ? data.PaymentIntentId
+                : context.ProviderPaymentIntentId;
+
+            if (!string.IsNullOrWhiteSpace(providerPaymentIntentId))
+            {
+                try
+                {
+                    await paymentGateway.CancelAuthorizationAsync(providerPaymentIntentId, cancellationToken);
+
+                    logger.LogInformation(
+                        "Cancelled uncertain authorization {ProviderPaymentIntentId} for order {OrderId} during compensation.",
+                        providerPaymentIntentId,
+                        data.CorrelationId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(
+                        ex,
+                        "Failed to cancel uncertain authorization {ProviderPaymentIntentId} for order {OrderId}. Manual reconciliation required.",
+                        providerPaymentIntentId,
+                        data.CorrelationId);
+
+                    await incidentReporter.SendAlertAsync(
+                        new IncidentAlert(
+                            AlertType: "PaymentCompensationUncertain",
+                            OrderId: data.CorrelationId,
+                            RefundId: null,
+                            Message: $"Uncertain payment compensation failed to cancel authorization {providerPaymentIntentId}.",
+                            Severity: AlertSeverity.Critical),
+                        cancellationToken);
+                }
+
+                return;
+            }
+
+            logger.LogError(
+                "Uncertain payment compensation has no PaymentId and no PaymentIntentId for order {OrderId}. Manual reconciliation required.",
+                data.CorrelationId);
+
+            await incidentReporter.SendAlertAsync(
+                new IncidentAlert(
+                    AlertType: "PaymentCompensationUncertain",
+                    OrderId: data.CorrelationId,
+                    RefundId: null,
+                    Message: "Uncertain payment compensation has no identifiers for automated verification/refund.",
+                    Severity: AlertSeverity.Critical),
+                cancellationToken);
+
+            return;
+        }
+
         if (string.IsNullOrEmpty(context.PaymentId))
         {
             logger.LogInformation(
@@ -266,9 +342,8 @@ public sealed class CapturePaymentStep(
             return;
         }
 
-        // Skip refund if payment is Uncertain - it might succeed later via webhook/reconciliation
         // Skip if Failed - we can't refund what wasn't charged
-        if (context.PaymentStatus is OrderSagaPaymentStatus.Uncertain or OrderSagaPaymentStatus.Failed)
+        if (context.PaymentStatus == OrderSagaPaymentStatus.Failed)
         {
             logger.LogInformation(
                 "Skipping refund for order {OrderId}. Payment status is {Status}.",
