@@ -35,6 +35,7 @@ public sealed class PaymentGateway(
             Currency = normalizedCurrency,
             PaymentMethod = paymentMethod,
             IdempotencyKey = idempotencyKey,
+            CustomerEmail = string.Empty,
         };
 
         try

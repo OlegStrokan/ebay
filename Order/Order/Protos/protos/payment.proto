@@ -9,6 +9,8 @@ package payment;
 service PaymentService {
   rpc ProcessPayment (ProcessPaymentRequest) returns (ProcessPaymentResponse);
   rpc RefundPayment (RefundPaymentRequest) returns (RefundPaymentResponse);
+  rpc GetPayment (GetPaymentRequest) returns (GetPaymentResponse);
+  rpc GetPaymentByOrderAndIdempotency (GetPaymentByOrderAndIdempotencyRequest) returns (GetPaymentByOrderAndIdempotencyResponse);
   rpc CapturePayment (CapturePaymentRequest) returns (CapturePaymentResponse);
   rpc CancelAuthorization (CancelAuthorizationRequest) returns (CancelAuthorizationResponse);
 }
@@ -28,6 +30,17 @@ enum RefundPaymentStatus {
   REFUND_PAYMENT_STATUS_FAILED = 3;
 }
 
+enum PaymentRecordStatus {
+  PAYMENT_RECORD_STATUS_UNSPECIFIED = 0;
+  PAYMENT_RECORD_STATUS_CREATED = 1;
+  PAYMENT_RECORD_STATUS_PENDING_PROVIDER_CONFIRMATION = 2;
+  PAYMENT_RECORD_STATUS_SUCCEEDED = 3;
+  PAYMENT_RECORD_STATUS_FAILED = 4;
+  PAYMENT_RECORD_STATUS_REFUND_PENDING = 5;
+  PAYMENT_RECORD_STATUS_REFUNDED = 6;
+  PAYMENT_RECORD_STATUS_REFUND_FAILED = 7;
+}
+
 message ProcessPaymentRequest {
   string order_id = 1;
   string customer_id = 2;
@@ -35,6 +48,7 @@ message ProcessPaymentRequest {
   string currency = 4;
   string payment_method = 5;
   string idempotency_key = 6;
+  string customer_email = 10;
 }
 
 message ProcessPaymentResponse {
@@ -63,6 +77,45 @@ message RefundPaymentResponse {
   RefundPaymentStatus status = 5;
   string provider_refund_id = 6;
   string payment_id = 7;
+}
+
+message GetPaymentRequest {
+  string payment_id = 1;
+}
+
+message GetPaymentByOrderAndIdempotencyRequest {
+  string order_id = 1;
+  string idempotency_key = 2;
+}
+
+message PaymentDetails {
+  string payment_id = 1;
+  string order_id = 2;
+  string customer_id = 3;
+  common.DecimalValue amount = 4;
+  string currency = 5;
+  string payment_method = 6;
+  PaymentRecordStatus status = 7;
+  string provider_payment_intent_id = 8;
+  string provider_refund_id = 9;
+  string failure_code = 10;
+  string failure_message = 11;
+  int64 created_at_unix = 12;
+  int64 updated_at_unix = 13;
+  int64 succeeded_at_unix = 14;
+  int64 failed_at_unix = 15;
+}
+
+message GetPaymentResponse {
+  bool success = 1;
+  string error_message = 2;
+  PaymentDetails payment = 3;
+}
+
+message GetPaymentByOrderAndIdempotencyResponse {
+  bool success = 1;
+  string error_message = 2;
+  PaymentDetails payment = 3;
 }
 
 message CapturePaymentRequest {

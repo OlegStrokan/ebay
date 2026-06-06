@@ -2,7 +2,6 @@ using Application.Gateways;
 
 namespace Infrastructure.Gateways;
 
-// @todo: before releasing 1.0 version create full implementation using help desk api (partners api)
 // Future implementations: JiraIncidentReporter, PagerDutyIncidentReporter, SlackIncidentReporter, SmsIncidentReporter
 public class HelpDeskIncidentReporter(
     ILogger<HelpDeskIncidentReporter> logger) : IIncidentReporter

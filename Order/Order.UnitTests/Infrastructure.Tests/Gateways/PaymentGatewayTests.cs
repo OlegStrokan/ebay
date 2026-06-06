@@ -58,6 +58,7 @@ public class PaymentGatewayTests
         Assert.Equal(Application.Gateways.PaymentProcessingStatus.Succeeded, result.Status);
         Assert.Equal("USD", capturedRequest?.Currency);
         Assert.False(string.IsNullOrWhiteSpace(capturedRequest?.IdempotencyKey));
+        Assert.Equal(string.Empty, capturedRequest?.CustomerEmail);
     }
 
     [Fact]

@@ -202,3 +202,33 @@ this is missing but it's not big deal:
 - server returns an error message containing owner region if user gets on wrong region master. upstream gateway/client must read that and perform forwarding/retry to us-east-1
 
 Out state. The watchdog then re-processes it as "stuck" rather than "timed out." These are different failure modes that should be handled differently.
+
+## return webhook ingress flow (new)
+
+we removed the hardcoded callback url from return saga.
+
+now AwaitReturnShipmentStep builds callback url from config `Shipping:WebhookCallUrl`
+and appends correlation query params (`orderId`, `shipmentId`) before calling
+`shippingGateway.RegisterWebhookAsync(...)`.
+
+external shipping provider does NOT call order service directly anymore.
+it calls gateway webhook endpoint:
+
+- `POST /api/v1/webhooks/shipping/returns/delivered`
+
+gateway validates payload (and optional shared secret header), then publishes
+`ReturnShipmentDeliveredEvent` to kafka saga topic (`order.events`).
+
+order `SagaOrchestrationService` consumes it and `ReturnShipmentDeliveredEventHandler`
+resumes ReturnSaga at `ConfirmReturnReceived` step.
+
+```mermaid
+flowchart LR
+	A[ReturnSaga AwaitReturnShipmentStep] --> B[Register webhook using Shipping:WebhookCallUrl]
+	B --> C[External shipping provider]
+	C --> D[Gateway /api/v1/webhooks/shipping/returns/delivered]
+	D --> E[Publish ReturnShipmentDeliveredEvent to order.events]
+	E --> F[Order SagaOrchestrationService]
+	F --> G[ReturnShipmentDeliveredEventHandler]
+	G --> H[Resume ReturnSaga at ConfirmReturnReceived]
+```
