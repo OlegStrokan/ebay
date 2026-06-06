@@ -48,9 +48,6 @@ message ProcessPaymentRequest {
   string currency = 4;
   string payment_method = 5;
   string idempotency_key = 6;
-  string return_url = 7;
-  string cancel_url = 8;
-  string order_callback_url = 9;
   string customer_email = 10;
 }
 

@@ -10,6 +10,4 @@ public sealed record ProcessPaymentProviderRequest(
     string Currency,
     PaymentMethod PaymentMethod,
     string IdempotencyKey,
-    string? ReturnUrl,
-    string? CancelUrl,
     string? CustomerEmail);

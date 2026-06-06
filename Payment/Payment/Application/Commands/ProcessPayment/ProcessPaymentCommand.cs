@@ -11,7 +11,4 @@ public sealed record ProcessPaymentCommand(
     string Currency,
     PaymentMethod PaymentMethod,
     string IdempotencyKey,
-    string? ReturnUrl,
-    string? CancelUrl,
-    string? OrderCallbackUrl,
     string? CustomerEmail) : ICommand<Result<ProcessPaymentResultDto>>;

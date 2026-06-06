@@ -25,29 +25,9 @@ public sealed class ProcessPaymentCommandValidator : AbstractValidator<ProcessPa
             .NotEmpty().WithMessage("IdempotencyKey is required.")
             .MaximumLength(128).WithMessage("IdempotencyKey must not exceed 128 characters.");
 
-        RuleFor(x => x.ReturnUrl)
-            .Must(BeValidAbsoluteUri)
-            .When(x => !string.IsNullOrWhiteSpace(x.ReturnUrl))
-            .WithMessage("ReturnUrl must be a valid absolute URI.");
-
-        RuleFor(x => x.CancelUrl)
-            .Must(BeValidAbsoluteUri)
-            .When(x => !string.IsNullOrWhiteSpace(x.CancelUrl))
-            .WithMessage("CancelUrl must be a valid absolute URI.");
-
-        RuleFor(x => x.OrderCallbackUrl)
-            .Must(BeValidAbsoluteUri)
-            .When(x => !string.IsNullOrWhiteSpace(x.OrderCallbackUrl))
-            .WithMessage("OrderCallbackUrl must be a valid absolute URI.");
-
         RuleFor(x => x.CustomerEmail)
             .EmailAddress()
             .When(x => !string.IsNullOrWhiteSpace(x.CustomerEmail))
             .WithMessage("CustomerEmail must be a valid email address.");
-    }
-
-    private static bool BeValidAbsoluteUri(string? value)
-    {
-        return Uri.TryCreate(value, UriKind.Absolute, out _);
     }
 }

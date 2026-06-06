@@ -42,9 +42,6 @@ public sealed class PaymentGrpcService(
             Currency: currency,
             PaymentMethod: PaymentMethodMapper.FromGrpc(request.PaymentMethod),
             IdempotencyKey: idempotencyKey,
-            ReturnUrl: EmptyToNull(request.ReturnUrl),
-            CancelUrl: EmptyToNull(request.CancelUrl),
-            OrderCallbackUrl: EmptyToNull(request.OrderCallbackUrl),
             CustomerEmail: EmptyToNull(request.CustomerEmail));
 
         var result = await mediator.Send(command, context.CancellationToken);

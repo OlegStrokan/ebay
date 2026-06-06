@@ -65,8 +65,6 @@ internal sealed class ProcessPaymentCommandHandler(
                     Currency: payment.Amount.Currency,
                     PaymentMethod: payment.Method,
                     IdempotencyKey: idempotencyKey.Value,
-                    ReturnUrl: request.ReturnUrl,
-                    CancelUrl: request.CancelUrl,
                     CustomerEmail: request.CustomerEmail),
                 cancellationToken);
 

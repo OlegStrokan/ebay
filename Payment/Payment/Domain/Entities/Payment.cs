@@ -212,7 +212,7 @@ public sealed class Payment : AggregateRoot<PaymentId>
         AddDomainEvent(new RefundFailedEvent(Id, refundId, reason, now));
     }
 
-    public void QueueOrderCallback(string callbackEventId, string callbackType, DateTime? queuedAt = null
+    public void QueueOrderCallback(string callbackEventId, string callbackType, DateTime? queuedAt = null)
     {
         if (string.IsNullOrWhiteSpace(callbackEventId))
         {
