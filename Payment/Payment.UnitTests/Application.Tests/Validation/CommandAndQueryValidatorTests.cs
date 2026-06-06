@@ -17,7 +17,7 @@ public class CommandAndQueryValidatorTests
     public void ProcessPaymentValidator_ShouldFail_WhenRequiredFieldsMissing()
     {
         var validator = new ProcessPaymentCommandValidator();
-        var command = new ProcessPaymentCommand("", "", 0, "US", PaymentMethod.Card, "", "not-url", null, null, "bad-email");
+        var command = new ProcessPaymentCommand("", "", 0, "US", PaymentMethod.Card, "", "bad-email");
 
         var result = validator.Validate(command);
 

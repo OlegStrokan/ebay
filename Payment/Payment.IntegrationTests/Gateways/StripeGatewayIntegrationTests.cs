@@ -31,8 +31,6 @@ public sealed class StripeGatewayIntegrationTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: $"action-{Guid.NewGuid():N}",
-            ReturnUrl: null,
-            CancelUrl: null,
             CustomerEmail: null));
 
         Assert.Equal(ProviderProcessPaymentStatus.RequiresAction, result.Status);

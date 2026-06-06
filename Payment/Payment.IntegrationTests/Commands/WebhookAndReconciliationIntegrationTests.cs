@@ -39,9 +39,6 @@ public sealed class WebhookAndReconciliationIntegrationTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: $"pending-{Guid.NewGuid():N}",
-            ReturnUrl: null,
-            CancelUrl: null,
-            OrderCallbackUrl: null,
             CustomerEmail: null));
 
         Assert.True(process.IsSuccess);
@@ -89,9 +86,6 @@ public sealed class WebhookAndReconciliationIntegrationTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: $"pending-{Guid.NewGuid():N}",
-            ReturnUrl: null,
-            CancelUrl: null,
-            OrderCallbackUrl: null,
             CustomerEmail: null));
 
         Assert.True(process.IsSuccess);

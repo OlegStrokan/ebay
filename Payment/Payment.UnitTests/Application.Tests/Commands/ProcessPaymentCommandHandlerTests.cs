@@ -40,9 +40,6 @@ public class ProcessPaymentCommandHandlerTests
             Currency: "usd",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: "idem-1",
-            ReturnUrl: "https://example.test/return",
-            CancelUrl: "https://example.test/cancel",
-            OrderCallbackUrl: null,
             CustomerEmail: "customer@example.test");
 
     [Fact]

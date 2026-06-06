@@ -31,8 +31,6 @@ public class StripePaymentProviderTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: "idem-normal",
-            ReturnUrl: null,
-            CancelUrl: null,
             CustomerEmail: null));
 
         Assert.Equal(ProviderProcessPaymentStatus.Succeeded, result.Status);
@@ -50,8 +48,6 @@ public class StripePaymentProviderTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: "idem-action-3ds",
-            ReturnUrl: null,
-            CancelUrl: null,
             CustomerEmail: null));
 
         Assert.Equal(ProviderProcessPaymentStatus.RequiresAction, result.Status);
@@ -70,8 +66,6 @@ public class StripePaymentProviderTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: "idem-fail",
-            ReturnUrl: null,
-            CancelUrl: null,
             CustomerEmail: null));
 
         Assert.Equal(ProviderProcessPaymentStatus.Failed, result.Status);
@@ -89,8 +83,6 @@ public class StripePaymentProviderTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: "idem-real",
-            ReturnUrl: null,
-            CancelUrl: null,
             CustomerEmail: null));
 
         Assert.Equal(ProviderProcessPaymentStatus.Failed, result.Status);

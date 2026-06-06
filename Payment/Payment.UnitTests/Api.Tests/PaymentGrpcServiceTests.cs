@@ -34,8 +34,6 @@ public class PaymentGrpcServiceTests
             Currency = "",
             PaymentMethod = "card",
             IdempotencyKey = "",
-            ReturnUrl = " https://example.test/return ",
-            CancelUrl = " https://example.test/cancel ",
             CustomerEmail = " test@example.test "
         };
 
@@ -64,8 +62,6 @@ public class PaymentGrpcServiceTests
                 cmd.Currency == "USD" &&
                 cmd.PaymentMethod == PaymentMethod.Card &&
                 cmd.IdempotencyKey.StartsWith("grpc-process:", StringComparison.Ordinal) &&
-                cmd.ReturnUrl == "https://example.test/return" &&
-                cmd.CancelUrl == "https://example.test/cancel" &&
                 cmd.CustomerEmail == "test@example.test"),
             Arg.Any<CancellationToken>());
     }

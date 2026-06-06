@@ -39,9 +39,6 @@ public sealed class ProcessAndRefundCommandIntegrationTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: idempotencyKey,
-            ReturnUrl: null,
-            CancelUrl: null,
-            OrderCallbackUrl: null,
             CustomerEmail: "integration@test.local");
 
         var first = await mediator.Send(command);
@@ -77,9 +74,6 @@ public sealed class ProcessAndRefundCommandIntegrationTests
             Currency: "USD",
             PaymentMethod: PaymentMethod.Card,
             IdempotencyKey: $"process-{Guid.NewGuid():N}",
-            ReturnUrl: null,
-            CancelUrl: null,
-            OrderCallbackUrl: null,
             CustomerEmail: null));
 
         Assert.True(processResult.IsSuccess);
