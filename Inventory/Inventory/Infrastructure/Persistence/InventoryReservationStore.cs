@@ -21,6 +21,7 @@ public sealed class InventoryReservationStore(
 {
     private const int MaxSerializableRetryAttempts = 3;
     private const string SerializationFailureSqlState = "40001";
+    private const string DeadlockDetectedSqlState = "40P01";
 
     private readonly string inventoryEventsTopic = string.IsNullOrWhiteSpace(kafkaOptions.Value.InventoryEventsTopic)
         ? "inventory.events"
@@ -121,14 +122,16 @@ public sealed class InventoryReservationStore(
                 await transaction.CommitAsync(cancellationToken);
                 return result;
             }
-            catch (PostgresException ex) when (ex.SqlState == SerializationFailureSqlState && attempt < MaxSerializableRetryAttempts)
+            catch (PostgresException ex)
+                when (attempt < MaxSerializableRetryAttempts && IsRetryableTransactionConflict(ex))
             {
                 await transaction.RollbackAsync(cancellationToken);
 
                 logger.LogWarning(
                     ex,
-                    "{Operation} serialization failure. Retry attempt {Attempt}/{MaxAttempts}.",
+                    "{Operation} transaction conflict ({SqlState}). Retry attempt {Attempt}/{MaxAttempts}.",
                     operationName,
+                    ex.SqlState,
                     attempt,
                     MaxSerializableRetryAttempts);
 
@@ -142,6 +145,11 @@ public sealed class InventoryReservationStore(
         }
 
         throw new InvalidOperationException($"{operationName} transaction failed after maximum retry attempts.");
+    }
+
+    private static bool IsRetryableTransactionConflict(PostgresException ex)
+    {
+        return ex.SqlState is SerializationFailureSqlState or DeadlockDetectedSqlState;
     }
 
     private async Task<ReserveInventoryResult> ReserveInternalAsync(
