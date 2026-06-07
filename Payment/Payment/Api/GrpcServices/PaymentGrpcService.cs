@@ -1,4 +1,5 @@
 using Api.Mappers;
+using Application.Commands.CancelAuthorization;
 using Application.Commands.CapturePayment;
 using Application.Commands.ProcessPayment;
 using Application.Commands.RefundPayment;
@@ -263,36 +264,30 @@ public sealed class PaymentGrpcService(
             };
         }
 
-        try
-        {
-            // i dont give a shit about idempotency here
-            var stripeProvider = context.GetHttpContext().RequestServices
-                .GetRequiredService<Application.Gateways.IStripePaymentProvider>();
+        var result = await mediator.Send(
+            new CancelAuthorizationCommand(request.ProviderPaymentIntentId),
+            context.CancellationToken);
 
-            await stripeProvider.CancelAuthorizationAsync(
-                request.ProviderPaymentIntentId,
-                context.CancellationToken);
-
-            logger.LogInformation(
-                "CancelAuthorization gRPC completed. ProviderPaymentIntentId={Id}",
-                request.ProviderPaymentIntentId);
-
-            return new CancelAuthorizationResponse { Success = true };
-        }
-        catch (Exception ex)
+        if (!result.IsSuccess)
         {
             logger.LogWarning(
-                ex,
-                "CancelAuthorization gRPC failed. ProviderPaymentIntentId={Id}",
-                request.ProviderPaymentIntentId);
+                "CancelAuthorization gRPC request failed. ProviderPaymentIntentId={Id}. Errors={Errors}",
+                request.ProviderPaymentIntentId,
+                JoinErrors(result.Errors));
 
             return new CancelAuthorizationResponse
             {
                 Success = false,
                 ErrorCode = "CANCEL_AUTHORIZATION_FAILED",
-                ErrorMessage = ex.Message,
+                ErrorMessage = JoinErrors(result.Errors),
             };
         }
+
+        logger.LogInformation(
+            "CancelAuthorization gRPC completed. ProviderPaymentIntentId={Id}",
+            request.ProviderPaymentIntentId);
+
+        return new CancelAuthorizationResponse { Success = true };
     }
 
 
