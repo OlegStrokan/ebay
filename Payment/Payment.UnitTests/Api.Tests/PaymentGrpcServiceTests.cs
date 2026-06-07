@@ -1,4 +1,5 @@
 using Api.GrpcServices;
+using Application.Commands.CancelAuthorization;
 using Application.Commands.ProcessPayment;
 using Application.Commands.RefundPayment;
 using Application.Common;
@@ -154,5 +155,47 @@ public class PaymentGrpcServiceTests
                 cmd.Reason == "requested_by_customer" &&
                 cmd.IdempotencyKey.StartsWith("grpc-refund:", StringComparison.Ordinal)),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CancelAuthorization_ShouldDispatchCommand_AndReturnSuccess()
+    {
+        var request = new CancelAuthorizationRequest
+        {
+            ProviderPaymentIntentId = "pi_cancel_1"
+        };
+
+        _mediator
+            .Send(Arg.Any<CancelAuthorizationCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        var response = await BuildService().CancelAuthorization(request, _callContext);
+
+        Assert.True(response.Success);
+        Assert.Equal(string.Empty, response.ErrorCode);
+        Assert.Equal(string.Empty, response.ErrorMessage);
+
+        await _mediator.Received(1).Send(
+            Arg.Is<CancelAuthorizationCommand>(c => c.ProviderPaymentIntentId == "pi_cancel_1"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CancelAuthorization_ShouldReturnFailure_WhenCommandFails()
+    {
+        var request = new CancelAuthorizationRequest
+        {
+            ProviderPaymentIntentId = "pi_cancel_2"
+        };
+
+        _mediator
+            .Send(Arg.Any<CancelAuthorizationCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure("provider unavailable"));
+
+        var response = await BuildService().CancelAuthorization(request, _callContext);
+
+        Assert.False(response.Success);
+        Assert.Equal("CANCEL_AUTHORIZATION_FAILED", response.ErrorCode);
+        Assert.Contains("provider unavailable", response.ErrorMessage);
     }
 }

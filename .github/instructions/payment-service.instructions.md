@@ -130,7 +130,7 @@ PendingPaymentsReconciliationWorker (every 60s)
 - `ProcessPayment()` → PaymentId, Status (Succeeded/Pending/Failed/RequiresAction), ProviderPaymentIntentId, ClientSecret, ErrorCode
 - `CapturePayment()` → capture pre-authorized intent
 - `RefundPayment()` → RefundId, Status (Succeeded/Pending/Failed), ProviderRefundId, ErrorCode
-- `CancelAuthorization()` → cancel pre-auth
+- `CancelAuthorization()` → cancel pre-auth (used by Order compensation when payment outcome is Uncertain and capture did not complete)
 - `GetPayment()`, `GetPaymentByOrderAndIdempotency()` → query
 
 ## Admin Endpoint
@@ -161,4 +161,5 @@ PendingPaymentsReconciliationWorker (every 60s)
 - **Callback delivery is at-least-once** — Order service must handle duplicate callbacks idempotently
 - **HMAC signing format must match Order service verification** — `t={timestamp},v1={signature}`
 - **Reconciliation worker is the safety net** — catches cases where webhook was lost or delayed
+- **Refund `Pending` is an accepted async outcome** — upstream Order may persist deferred verification and retry later via its compensation worker
 - **UseFakeProvider in E2E tests** — override via `ConfigureAppConfiguration` with in-memory settings, not `services.Configure` lambda mutation
