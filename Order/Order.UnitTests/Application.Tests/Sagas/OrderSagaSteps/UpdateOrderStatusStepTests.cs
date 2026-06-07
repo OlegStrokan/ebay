@@ -53,6 +53,18 @@ public class UpdateOrderStatusStepTests
             data.CorrelationId,
             Arg.Any<Func<Order, Task>>(),
             Arg.Any<CancellationToken>());
+
+        Received.InOrder(() =>
+        {
+            _orderPersistenceService.UpdateOrderAsync(
+                data.CorrelationId,
+                Arg.Any<Func<Order, Task>>(),
+                Arg.Any<CancellationToken>());
+
+            _inventoryGateway.ConfirmReservationAsync(
+                "RES-123",
+                Arg.Any<CancellationToken>());
+        });
     }
 
     [Fact]
@@ -160,6 +172,10 @@ public class UpdateOrderStatusStepTests
 
         Assert.IsType<Fail>(result);
         Assert.Contains("Critical Error", ((Fail)result).Reason);
+
+        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -181,6 +197,10 @@ public class UpdateOrderStatusStepTests
 
         Assert.IsType<Fail>(result);
         Assert.Contains("Database timeout", ((Fail)result).Reason);
+
+        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -202,7 +222,7 @@ public class UpdateOrderStatusStepTests
         Assert.IsType<Fail>(result);
         Assert.Contains("expired", ((Fail)result).Reason);
 
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
+        await _orderPersistenceService.Received(1).UpdateOrderAsync(
             Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
     }
     

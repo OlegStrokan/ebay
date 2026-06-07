@@ -69,6 +69,11 @@ if no `paymentIntentId` - BNPL, COD, recurring, B2B, whatever - we do the old ba
 compensation for step 2:
 - if capture already happened (PaymentId exists in context) — refund, same as before
 - if paymentIntentId exists but capture never happened (failed before or during capture) — we cancel the stripe authorization so we're not holding funds on a dead order
+
+uncertain safety path during compensation:
+- if status is `Uncertain` and PaymentId exists — persist compensation retry row for deferred refund verification
+- if status is `Uncertain` and PaymentId is missing but payment intent exists — call cancel authorization through payment service
+- if status is `Uncertain` and no identifiers exist — raise critical incident for manual reconciliation
 - if no paymentIntentId — nothing to cancel, BNPL/COD handles its own thing
 
 step 0 also got an update: on compensation it now checks if we need to cancel a pre-auth. if `paymentIntentId` is in saga data but `PaymentId` is empty (capture never ran), it will try to cancel the authorization. if stripe is down and cancel fails — incident ticket, same pattern as everything else that blows up.
