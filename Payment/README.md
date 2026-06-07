@@ -57,3 +57,5 @@ small note about refund compensation with order:
 - if refund call is temporary unavailable/timeout, Order service persist retry record to db
 - then Order bg worker (CompensationRefundRetryWorker) polls and retries with backoff
 - if retries exhausted -> critical incident for manual ops intervention
+- if Order compensation has `Uncertain` status with known PaymentId, it persists deferred verification and later calls `RefundWithStatusAsync`
+- if Order compensation is `Uncertain` without PaymentId but with ProviderPaymentIntentId, it calls `CancelAuthorization` gRPC and Payment forwards cancel to provider (Stripe/fake/mock)

@@ -12,6 +12,10 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
         builder.HasKey(x => x.Id);
 
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .IsRowVersion();
+
         builder.Property(x => x.Id)
             .HasColumnName("id")
             .HasMaxLength(64)
