@@ -46,15 +46,6 @@ public class UpdateOrderStatusStep(
                 return new Fail("Inventory reservation ID not found in saga context");
 
             logger.LogInformation(
-                "Confirming inventory reservation {ReservationId} for order {OrderId}",
-                context.ReservationId,
-                data.CorrelationId);
-
-            await inventoryGateway.ConfirmReservationAsync(
-                context.ReservationId,
-                cancellationToken);
-            
-            logger.LogInformation(
                 "Updating order {OrderId} status to Paid",
                 data.CorrelationId);
             
@@ -66,6 +57,15 @@ public class UpdateOrderStatusStep(
                     order.Pay(paymentId);
                     return Task.CompletedTask;
                 },
+                cancellationToken);
+
+            logger.LogInformation(
+                "Confirming inventory reservation {ReservationId} for order {OrderId}",
+                context.ReservationId,
+                data.CorrelationId);
+
+            await inventoryGateway.ConfirmReservationAsync(
+                context.ReservationId,
                 cancellationToken);
 
             context.OrderStatusUpdated = true;
