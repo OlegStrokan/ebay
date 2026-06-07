@@ -20,6 +20,11 @@ internal sealed class EfUnitOfWork(PaymentDbContext dbContext) : IUnitOfWork
         }
     }
 
+    public void ClearTrackedChanges()
+    {
+        dbContext.ChangeTracker.Clear();
+    }
+
     private static bool IsUniqueConstraintViolation(DbUpdateException ex, out string? constraintName)
     {
         if (ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation)

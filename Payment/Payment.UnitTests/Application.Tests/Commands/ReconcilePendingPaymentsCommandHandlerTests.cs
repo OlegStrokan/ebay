@@ -34,18 +34,23 @@ public class ReconcilePendingPaymentsCommandHandlerTests
     private ReconcilePendingPaymentsCommandHandler BuildHandler() =>
         new(_paymentRepository, _refundRepository, _stripePaymentProvider, _queueService, _unitOfWork, _clock, _logger);
 
-    private static Payment CreatePendingPayment()
+    private static Payment CreatePendingPayment(
+        string paymentId = "pay-1",
+        string orderId = "order-1",
+        string customerId = "customer-1",
+        string idempotencyKey = "idem-1",
+        string providerPaymentIntentId = "pi_1")
     {
         var payment = Payment.Create(
-            PaymentId.From("pay-1"),
-            "order-1",
-            "customer-1",
+            PaymentId.From(paymentId),
+            orderId,
+            customerId,
             Money.Create(100m, "USD"),
             PaymentMethod.Card,
-            IdempotencyKey.From("idem-1"),
+            IdempotencyKey.From(idempotencyKey),
             FixedNow.AddMinutes(-30));
 
-        payment.MarkPendingProviderConfirmation(ProviderPaymentIntentId.From("pi_1"), FixedNow.AddMinutes(-29));
+        payment.MarkPendingProviderConfirmation(ProviderPaymentIntentId.From(providerPaymentIntentId), FixedNow.AddMinutes(-29));
         return payment;
     }
 
@@ -80,7 +85,13 @@ public class ReconcilePendingPaymentsCommandHandlerTests
                 Arg.Any<CancellationToken>())
             .Returns([refund]);
 
-        _paymentRepository.GetByIdAsync(payment.Id, Arg.Any<CancellationToken>()).Returns(payment);
+        _paymentRepository.GetByIdsAsync(
+                Arg.Any<IReadOnlyCollection<PaymentId>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<PaymentId, Payment>
+            {
+                [payment.Id] = payment,
+            });
 
         _stripePaymentProvider.GetPaymentStatusAsync("pi_1", Arg.Any<CancellationToken>())
             .Returns(new ProviderPaymentStatusResult(ProviderPaymentLifecycleStatus.Succeeded, null, null));
@@ -98,7 +109,7 @@ public class ReconcilePendingPaymentsCommandHandlerTests
         Assert.Equal(1, result.Value.RefundsFailed);
         Assert.Equal(2, result.Value.CallbacksQueued);
 
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -114,5 +125,61 @@ public class ReconcilePendingPaymentsCommandHandlerTests
 
         Assert.False(result.IsSuccess);
         Assert.Contains("Unexpected error", result.Errors[0]);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldClearTrackedChanges_WhenPaymentSaveFails_AndContinueWithNextPayment()
+    {
+        var firstPayment = CreatePendingPayment(
+            paymentId: "pay-1",
+            orderId: "order-1",
+            customerId: "customer-1",
+            idempotencyKey: "idem-1",
+            providerPaymentIntentId: "pi_1");
+
+        var secondPayment = CreatePendingPayment(
+            paymentId: "pay-2",
+            orderId: "order-2",
+            customerId: "customer-2",
+            idempotencyKey: "idem-2",
+            providerPaymentIntentId: "pi_2");
+
+        _paymentRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns([firstPayment, secondPayment]);
+
+        _refundRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Refund>());
+
+        _paymentRepository.GetByIdsAsync(
+                Arg.Any<IReadOnlyCollection<PaymentId>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<PaymentId, Payment>());
+
+        _stripePaymentProvider.GetPaymentStatusAsync("pi_1", Arg.Any<CancellationToken>())
+            .Returns(new ProviderPaymentStatusResult(ProviderPaymentLifecycleStatus.Succeeded, null, null));
+
+        _stripePaymentProvider.GetPaymentStatusAsync("pi_2", Arg.Any<CancellationToken>())
+            .Returns(new ProviderPaymentStatusResult(ProviderPaymentLifecycleStatus.Succeeded, null, null));
+
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(
+                _ => throw new InvalidOperationException("db write failed"),
+                _ => 1);
+
+        var result = await BuildHandler().Handle(new ReconcilePendingPaymentsCommand(15, 100), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+        Assert.Equal(2, result.Value!.PaymentsChecked);
+        Assert.Equal(2, result.Value.PaymentsSucceeded);
+
+        await _unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
+        _unitOfWork.Received(1).ClearTrackedChanges();
     }
 }
