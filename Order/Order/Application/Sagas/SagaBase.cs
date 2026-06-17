@@ -152,6 +152,10 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         string fromStepName,
         CancellationToken cancellationToken)
     {
+        var serviceCancellationToken = cancellationToken;
+        using var timeoutCts = new CancellationTokenSource(SagaTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(serviceCancellationToken, timeoutCts.Token);
+        var resumeCancellationToken = linkedCts.Token;
 
         _logger.LogInformation(
             "Resuming {SagaType} for correlation {CorrelationId} from step {StepName}",
@@ -162,7 +166,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         var sagaState = await _sagaRepository.GetByCorrelationIdAsync(
             data.CorrelationId,
             SagaType,
-            cancellationToken);
+            resumeCancellationToken);
 
         if (sagaState == null)
         {
@@ -190,7 +194,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         sagaState.UpdatedAt = DateTime.UtcNow;
         sagaState.Context = JsonSerializer.Serialize(typedContext);   
         
-        await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+        await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);
 
         var resumeStep = Steps.FirstOrDefault(s => s.StepName == fromStepName);
         if (resumeStep == null)
@@ -212,44 +216,60 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
             .Select(s => s.StepName)
             .ToHashSet();
 
-        foreach (var step in remainingSteps)
+        try
         {
-            if (alreadyCompleted.Contains(step.StepName))
+            foreach (var step in remainingSteps)
             {
-                _logger.LogInformation(
-                    "Skipping already-completed step {StepName} during resume of saga {SagaId}",
-                    step.StepName, sagaState.Id);
-                continue;
+                if (alreadyCompleted.Contains(step.StepName))
+                {
+                    _logger.LogInformation(
+                        "Skipping already-completed step {StepName} during resume of saga {SagaId}",
+                        step.StepName, sagaState.Id);
+                    continue;
+                }
+
+                var stepResult = await ExecuteStepAsync(
+                    sagaState.Id, step, data, typedContext, resumeCancellationToken);
+
+                sagaState.Context = JsonSerializer.Serialize(typedContext); 
+                sagaState.CurrentStep = step.StepName;
+                sagaState.UpdatedAt = DateTime.UtcNow;
+
+                if (stepResult is WaitForEvent)
+                {
+                    sagaState.Status = SagaStatus.WaitingForEvent;
+                    await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);
+                    return SagaResult.Success(sagaState.Id);
+                }
+
+                if (stepResult is Fail resumeFailure)
+                {
+                    await CompensateAsync(sagaState.Id, resumeCancellationToken);
+                    return SagaResult.Failed(sagaState.Id, resumeFailure.Reason);
+                }
+
+                await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);
             }
 
-            var stepResult = await ExecuteStepAsync(
-                sagaState.Id, step, data, typedContext, cancellationToken);
-
-            sagaState.Context = JsonSerializer.Serialize(typedContext); 
-            sagaState.CurrentStep = step.StepName;
+            sagaState.Status = SagaStatus.Completed;
             sagaState.UpdatedAt = DateTime.UtcNow;
+            await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);
 
-            if (stepResult is WaitForEvent)
-            {
-                sagaState.Status = SagaStatus.WaitingForEvent;
-                await _sagaRepository.SaveAsync(sagaState, cancellationToken);
-                return SagaResult.Success(sagaState.Id);
-            }
-
-            if (stepResult is Fail resumeFailure)
-            {
-                await CompensateAsync(sagaState.Id, cancellationToken);
-                return SagaResult.Failed(sagaState.Id, resumeFailure.Reason);
-            }
-
-            await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+            return SagaResult.Success(sagaState.Id);
         }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !serviceCancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError(
+                "Resumed saga {SagaId} ({SagaType}) timed out after {Timeout}. Starting compensation.",
+                sagaState.Id, SagaType, SagaTimeout);
 
-        sagaState.Status = SagaStatus.Completed;
-        sagaState.UpdatedAt = DateTime.UtcNow;
-        await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+            sagaState.Status = SagaStatus.TimedOut;
+            sagaState.UpdatedAt = DateTime.UtcNow;
+            await _sagaRepository.SaveAsync(sagaState, serviceCancellationToken);
 
-        return SagaResult.Success(sagaState.Id);
+            await CompensateAsync(sagaState.Id, serviceCancellationToken);
+            return SagaResult.TimedOut(sagaState.Id);
+        }
     }
 
     private async Task<StepOutcome> ExecuteStepAsync(
