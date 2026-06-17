@@ -13,6 +13,8 @@ public sealed class OutboxProcessor(
     IOptions<OutboxOptions> outboxOptions,
     ILogger<OutboxProcessor> logger) : BackgroundService
 {
+    private DateTime _lastCleanupAt = DateTime.MinValue;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -20,6 +22,13 @@ public sealed class OutboxProcessor(
             try
             {
                 await ProcessBatchAsync(stoppingToken);
+
+                if (DateTime.UtcNow - _lastCleanupAt >=
+                    TimeSpan.FromMilliseconds(outboxOptions.Value.CleanupIntervalMs))
+                {
+                    await CleanupProcessedMessagesAsync(stoppingToken);
+                    _lastCleanupAt = DateTime.UtcNow;
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -74,5 +83,25 @@ public sealed class OutboxProcessor(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task CleanupProcessedMessagesAsync(CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+
+        var cutoff = DateTime.UtcNow - TimeSpan.FromHours(outboxOptions.Value.RetentionHours);
+
+        var deleted = await dbContext.OutboxMessages
+            .Where(x => x.ProcessedAtUtc != null && x.ProcessedAtUtc < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (deleted > 0)
+        {
+            logger.LogInformation(
+                "Deleted {Count} processed outbox messages older than {RetentionHours}h.",
+                deleted,
+                outboxOptions.Value.RetentionHours);
+        }
     }
 }
