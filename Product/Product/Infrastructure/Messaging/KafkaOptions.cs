@@ -8,4 +8,5 @@ public sealed class KafkaOptions
     public string ProductEventsTopic { get; set; } = "product.events";
     public string InventoryEventsTopic { get; set; } = "inventory.events";
     public string InventoryConsumerGroupId { get; set; } = "product-service-inventory";
+    public string InventoryDlqTopic { get; set; } = "product.inventory.dlq";
 }

@@ -37,7 +37,15 @@ public sealed class InventoryKafkaConsumerBackgroundService(
             IsolationLevel = IsolationLevel.ReadCommitted,
         };
 
+        var producerConfig = new ProducerConfig
+        {
+            BootstrapServers = options.BootstrapServers,
+            EnableIdempotence = true,
+            Acks = Acks.All,
+        };
+
         using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        using var dlqProducer = new ProducerBuilder<string, string>(producerConfig).Build();
         consumer.Subscribe(options.InventoryEventsTopic);
 
         logger.LogInformation(
@@ -76,9 +84,13 @@ public sealed class InventoryKafkaConsumerBackgroundService(
 
                 var success = await TryConsumeWithRetries(eventType, wrapper, stoppingToken);
                 if (!success)
+                {
                     logger.LogError(
-                        "All retries exhausted for '{EventType}' at Partition {P} Offset {O} — skipping",
+                        "All retries exhausted for '{EventType}' at Partition {P} Offset {O} — publishing to DLQ",
                         eventType, result.Partition.Value, result.Offset.Value);
+
+                    await PublishToDlqAsync(dlqProducer, options.InventoryDlqTopic, result, stoppingToken);
+                }
 
                 consumer.StoreOffset(result);
                 consumer.Commit(result);
@@ -101,6 +113,42 @@ public sealed class InventoryKafkaConsumerBackgroundService(
 
         consumer.Close();
         logger.LogInformation("Inventory Kafka consumer stopped");
+    }
+
+    private async Task PublishToDlqAsync(
+        IProducer<string, string> dlqProducer,
+        string dlqTopic,
+        ConsumeResult<string, string> original,
+        CancellationToken ct)
+    {
+        try
+        {
+            var dlqMessage = new Message<string, string>
+            {
+                Key = original.Message.Key,
+                Value = original.Message.Value,
+                Headers = new Headers(original.Message.Headers)
+                {
+                    { "dlq-source-topic", Encoding.UTF8.GetBytes(original.Topic) },
+                    { "dlq-source-partition", Encoding.UTF8.GetBytes(original.Partition.Value.ToString()) },
+                    { "dlq-source-offset", Encoding.UTF8.GetBytes(original.Offset.Value.ToString()) },
+                    { "dlq-failed-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")) },
+                }
+            };
+
+            await dlqProducer.ProduceAsync(dlqTopic, dlqMessage, ct);
+
+            logger.LogWarning(
+                "Published failed inventory event to DLQ topic '{DlqTopic}' (source partition {P} offset {O})",
+                dlqTopic, original.Partition.Value, original.Offset.Value);
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(
+                ex,
+                "FATAL: Failed to publish to DLQ topic '{DlqTopic}' for inventory event at Partition {P} Offset {O}. Message permanently lost.",
+                dlqTopic, original.Partition.Value, original.Offset.Value);
+        }
     }
 
     private async Task<bool> TryConsumeWithRetries(
