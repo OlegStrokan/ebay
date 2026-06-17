@@ -22,15 +22,18 @@ async def process_event(msg: Message, indexer: Indexer) -> None:
         event_type = raw_event_type.decode()
     else:
         event_type = str(raw_event_type)
-    payload = json.loads(msg.value())
+    wrapper = json.loads(msg.value())
+    payload = wrapper["Payload"]
 
     match event_type:
-        case "ProductCreateEvent" | "ProductUpdatedEvent":
+        case "ProductCreatedEvent" | "ProductUpdatedEvent":
             await indexer.upsert(payload)
         case "ProductStockUpdatedEvent":
             await indexer.update_stock(payload)
         case "ProductDeletedEvent":
-            await indexer.delete(payload["product_id"])
+            product_id_obj = payload.get("ProductId", {})
+            product_id = product_id_obj.get("Value") if isinstance(product_id_obj, dict) else product_id_obj
+            await indexer.delete(product_id)
         case "CatalogItemCreatedEvent" | "CatalogItemUpdatedEvent":
             await indexer.upsert_catalog_item(payload)
         case "CatalogItemListingSummaryUpdatedEvent":
