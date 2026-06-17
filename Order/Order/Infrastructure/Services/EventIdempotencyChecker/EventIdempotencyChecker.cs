@@ -1,6 +1,7 @@
 using Domain.Entities;
 using Infrastructure.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Infrastructure.Services.EventIdempotencyChecker;
 
@@ -62,7 +63,7 @@ public class EventIdempotencyChecker(
             return true;
         }
 
-        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key") == true)
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             // another consumer already marked it - this is ok (race condition, but ok)
             logger.LogInformation(

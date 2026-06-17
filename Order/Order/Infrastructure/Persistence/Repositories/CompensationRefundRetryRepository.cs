@@ -2,6 +2,7 @@ using Application.Interfaces;
 using Application.Models;
 using Infrastructure.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Infrastructure.Persistence.Repositories;
 
@@ -50,7 +51,7 @@ public sealed class CompensationRefundRetryRepository(
             await dbContext.SaveChangesAsync(cancellationToken);
             return retry;
         }
-        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) == true)
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             logger.LogInformation(
                 ex,
