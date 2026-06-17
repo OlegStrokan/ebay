@@ -72,6 +72,7 @@ public static class InfrastructureModule
         if (!enabled)
         {
             services.AddScoped<IAiSearchGateway, NullAiSearchGateway>();
+            services.AddScoped<IAiSearchStreamGateway, NullAiSearchStreamGateway>();
             return services;
         }
 
