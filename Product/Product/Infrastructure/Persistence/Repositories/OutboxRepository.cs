@@ -2,6 +2,7 @@ using Application.Interfaces;
 using Application.Models;
 using Infrastructure.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Infrastructure.Persistence.Repositories;
 
@@ -17,10 +18,23 @@ internal sealed class OutboxRepository(ProductDbContext dbContext) : IOutboxRepo
 
     public async Task<List<OutboxMessage>> GetUnprocessedMessagesAsync(int batchSize, int maxRetries, CancellationToken ct = default)
     {
+        // FOR UPDATE SKIP LOCKED ensures each replica claims a distinct batch —
+        // no duplicate publishes across multiple Product service instances
+        if (dbContext.Database.CurrentTransaction is null)
+            await dbContext.Database.BeginTransactionAsync(ct);
+
         return await dbContext.OutboxMessages
-            .Where(m => m.ProcessedOn == null && m.RetryCount < maxRetries)
-            .OrderBy(m => m.OccurredOn)
-            .Take(batchSize)
+            .FromSqlRaw(
+                """
+                SELECT * FROM "OutboxMessages"
+                WHERE "ProcessedOn" IS NULL
+                  AND "RetryCount" < {0}
+                ORDER BY "OccurredOn"
+                LIMIT {1}
+                FOR UPDATE SKIP LOCKED
+                """,
+                maxRetries,
+                batchSize)
             .ToListAsync(ct);
     }
 

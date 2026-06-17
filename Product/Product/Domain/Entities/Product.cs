@@ -188,10 +188,9 @@ public sealed class Product : AggregateRoot<ProductId>
             throw new DomainException("Category must be assigned before approval");
 
         _status.ValidateTransitionTo(ProductStatus.Approved);
-        _status = ProductStatus.Approved;
         _reviewNotes = null;
-        _updatedAt = DateTime.UtcNow;
-        AddDomainEvent(new ProductApprovedEvent(Id, _updatedAt.Value));
+        ChangeStatus(ProductStatus.Approved);
+        AddDomainEvent(new ProductApprovedEvent(Id, _updatedAt!.Value));
     }
 
     public void Reject(string reason)
@@ -199,10 +198,9 @@ public sealed class Product : AggregateRoot<ProductId>
         if (string.IsNullOrWhiteSpace(reason))
             throw new DomainException("Rejection reason cannot be empty");
         _status.ValidateTransitionTo(ProductStatus.Rejected);
-        _status = ProductStatus.Rejected;
         _reviewNotes = reason.Trim();
-        _updatedAt = DateTime.UtcNow;
-        AddDomainEvent(new ProductRejectedEvent(Id, _reviewNotes, _updatedAt.Value));
+        ChangeStatus(ProductStatus.Rejected);
+        AddDomainEvent(new ProductRejectedEvent(Id, _reviewNotes, _updatedAt!.Value));
     }
     
     
