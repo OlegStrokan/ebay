@@ -23,6 +23,7 @@ public sealed class PostgresRetryStore(
                  @payload, @headers, @firstFailureTime, @lastFailureTime,
                  @retryCount, @nextRetryAt, @status, @lastErrorMessage,
                  @lastErrorType, @correlationId)
+            ON CONFLICT (topic, partition, "offset") DO NOTHING
             """;
 
         await using var conn = new NpgsqlConnection(ConnectionString);
@@ -56,15 +57,27 @@ public sealed class PostgresRetryStore(
 
     public async Task<IReadOnlyList<RetryRecord>> GetDueRecordsAsync(int batchSize, CancellationToken ct = default)
     {
+        // Atomically claim a batch: the inner SELECT uses FOR UPDATE SKIP LOCKED so
+        // concurrent replicas skip already-claimed rows, and the outer UPDATE sets
+        // status = 'InProgress' in the same statement — no separate MarkInProgressAsync needed.
         const string sql = """
-            SELECT id, event_id, event_type, topic, partition, "offset", message_key,
-                   payload, headers, first_failure_time, last_failure_time,
-                   retry_count, next_retry_at, status, last_error_message,
-                   last_error_type, correlation_id
-            FROM retry_records
-            WHERE status = 'Pending' AND next_retry_at <= @now
+            WITH claimed AS (
+                UPDATE retry_records
+                SET status = 'InProgress'
+                WHERE id IN (
+                    SELECT id FROM retry_records
+                    WHERE status = 'Pending' AND next_retry_at <= @now
+                    ORDER BY next_retry_at
+                    LIMIT @limit
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING id, event_id, event_type, topic, partition, "offset", message_key,
+                          payload, headers, first_failure_time, last_failure_time,
+                          retry_count, next_retry_at, status, last_error_message,
+                          last_error_type, correlation_id
+            )
+            SELECT * FROM claimed
             ORDER BY next_retry_at
-            LIMIT @limit
             """;
 
         await using var conn = new NpgsqlConnection(ConnectionString);

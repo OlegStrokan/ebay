@@ -66,8 +66,6 @@ public sealed class RetryWorkerBackgroundService(
     {
         try
         {
-            await retryStore.MarkInProgressAsync(record.Id, ct);
-
             var wrapper = JsonSerializer.Deserialize<EventWrapper>(record.Payload);
             if (wrapper is null)
             {
