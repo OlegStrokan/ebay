@@ -1,4 +1,5 @@
 using Application.Gateways;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Domain.Common.Interfaces;
 
@@ -7,12 +8,13 @@ namespace Application.Queries.SearchProducts;
 public sealed class SearchProductsQueryHandler(
     IElasticsearchSearcher elasticsearchSearcher,
     IAiSearchGateway aiGateway,
+    IConfiguration configuration,
     ILogger<SearchProductsQueryHandler> logger)
 : IQueryHandler<SearchProductsQuery, SearchProductsResult>
 {
-    
-    private static readonly TimeSpan AiTimeout = TimeSpan.FromMilliseconds(2000);
-    
+    private TimeSpan AiTimeout =>
+        TimeSpan.FromMilliseconds(configuration.GetValue<int>("AiSearch:TimeoutMs", 500));
+
     public async Task<SearchProductsResult> HandleAsync(SearchProductsQuery query, CancellationToken ct)
     {
         if (query.UseAi)

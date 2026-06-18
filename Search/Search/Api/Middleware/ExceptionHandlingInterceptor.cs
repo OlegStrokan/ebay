@@ -15,21 +15,40 @@ public sealed class ExceptionHandlingInterceptor(
         {
             return await continuation(request, context);
         }
-        catch (RpcException)
+        catch (Exception ex)
         {
-            throw;
+            throw TranslateException(ex);
         }
-        catch (ArgumentException ex)
+    }
+
+    public override async Task ServerStreamingServerHandler<TRequest, TResponse>(
+        TRequest request,
+        IServerStreamWriter<TResponse> responseStream,
+        ServerCallContext context,
+        ServerStreamingServerMethod<TRequest, TResponse> continuation)
+    {
+        try
         {
-            logger.LogWarning(ex, "Validation error in gRPC call.");
-            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+            await continuation(request, responseStream, context);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unhandled exception in gRPC call.");
-            throw new RpcException(new Status(
-                StatusCode.Internal,
-                "An internal error occurred."));
+            throw TranslateException(ex);
         }
+    }
+
+    private RpcException TranslateException(Exception ex)
+    {
+        if (ex is RpcException rpc)
+            return rpc;
+
+        if (ex is ArgumentException)
+        {
+            logger.LogWarning(ex, "Validation error in gRPC call.");
+            return new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
+
+        logger.LogError(ex, "Unhandled exception in gRPC call.");
+        return new RpcException(new Status(StatusCode.Internal, "An internal error occurred."));
     }
 }
