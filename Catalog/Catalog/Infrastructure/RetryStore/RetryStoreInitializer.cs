@@ -30,6 +30,9 @@ public sealed class RetryStoreInitializer(
                 correlation_id     TEXT
             );
 
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_retry_records_topic_partition_offset
+                ON retry_records (topic, partition, "offset");
+
             CREATE INDEX IF NOT EXISTS idx_retry_records_pending_due
                 ON retry_records (next_retry_at)
                 WHERE status = 'Pending';
