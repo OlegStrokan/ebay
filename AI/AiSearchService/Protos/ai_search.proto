@@ -30,7 +30,7 @@ message SearchResultItem {
   string product_id = 1;
   string name = 2;
   string category = 3;
-  string price = 4;
+  double price = 4;
   string currency = 5;
   double relevance_score = 6;
   repeated string image_urls = 7;
