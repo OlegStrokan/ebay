@@ -17,38 +17,62 @@ public sealed class ElasticsearchIndexInitializerTests
     }
 
     [Fact]
-    public async Task EnsureIndexAsync_WhenIndexMissing_ShouldCreateProductsIndex()
+    public async Task EnsureIndexAsync_WhenIndexMissing_ShouldNotCreateIndex()
     {
+        // Search is read-only — index creation is Catalog's responsibility.
         await DeleteProductsIndexIfExistsAsync();
 
         var initializer = new ElasticsearchIndexInitializer(
             _fixture.Client,
             NullLogger<ElasticsearchIndexInitializer>.Instance);
 
-        await initializer.EnsureIndexAsync();
+        var act = () => initializer.EnsureIndexAsync();
+
+        await act.Should().NotThrowAsync("missing index should only log a warning, not throw");
 
         var exists = await _fixture.Client.Indices.ExistsAsync(ElasticsearchIndexInitializer.IndexName);
-
         (exists.ApiCallDetails.HttpStatusCode == 200)
             .Should()
-            .BeTrue("index bootstrap should create the products index when missing");
+            .BeFalse("Search service must not create the index — that is Catalog's job");
+    }
+
+    [Fact]
+    public async Task EnsureIndexAsync_WhenIndexExists_ShouldCompleteWithoutError()
+    {
+        await DeleteProductsIndexIfExistsAsync();
+        await _fixture.Client.Indices.CreateAsync(ElasticsearchIndexInitializer.IndexName);
+
+        var initializer = new ElasticsearchIndexInitializer(
+            _fixture.Client,
+            NullLogger<ElasticsearchIndexInitializer>.Instance);
+
+        var act = () => initializer.EnsureIndexAsync();
+
+        await act.Should().NotThrowAsync("existing index should be a no-op");
+
+        var exists = await _fixture.Client.Indices.ExistsAsync(ElasticsearchIndexInitializer.IndexName);
+        (exists.ApiCallDetails.HttpStatusCode == 200)
+            .Should()
+            .BeTrue("the pre-existing index should remain untouched");
     }
 
     [Fact]
     public async Task EnsureIndexAsync_ShouldBeIdempotent_WhenCalledMultipleTimes()
     {
         await DeleteProductsIndexIfExistsAsync();
+        await _fixture.Client.Indices.CreateAsync(ElasticsearchIndexInitializer.IndexName);
 
         var initializer = new ElasticsearchIndexInitializer(
             _fixture.Client,
             NullLogger<ElasticsearchIndexInitializer>.Instance);
 
-        await initializer.EnsureIndexAsync();
-        await initializer.EnsureIndexAsync();
+        var act = async () =>
+        {
+            await initializer.EnsureIndexAsync();
+            await initializer.EnsureIndexAsync();
+        };
 
-        var exists = await _fixture.Client.Indices.ExistsAsync(ElasticsearchIndexInitializer.IndexName);
-
-        (exists.ApiCallDetails.HttpStatusCode == 200).Should().BeTrue();
+        await act.Should().NotThrowAsync("repeated calls against an existing index must be a no-op");
     }
 
     private async Task DeleteProductsIndexIfExistsAsync()
