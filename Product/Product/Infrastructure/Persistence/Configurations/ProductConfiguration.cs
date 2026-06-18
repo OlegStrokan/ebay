@@ -68,7 +68,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         var attributesComparer = new ValueComparer<List<ProductAttribute>>(
             (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null)
                    == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
-            c => c.GetHashCode(),
+            c => c.Aggregate(0, (h, a) => HashCode.Combine(h, a.Key.GetHashCode(), a.Value.GetHashCode())),
             c => c.ToList());
 
         builder.Property<List<ProductAttribute>>("_attributes")
@@ -82,7 +82,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         var imageUrlsComparer = new ValueComparer<List<string>>(
             (a, b) => (a ?? new List<string>()).SequenceEqual(b ?? new List<string>()),
-            c => c.GetHashCode(),
+            c => c.Aggregate(0, (h, s) => HashCode.Combine(h, s.GetHashCode())),
             c => c.ToList());
 
         builder.Property<List<string>>("_imageUrls")
