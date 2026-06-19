@@ -44,7 +44,6 @@ public sealed class ElasticsearchSearcher : IElasticsearchSearcher
                                 {
                                     new("name", 3.0),
                                     new("description"),
-                                    new("categoryId", 2.0),
                                     new("attributes")
                                 })
                                 .Type(TextQueryType.BestFields)
