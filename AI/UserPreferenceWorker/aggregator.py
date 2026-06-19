@@ -23,6 +23,7 @@ _WEIGHTS = {
 # Redis key patterns
 _INTERACTIONS_KEY = "user:{user_id}:interactions"
 _PROFILE_KEY = "user:{user_id}:preference_profile"
+_RECOMPUTE_GUARD_KEY = "user:{user_id}:recompute_guard"
 
 
 class PreferenceAggregator:
@@ -97,8 +98,17 @@ class PreferenceAggregator:
         await self._redis.lpush(key, json.dumps(interaction))
         await self._redis.ltrim(key, 0, settings.max_interactions_per_user - 1)
 
-        # recompute profile
-        await self._recompute_profile(user_id)
+        # Throttle full recomputation to once per debounce window per user.
+        # SET NX EX is atomic: returns True only for the first caller in the window.
+        # Burst events skip the O(N) recompute; the profile is at most
+        # `profile_recompute_debounce_seconds` stale, which is acceptable given
+        # the 14-day decay half-life.
+        guard_key = _RECOMPUTE_GUARD_KEY.format(user_id=user_id)
+        should_recompute = await self._redis.set(
+            guard_key, "1", nx=True, ex=settings.profile_recompute_debounce_seconds
+        )
+        if should_recompute:
+            await self._recompute_profile(user_id)
 
     async def _recompute_profile(self, user_id: str) -> None:
         key = _INTERACTIONS_KEY.format(user_id=user_id)

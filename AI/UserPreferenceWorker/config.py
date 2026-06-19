@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     top_categories: int = 10
     top_brands: int = 10
     decay_half_life_days: float = 14.0
+    # Minimum seconds between full profile recomputations per user.
+    # Burst events within this window skip the O(N) recompute; the profile
+    # catches up on the next event after the window expires.
+    profile_recompute_debounce_seconds: int = 5
 
     # vector preference (for future Option A)
     qdrant_url: str = "http://localhost:6333"
