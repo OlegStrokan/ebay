@@ -29,6 +29,7 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
         catalog_item_id = request.catalog_item_id
         if not catalog_item_id:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "catalog_item_id is required")
+            return ai_search_pb2.GetFrequentlyBoughtTogetherResponse()
 
         limit = request.limit or 10
 
@@ -52,6 +53,7 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
         catalog_item_id = request.catalog_item_id
         if not catalog_item_id:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "catalog_item_id is required")
+            return ai_search_pb2.GetSimilarItemsResponse()
 
         limit = request.limit or 10
 
