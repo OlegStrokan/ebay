@@ -37,13 +37,15 @@ class LLMQueryClient:
         self._prompt_template = PROMPT_PATH.read_text(encoding="utf-8")
 
     async def parse_query(self, query: str) -> ParsedQuery:
-        prompt = self._prompt_template.format(query=query)
         try:
             response = await self._http.post(
-                "/api/generate",
+                "/api/chat",
                 json={
                     "model": self._model,
-                    "prompt": prompt,
+                    "messages": [
+                        {"role": "system", "content": self._prompt_template},
+                        {"role": "user", "content": query},
+                    ],
                     "format": "json",
                     "stream": False,
                     "options": {
@@ -53,7 +55,7 @@ class LLMQueryClient:
                 },
             )
             response.raise_for_status()
-            data = json.loads(response.json()["response"])
+            data = json.loads(response.json()["message"]["content"])
             return ParsedQuery(
                 semantic_query=data["semantic_query"],
                 filters=Filters(**data.get("filters", {})),
