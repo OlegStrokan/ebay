@@ -35,6 +35,11 @@ class GrpcEmbeddingClient:
                 response = await self._stream.read()
                 if response == grpc.aio.EOF:
                     raise grpc.RpcError("stream closed by server")
+                if response.correlation_id != corr_id:
+                    raise grpc.RpcError(
+                        f"stream out of sync: expected correlation_id={corr_id!r}, "
+                        f"got {response.correlation_id!r}"
+                    )
                 return list(response.vector)
             except grpc.RpcError as exc:
                 log.warning(
