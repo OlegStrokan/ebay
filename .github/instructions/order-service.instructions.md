@@ -9,6 +9,8 @@ description: "Use when working on the Order Service — event-sourced gRPC servi
 
 Event-sourced gRPC service handling the complete order lifecycle across four aggregate types. Uses saga orchestration for multi-step fulfillment, CQRS with separate read models, transactional outbox for Kafka publishing, and Redis distributed locking for concurrent saga protection.
 
+Return shipment delivery callbacks are ingressed via Gateway webhook endpoint and translated into Kafka saga continuation events (`ReturnShipmentDeliveredEvent`) consumed by Order.
+
 ## Architecture (Event Sourcing + CQRS + Saga)
 
 - **Api/** — gRPC services (`OrderGrpcService`, `B2BOrderGrpcService`, `RecurringOrderGrpcService`), validators, Program.cs
@@ -82,9 +84,16 @@ Event-sourced gRPC service handling the complete order lifecycle across four agg
 ### ReturnSaga Steps (6 steps)
 - ValidateReturnRequest → AwaitReturnShipment (waits days) → ConfirmReceived → ProcessRefund → UpdateAccounting → CompleteReturn
 
+### Return webhook callback flow
+- `AwaitReturnShipmentStep` registers shipping callback using configurable `Shipping:WebhookCallUrl` (never hardcoded)
+- Callback URL includes correlation query params (`orderId`, `shipmentId`) to preserve routing context
+- External carrier callback is received by Gateway and published to `order.events` as `ReturnShipmentDeliveredEvent`
+- `ReturnShipmentDeliveredEventHandler` resumes `ReturnSaga` at `ConfirmReturnReceived`
+
 ### Saga Event Handlers
 - **Creation**: `OrderCreatedEventHandler` — starts saga on OrderCreatedEvent from Kafka
 - **Continuation**: `PaymentSucceededEventHandler`/`PaymentFailedEventHandler` — resumes paused saga with Redis lock
+- **Return continuation**: `ReturnShipmentDeliveredEventHandler` — resumes `ReturnSaga` when return delivery callback arrives via Gateway→Kafka
 
 ### Redis Saga Locking
 - Key: `saga-lock:OrderSaga:{correlationId}`
@@ -95,7 +104,11 @@ Event-sourced gRPC service handling the complete order lifecycle across four agg
 ## Compensation & Refund Retry
 
 - Steps compensate in reverse order
-- Payment compensation: refund if Succeeded, cancel pre-auth if Uncertain + paymentIntentId, no-op otherwise
+- Payment compensation behavior by status:
+   - Succeeded + PaymentId present: call `RefundWithStatusAsync()`
+   - Uncertain + PaymentId present: enqueue deferred verification/retry row in `CompensationRefundRetries`
+   - Uncertain + no PaymentId but paymentIntentId present: call `CancelAuthorizationAsync()` to release pre-auth hold
+   - Uncertain + no identifiers: raise critical incident (manual reconciliation required)
 - Retriable refund failures (GatewayUnavailable/timeout) → `CompensationRefundRetries` table
 - `CompensationRefundRetryWorker`: exponential backoff (30s base, 900s max), max 3 retries
 - Dedupe: unique filtered index on (OrderId, PaymentId) WHERE Status=Pending
@@ -149,6 +162,7 @@ Event-sourced gRPC service handling the complete order lifecycle across four agg
 - CompensationRefundRetry: BatchSize=20, MaxRetries=3, PollIntervalSeconds=30, BaseRetryDelaySeconds=30, MaxRetryDelaySeconds=900
 - Kafka: BootstrapServers, OrderEventsTopic, ReturnEventsTopic, SagaTopic
 - WriteRouting: Enabled, CurrentRegion, Regions list
+- Shipping: `WebhookCallUrl` for return webhook registration target (Gateway public webhook endpoint)
 
 ## Testing
 
@@ -161,9 +175,12 @@ Event-sourced gRPC service handling the complete order lifecycle across four agg
 - **Event sourcing is the source of truth** — never mutate state without raising a domain event
 - **Saga timeout is per-saga (5 min total), not per-step** — a slow step starves subsequent ones
 - **DeadlineExceeded ≠ failure** — it means Uncertain; wait for webhook/reconciliation to resolve
+- **Uncertain compensation must never silently no-op** — execute explicit safety path (deferred verification and/or authorization cancel + incident on missing identifiers)
 - **WaitingForEvent sagas must not be killed by watchdog** — verify GetStuckSagasAsync excludes them
 - **Outbox guarantees causal ordering within an aggregate** — but parallel across aggregates may reorder within a batch
 - **Region affinity is advisory** — duplicates are rare but possible; saga idempotency is the real guard
 - **B2B Quote snapshots at 20 events** (not 50) because draft editing creates many events
 - **Proto uses `double` for money** — precision loss exists at proto boundary (known issue)
 - **String matching on concurrency exceptions is fragile** — known tech debt
+- **Never hardcode webhook callback URLs in saga steps** — always resolve from config/provider
+- **Carrier callbacks ingress through Gateway, not directly into Order** — Gateway translates webhook payload to Kafka saga events
