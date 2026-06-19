@@ -40,7 +40,3 @@ Output: {"semantic_query":"laptop","filters":{"price_max":500.0,"price_min":null
 
 Query: "new mechanical keyboard cherry mx switches"
 Output: {"semantic_query":"mechanical keyboard cherry mx switches","filters":{"price_max":null,"price_min":null,"color":null,"category":null,"brand":null,"condition":"New","attributes_required":["mechanical","cherry mx"],"attributes_excluded":[]},"keywords":["mechanical","keyboard","cherry","mx"],"confidence":0.90}
-
-Now parse this query:
-Query: "{query}"
-Output:
