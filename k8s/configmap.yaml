@@ -42,7 +42,7 @@ data:
   WriteRouting__Enabled: "false"
   WriteRouting__CurrentRegion: "local"
 
-  Stripe__UseFakeProvider: "true"
+  Stripe__ProviderType: "Fake"
   Stripe__WebhookToleranceSeconds: "300"
   Stripe__DefaultCurrency: "USD"
 
