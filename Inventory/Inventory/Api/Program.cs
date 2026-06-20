@@ -13,6 +13,7 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 
 builder.Services.AddGrpc();
 
+//@todo: add real health checks
 builder.Services.AddGrpcHealthChecks()
 	.AddCheck("Sample", () => HealthCheckResult.Healthy());
 
