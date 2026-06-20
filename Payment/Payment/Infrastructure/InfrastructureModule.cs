@@ -10,6 +10,8 @@ using Infrastructure.Persistence.Repositories;
 using Infrastructure.Persistence.UnitOfWork;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
 
 namespace Infrastructure;
 
@@ -42,7 +44,27 @@ public static class InfrastructureModule
 
         services.AddScoped<StripePaymentProvider>();
         services.AddScoped<FakePaymentProvider>();
-        services.AddScoped<MockFintechPaymentProvider>();
+
+        // MockFintech is a thin HTTP client to the standalone sandbox provider
+        // (/partners/fintech-sandbox). Registered as a typed HttpClient so base
+        // address, bearer auth, and timeout come from MockFintechOptions.
+        services.AddHttpClient<MockFintechPaymentProvider>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<IOptions<MockFintechOptions>>().Value;
+
+            if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+            {
+                client.BaseAddress = new Uri(options.BaseUrl);
+            }
+
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds <= 0 ? 10 : options.TimeoutSeconds);
+
+            if (!string.IsNullOrWhiteSpace(options.ApiKey))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", options.ApiKey);
+            }
+        });
 
         var providerTypeRaw = configuration.GetSection(StripeOptions.SectionName)
             .GetValue<string>("ProviderType")
