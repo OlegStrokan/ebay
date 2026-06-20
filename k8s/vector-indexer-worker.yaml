@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: vector-indexer-worker
-          image: free-ebay/vector-indexer-worker:latest
-          imagePullPolicy: Always
+          image: free-ebay/vector-indexer-worker:1.0.0
+          imagePullPolicy: IfNotPresent
           env:
             - name: INDEXER_KAFKA_BOOTSTRAP_SERVER
               value: kafka:9092

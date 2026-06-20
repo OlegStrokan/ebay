@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: email-service
-          image: free-ebay/email-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/email-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: grpc

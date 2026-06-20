@@ -33,3 +33,34 @@ resources:
   - embedding-service.yaml
   - ai-search-service.yaml
   - vector-indexer-worker.yaml
+
+# CI overrides these tags at deploy time via:
+#   kustomize edit set image free-ebay/auth-service=free-ebay/auth-service:<GIT_SHA>
+# or: kustomize edit set image free-ebay/auth-service:1.0.0=free-ebay/auth-service:<GIT_SHA>
+images:
+  - name: free-ebay/auth-service
+    newTag: "1.0.0"
+  - name: free-ebay/user-service
+    newTag: "1.0.0"
+  - name: free-ebay/inventory-service
+    newTag: "1.0.0"
+  - name: free-ebay/order-service
+    newTag: "1.0.0"
+  - name: free-ebay/product-service
+    newTag: "1.0.0"
+  - name: free-ebay/payment-service
+    newTag: "1.0.0"
+  - name: free-ebay/search-service
+    newTag: "1.0.0"
+  - name: free-ebay/gateway-api
+    newTag: "1.0.0"
+  - name: free-ebay/catalog-service
+    newTag: "1.0.0"
+  - name: free-ebay/email-service
+    newTag: "1.0.0"
+  - name: free-ebay/embedding-service
+    newTag: "1.0.0"
+  - name: free-ebay/ai-search-service
+    newTag: "1.0.0"
+  - name: free-ebay/vector-indexer-worker
+    newTag: "1.0.0"

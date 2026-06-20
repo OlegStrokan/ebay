@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: free-ebay/product-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/product-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: grpc

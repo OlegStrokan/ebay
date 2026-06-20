@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: ai-search-service
-          image: free-ebay/ai-search-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/ai-search-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 50051
               name: grpc

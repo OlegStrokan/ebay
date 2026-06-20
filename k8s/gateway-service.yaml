@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: gateway-api
-          image: free-ebay/gateway-api:latest
-          imagePullPolicy: Always
+          image: free-ebay/gateway-api:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http

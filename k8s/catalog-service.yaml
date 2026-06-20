@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: catalog-service
-          image: free-ebay/catalog-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/catalog-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http

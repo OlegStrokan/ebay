@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: embedding-service
-          image: free-ebay/embedding-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/embedding-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8001
               name: http

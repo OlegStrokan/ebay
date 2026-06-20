@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: search-service
-          image: free-ebay/search-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/search-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: grpc

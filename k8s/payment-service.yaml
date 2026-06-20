@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: payment-service
-          image: free-ebay/payment-service:latest
-          imagePullPolicy: Always
+          image: free-ebay/payment-service:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: grpc
