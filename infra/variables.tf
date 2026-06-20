@@ -39,8 +39,15 @@ variable "eks_node_desired" {
 }
 
 variable "vpc_cidr" {
-    type = string
+    type    = string
     default = "10.0.0.0/16"
+}
+
+variable "eks_public_access_cidrs" {
+    description = "CIDR blocks allowed to reach the EKS public API endpoint. Restrict to your VPN/office IP range. Set to [] and disable endpoint_public_access instead if no public access is needed."
+    type        = list(string)
+    # No default — must be set explicitly per environment to prevent accidental open access.
+    # Example: ["203.0.113.0/24"]  (your VPN/bastion egress CIDR)
 }
 
 variable "db_username" {
