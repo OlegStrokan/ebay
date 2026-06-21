@@ -2,7 +2,7 @@ using Application.Gateways;
 
 namespace Infrastructure.Gateways;
 
-// Future implementations: JiraIncidentReporter, PagerDutyIncidentReporter, SlackIncidentReporter, SmsIncidentReporter
+// @todo: Future implementations: JiraIncidentReporter, PagerDutyIncidentReporter, SlackIncidentReporter, SmsIncidentReporter
 public class HelpDeskIncidentReporter(
     ILogger<HelpDeskIncidentReporter> logger) : IIncidentReporter
 {
