@@ -10,7 +10,7 @@ public sealed class CompleteOrderStep(
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
     public string StepName => "CompleteOrder";
-    public int Order => 6;
+    public int Order => 7;
 
     public async Task<StepOutcome> ExecuteAsync(
         OrderSagaData data,

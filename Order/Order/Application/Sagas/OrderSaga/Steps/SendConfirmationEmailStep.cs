@@ -15,7 +15,7 @@ public sealed class SendConfirmationEmailStep(
     private const int MaxEmailAttempts = 3;
 
     public string StepName => "SendConfirmationEmail";
-    public int Order => 7;
+    public int Order => 8;
 
 
     public async Task<StepOutcome> ExecuteAsync(

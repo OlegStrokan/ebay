@@ -14,8 +14,8 @@ public sealed class CapturePaymentStep(
     ILogger<CapturePaymentStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "ProcessPayment";
-    public int Order => 2;
+    public string StepName => "CapturePayment";
+    public int Order => 6;
 
     public async Task<StepOutcome> ExecuteAsync(
         OrderSagaData data,
@@ -59,7 +59,7 @@ public sealed class CapturePaymentStep(
                 OrderSagaPaymentStatus.Uncertain)
             {
                 logger.LogInformation(
-                    "Payment is still awaiting provider confirmation for order {OrderId}. " +
+                    "Payment is still awaiting authorization confirmation for order {OrderId}. " +
                     "Current status: {Status}",
                     data.CorrelationId,
                     context.PaymentStatus);
@@ -67,14 +67,9 @@ public sealed class CapturePaymentStep(
                 return new WaitForEvent();
             }
 
-            // B2C card path
-            if (!string.IsNullOrEmpty(data.PaymentIntentId))
-            {
-                return await ExecuteCaptureAsync(data, context, cancellationToken);
-            }
-
-            // B2B / COD / recurring path: backend initiates the charge
-            return await ExecuteBackendInitiatedPaymentAsync(data, context, cancellationToken);
+            // Capture the authorization hold placed earlier by AuthorizePaymentStep
+            // (frontend-created or backend-initiated). This is where money moves.
+            return await ExecuteCaptureAsync(data, context, cancellationToken);
         }
         catch (PaymentDeclinedException ex)
         {
@@ -132,15 +127,26 @@ public sealed class CapturePaymentStep(
         OrderSagaContext context,
         CancellationToken cancellationToken)
     {
+        var providerPaymentIntentId = !string.IsNullOrWhiteSpace(context.ProviderPaymentIntentId)
+            ? context.ProviderPaymentIntentId!
+            : data.PaymentIntentId;
+
+        if (string.IsNullOrWhiteSpace(providerPaymentIntentId))
+        {
+            context.PaymentStatus = OrderSagaPaymentStatus.Failed;
+            logger.LogWarning("No authorization hold to capture for order {OrderId}", data.CorrelationId);
+            return new Fail("No authorization hold available to capture.");
+        }
+
         logger.LogInformation(
-            "Capturing pre-authorized payment for order {OrderId}, PaymentIntentId {PaymentIntentId}",
+            "Capturing authorized payment for order {OrderId}, ProviderPaymentIntentId {ProviderPaymentIntentId}",
             data.CorrelationId,
-            data.PaymentIntentId);
+            providerPaymentIntentId);
 
         var captureResult = await paymentGateway.CaptureAsync(
             orderId: data.CorrelationId,
             customerId: data.CustomerId,
-            providerPaymentIntentId: data.PaymentIntentId!,
+            providerPaymentIntentId: providerPaymentIntentId,
             amount: data.TotalAmount,
             currency: data.Currency,
             cancellationToken);
@@ -172,77 +178,6 @@ public sealed class CapturePaymentStep(
         var failedMessage = captureResult.ErrorMessage ?? "Capture returned non-succeeded status";
         logger.LogWarning("Payment capture failed for order {OrderId}. Error: {Error}", data.CorrelationId, failedMessage);
         return new Fail($"Payment capture failed: {failedMessage}");
-    }
-
-    private async Task<StepOutcome> ExecuteBackendInitiatedPaymentAsync(
-        OrderSagaData data,
-        OrderSagaContext context,
-        CancellationToken cancellationToken)
-    {
-        logger.LogInformation(
-            "Processing backend-initiated payment for order {OrderId}, amount {Amount} {Currency}",
-            data.CorrelationId,
-            data.TotalAmount,
-            data.Currency);
-
-        var paymentResult = await paymentGateway.ProcessPaymentAsync(
-            orderId: data.CorrelationId,
-            customerId: data.CustomerId,
-            amount: data.TotalAmount,
-            currency: data.Currency,
-            paymentMethod: data.PaymentMethod.ToString(),
-            cancellationToken);
-
-        context.PaymentId = paymentResult.PaymentId;
-        context.ProviderPaymentIntentId = paymentResult.ProviderPaymentIntentId;
-        context.PaymentFailureCode = paymentResult.ErrorCode;
-        context.PaymentFailureMessage = paymentResult.ErrorMessage;
-
-        // oh, I am glad that you have better idea, you can stick your idea into your åss
-        switch (paymentResult.Status)
-        {
-            case PaymentProcessingStatus.Succeeded:
-                context.PaymentStatus = OrderSagaPaymentStatus.Succeeded;
-                logger.LogInformation(
-                    "Successfully processed payment {PaymentId} for order {OrderId}",
-                    context.PaymentId,
-                    data.CorrelationId);
-
-                return new Completed(new Dictionary<string, object>
-                {
-                    ["PaymentId"] = context.PaymentId ?? string.Empty,
-                    ["Amount"] = data.TotalAmount,
-                    ["Currency"] = data.Currency,
-                    ["Status"] = context.PaymentStatus.ToString(),
-                });
-
-            case PaymentProcessingStatus.Pending:
-                context.PaymentStatus = OrderSagaPaymentStatus.Pending;
-                logger.LogInformation(
-                    "Payment {PaymentId} for order {OrderId} is pending provider confirmation",
-                    context.PaymentId,
-                    data.CorrelationId);
-                return new WaitForEvent();
-
-            case PaymentProcessingStatus.RequiresAction:
-                context.PaymentStatus = OrderSagaPaymentStatus.RequiresAction;
-                context.PaymentClientSecret = paymentResult.ClientSecret;
-                logger.LogInformation(
-                    "Payment {PaymentId} for order {OrderId} requires customer action before completion",
-                    context.PaymentId,
-                    data.CorrelationId);
-                return new WaitForEvent();
-
-            case PaymentProcessingStatus.Failed:
-                context.PaymentStatus = OrderSagaPaymentStatus.Failed;
-                var failedMessage = paymentResult.ErrorMessage ?? "Provider returned failed status";
-                logger.LogWarning("Payment failed for order {OrderId}. Error: {Error}", data.CorrelationId, failedMessage);
-                return new Fail($"Payment failed: {failedMessage}");
-
-            default:
-                context.PaymentStatus = OrderSagaPaymentStatus.Failed;
-                return new Fail("Payment returned unknown processing status");
-        }
     }
 
     public async Task CompensateAsync(

@@ -33,10 +33,24 @@ public sealed class AwaitPaymentConfirmationStep(
 
         return Task.FromResult<StepOutcome>(context.PaymentStatus switch
         {
+            OrderSagaPaymentStatus.Authorized => HandleAuthorized(data, context),
             OrderSagaPaymentStatus.Succeeded => HandleSucceeded(data, context),
             OrderSagaPaymentStatus.Failed => HandleFailed(data, context),
             OrderSagaPaymentStatus.Pending or OrderSagaPaymentStatus.RequiresAction or OrderSagaPaymentStatus.Uncertain => HandleWaiting(data, context),
             _ => new Fail("Payment state is unknown. Cannot continue order saga."),
+        });
+    }
+
+    private StepOutcome HandleAuthorized(OrderSagaData data, OrderSagaContext context)
+    {
+       logger.LogInformation(
+            "Authorization confirmed for order {OrderId}. Proceeding to fulfillment (capture happens later).",
+            data.CorrelationId);
+
+        return new Completed(new Dictionary<string, object>
+        {
+            ["ProviderPaymentIntentId"] = context.ProviderPaymentIntentId ?? data.PaymentIntentId ?? string.Empty,
+            ["Status"] = context.PaymentStatus.ToString(),
         });
     }
 
