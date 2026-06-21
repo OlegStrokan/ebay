@@ -32,7 +32,9 @@ gRPC payment processor that integrates with Stripe for payment capture, refunds,
 
 ### Payment
 - Created → PendingProviderConfirmation → Succeeded | Failed
+- Created → **Authorized** → Succeeded (capture) | Failed  *(manual-capture authorize-only flow)*
 - Succeeded → RefundPending → Refunded | RefundFailed
+- `Authorized` = funds held, not moved; settled later by CapturePayment (move) or CancelAuthorization (void). Emits no webhook and is not reconciled as pending.
 - Tracks: PaymentId, OrderId, CustomerId, Amount, Currency, Status, ProviderPaymentIntentId, ClientSecret, FailureReason, ProcessIdempotencyKey
 
 ### Refund
@@ -52,13 +54,14 @@ gRPC payment processor that integrates with Stripe for payment capture, refunds,
 
 ### Synchronous path (gRPC ProcessPayment)
 ```
-Order saga → ProcessPayment RPC
+Order saga → ProcessPayment RPC (capture_method: automatic | manual)
   → Check idempotency (OrderId, ProcessIdempotencyKey)
   → If exists: return cached response
-  → Else: Create Payment entity → Call Stripe
-    → Succeeded: Payment.Succeed(), queue PaymentSucceededEvent callback
-    → Pending/RequiresAction: Payment.MarkPending(), return status (webhook will finalize)
-    → Failed: Payment.Fail(), queue PaymentFailedEvent callback
+  → Else: Create Payment entity → Call provider (capture_method forwarded)
+    → Succeeded: Payment.MarkSucceeded(), queue PaymentSucceededEvent callback
+    → RequiresCapture (manual authorize-only): Payment.MarkAuthorized() → return Authorized (no webhook; settled later by CapturePayment)
+    → Pending/RequiresAction: Payment.MarkPendingProviderConfirmation(), return status (webhook will finalize)
+    → Failed: Payment.MarkFailed(), queue PaymentFailedEvent callback
 ```
 
 ### Asynchronous push path (Stripe Webhook)
@@ -81,21 +84,26 @@ PendingPaymentsReconciliationWorker (every 60s)
   → Same for Refunds with Status=Pending
 ```
 
-## Stripe Integration (Dual Mode)
+## Payment Provider (selected by `Stripe:ProviderType`)
 
-### Real mode (`Stripe:UseFakeProvider=false`)
-- Uses Stripe SDK: PaymentIntent.Create/Get, Refund.Create/Get
+The `IStripePaymentProvider` abstraction has three implementations chosen at startup via `Stripe:ProviderType` = `Stripe` | `MockFintech` | `Fake`.
+
+### Stripe (`ProviderType=Stripe`)
+- Uses Stripe SDK: PaymentIntent.Create/Get (with `CaptureMethod=manual|automatic`), Refund.Create/Get, Capture, Cancel
 - Webhook signature verification with `Stripe:WebhookSecret`
-- CapturePayment for pre-authorized intents
 
-### Fake mode (`Stripe:UseFakeProvider=true`)
-- Simulates responses based on idempotency key tokens:
-  - Contains "fail" → Failed
-  - Contains "pending" → Pending
-  - Contains "action"/"3ds" → RequiresAction
-  - Otherwise → Succeeded
-- Skips webhook signature verification
-- Used for local dev and E2E tests
+### MockFintech (`ProviderType=MockFintech`)
+- Thin typed `HttpClient` to the standalone **fintech-sandbox** (`/partners/fintech-sandbox`), a Go service that imitates a Stripe-level processor without moving real money
+- REST + `Authorization: Bearer <MockFintech:ApiKey>`; sends `capture_method` ("manual"/"automatic")
+- Async outcomes finalized by the sandbox's Stripe-shaped signed webhooks to `/api/v1/webhooks/stripe`; reconciliation polls the sandbox `GET` endpoints
+- Sandbox models full lifecycle: authorize (requires_capture) → capture → cancel, plus 8-day auth-hold expiry
+- Config: `MockFintech:BaseUrl`, `MockFintech:ApiKey`, `MockFintech:TimeoutSeconds`
+
+### Fake (`ProviderType=Fake`)
+- In-memory simulation; deterministic via idempotency-key tokens:
+  - "fail" → Failed, "pending" → Pending, "action"/"3ds" → RequiresAction, otherwise → Succeeded
+  - manual capture → RequiresCapture (Authorized hold)
+- Skips webhook signature verification; used for local dev and tests
 
 ## Callback Delivery (Outbound to Order Service)
 
@@ -127,8 +135,8 @@ PendingPaymentsReconciliationWorker (every 60s)
 
 ## gRPC API
 
-- `ProcessPayment()` → PaymentId, Status (Succeeded/Pending/Failed/RequiresAction), ProviderPaymentIntentId, ClientSecret, ErrorCode
-- `CapturePayment()` → capture pre-authorized intent
+- `ProcessPayment(capture_method)` → PaymentId, Status (Succeeded/Pending/Failed/RequiresAction/RequiresCapture), ProviderPaymentIntentId, ClientSecret, ErrorCode; `capture_method="manual"` authorizes only (returns RequiresCapture → Authorized hold)
+- `CapturePayment()` → capture a pre-authorized/held intent (moves the held funds)
 - `RefundPayment()` → RefundId, Status (Succeeded/Pending/Failed), ProviderRefundId, ErrorCode
 - `CancelAuthorization()` → cancel pre-auth (used by Order compensation when payment outcome is Uncertain and capture did not complete)
 - `GetPayment()`, `GetPaymentByOrderAndIdempotency()` → query
@@ -140,7 +148,8 @@ PendingPaymentsReconciliationWorker (every 60s)
 
 ## Configuration
 
-- **Stripe**: UseFakeProvider, SecretKey, WebhookSecret, WebhookToleranceSeconds (300), DefaultCurrency
+- **Stripe**: ProviderType (Stripe|MockFintech|Fake), SecretKey, WebhookSecret, WebhookToleranceSeconds (300), DefaultCurrency
+- **MockFintech**: BaseUrl, ApiKey, TimeoutSeconds (used when ProviderType=MockFintech)
 - **OrderCallback**: EndpointUrl, SharedSecret, TimeoutSeconds, BatchSize (100), MaxAttempts (8), BaseRetryDelaySeconds (5), MaxRetryDelaySeconds (300)
 - **Reconciliation**: Enabled, IntervalSeconds (60), OlderThanMinutes (15), BatchSize
 
@@ -154,6 +163,7 @@ PendingPaymentsReconciliationWorker (every 60s)
 ## Key Rules
 
 - **Dual-path finalization is by design** — webhook (push) and reconciliation (pull) BOTH resolve pending payments; they converge on the same callback mechanism
+- **Manual capture = authorize-only** — `ProcessPayment(capture_method=manual)` → RequiresCapture → `Payment.MarkAuthorized()`; emits NO webhook and is NOT reconciled as pending; settled later by CapturePayment (move) or CancelAuthorization (void)
 - **Never skip idempotency checks** — unique constraints are the last line of defense
 - **State machine transitions are validated** — invalid transitions throw; never set status directly
 - **Refund amount validated against available** — cannot refund more than captured amount
@@ -162,4 +172,4 @@ PendingPaymentsReconciliationWorker (every 60s)
 - **HMAC signing format must match Order service verification** — `t={timestamp},v1={signature}`
 - **Reconciliation worker is the safety net** — catches cases where webhook was lost or delayed
 - **Refund `Pending` is an accepted async outcome** — upstream Order may persist deferred verification and retry later via its compensation worker
-- **UseFakeProvider in E2E tests** — override via `ConfigureAppConfiguration` with in-memory settings, not `services.Configure` lambda mutation
+- **Set `Stripe:ProviderType=Fake` in E2E tests** — override via `ConfigureAppConfiguration` with in-memory settings, not `services.Configure` lambda mutation
