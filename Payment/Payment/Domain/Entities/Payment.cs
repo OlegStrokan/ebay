@@ -120,6 +120,19 @@ public sealed class Payment : AggregateRoot<PaymentId>
         AddDomainEvent(new PaymentPendingProviderConfirmationEvent(Id, providerPaymentIntentId, now));
     }
 
+    public void MarkAuthorized(ProviderPaymentIntentId providerPaymentIntentId, DateTime? authorizedAt = null)
+    {
+        PaymentStateMachine.EnsureCanTransition(Status, PaymentStatus.Authorized);
+
+        var now = authorizedAt ?? DateTime.UtcNow;
+        ProviderPaymentIntentId = providerPaymentIntentId;
+        Status = PaymentStatus.Authorized;
+        FailureReason = null;
+        UpdatedAt = now;
+
+        AddDomainEvent(new PaymentAuthorizedEvent(Id, providerPaymentIntentId, now));
+    }
+
     public void MarkSucceeded(ProviderPaymentIntentId? providerPaymentIntentId = null, DateTime? succeededAt = null)
     {
         PaymentStateMachine.EnsureCanTransition(Status, PaymentStatus.Succeeded);

@@ -6,4 +6,5 @@ public enum ProcessPaymentStatus
     Pending = 1,
     Failed = 2,
     RequiresAction = 3,
+    Authorized = 4,
 }

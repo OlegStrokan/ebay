@@ -10,8 +10,12 @@ public static class PaymentStateMachine
         (PaymentStatus.Created, PaymentStatus.PendingProviderConfirmation),
         (PaymentStatus.Created, PaymentStatus.Succeeded),
         (PaymentStatus.Created, PaymentStatus.Failed),
+        (PaymentStatus.Created, PaymentStatus.Authorized),
         (PaymentStatus.PendingProviderConfirmation, PaymentStatus.Succeeded),
         (PaymentStatus.PendingProviderConfirmation, PaymentStatus.Failed),
+        (PaymentStatus.PendingProviderConfirmation, PaymentStatus.Authorized),
+        (PaymentStatus.Authorized, PaymentStatus.Succeeded), 
+        (PaymentStatus.Authorized, PaymentStatus.Failed),
         (PaymentStatus.Succeeded, PaymentStatus.RefundPending),
         (PaymentStatus.RefundPending, PaymentStatus.Succeeded),  // partial refund completed — still refundable
         (PaymentStatus.RefundPending, PaymentStatus.Refunded),

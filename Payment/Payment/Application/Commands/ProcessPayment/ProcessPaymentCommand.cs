@@ -11,4 +11,5 @@ public sealed record ProcessPaymentCommand(
     string Currency,
     PaymentMethod PaymentMethod,
     string IdempotencyKey,
-    string? CustomerEmail) : ICommand<Result<ProcessPaymentResultDto>>;
+    string? CustomerEmail,
+    bool ManualCapture = false) : ICommand<Result<ProcessPaymentResultDto>>;

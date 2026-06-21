@@ -6,4 +6,5 @@ public enum ProviderProcessPaymentStatus
     Pending = 1,
     Failed = 2,
     RequiresAction = 3,
+    RequiresCapture = 4,
 }

@@ -10,4 +10,5 @@ public sealed record ProcessPaymentProviderRequest(
     string Currency,
     PaymentMethod PaymentMethod,
     string IdempotencyKey,
-    string? CustomerEmail);
+    string? CustomerEmail,
+    bool ManualCapture = false);

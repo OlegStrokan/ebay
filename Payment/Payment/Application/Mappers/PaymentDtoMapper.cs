@@ -66,6 +66,7 @@ internal static class PaymentDtoMapper
         {
             PaymentStatus.Created => ProcessPaymentStatus.Pending,
             PaymentStatus.PendingProviderConfirmation => ProcessPaymentStatus.Pending,
+            PaymentStatus.Authorized => ProcessPaymentStatus.Authorized,
             PaymentStatus.Succeeded => ProcessPaymentStatus.Succeeded,
             PaymentStatus.Failed => ProcessPaymentStatus.Failed,
             PaymentStatus.RefundPending => ProcessPaymentStatus.Succeeded,

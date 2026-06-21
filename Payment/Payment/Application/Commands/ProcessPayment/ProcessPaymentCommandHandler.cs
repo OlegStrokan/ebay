@@ -65,7 +65,8 @@ internal sealed class ProcessPaymentCommandHandler(
                     Currency: payment.Amount.Currency,
                     PaymentMethod: payment.Method,
                     IdempotencyKey: idempotencyKey.Value,
-                    CustomerEmail: request.CustomerEmail),
+                    CustomerEmail: request.CustomerEmail,
+                    ManualCapture: request.ManualCapture),
                 cancellationToken);
 
             var now = clock.UtcNow;
@@ -100,6 +101,24 @@ internal sealed class ProcessPaymentCommandHandler(
                     responseStatus = providerResult.Status == ProviderProcessPaymentStatus.RequiresAction
                         ? ProcessPaymentStatus.RequiresAction
                         : ProcessPaymentStatus.Pending;
+                    break;
+                }
+                case ProviderProcessPaymentStatus.RequiresCapture:
+                {
+                    // Manual-capture authorization: a hold is placed but no money
+                    // is moved. The payment waits for an explicit CapturePayment
+                    // (or CancelAuthorization) and is NOT reconciled as pending.
+                    if (string.IsNullOrWhiteSpace(providerResult.ProviderPaymentIntentId))
+                    {
+                        return Result<ProcessPaymentResultDto>.Failure(
+                            "ProviderPaymentIntentId is required when provider status is RequiresCapture");
+                    }
+
+                    payment.MarkAuthorized(
+                        ProviderPaymentIntentId.From(providerResult.ProviderPaymentIntentId),
+                        now);
+
+                    responseStatus = ProcessPaymentStatus.Authorized;
                     break;
                 }
                 case ProviderProcessPaymentStatus.Failed:

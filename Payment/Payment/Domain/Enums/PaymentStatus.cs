@@ -9,4 +9,5 @@ public enum PaymentStatus
     RefundPending = 4,
     Refunded = 5,
     RefundFailed = 6,
+    Authorized = 7,
 }
