@@ -41,6 +41,7 @@ internal sealed class MockFintechPaymentProvider(
             payment_method = request.PaymentMethod.ToString(),
             idempotency_key = request.IdempotencyKey,
             customer_email = request.CustomerEmail,
+            capture_method = request.ManualCapture ? "manual" : "automatic",
         };
 
         try
@@ -295,6 +296,7 @@ internal sealed class MockFintechPaymentProvider(
         "succeeded" => ProviderProcessPaymentStatus.Succeeded,
         "failed" => ProviderProcessPaymentStatus.Failed,
         "requires_action" => ProviderProcessPaymentStatus.RequiresAction,
+        "requires_capture" => ProviderProcessPaymentStatus.RequiresCapture,
         "pending" => ProviderProcessPaymentStatus.Pending,
         _ => ProviderProcessPaymentStatus.Pending,
     };

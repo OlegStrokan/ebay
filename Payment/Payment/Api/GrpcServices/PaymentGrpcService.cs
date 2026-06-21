@@ -43,7 +43,8 @@ public sealed class PaymentGrpcService(
             Currency: currency,
             PaymentMethod: PaymentMethodMapper.FromGrpc(request.PaymentMethod),
             IdempotencyKey: idempotencyKey,
-            CustomerEmail: EmptyToNull(request.CustomerEmail));
+            CustomerEmail: EmptyToNull(request.CustomerEmail),
+            ManualCapture: string.Equals(request.CaptureMethod, "manual", StringComparison.OrdinalIgnoreCase));
 
         var result = await mediator.Send(command, context.CancellationToken);
         if (!result.IsSuccess || result.Value is null)
@@ -344,6 +345,7 @@ public sealed class PaymentGrpcService(
             ApplicationProcessPaymentStatus.Succeeded => GrpcProcessPaymentStatus.Succeeded,
             ApplicationProcessPaymentStatus.Pending => GrpcProcessPaymentStatus.Pending,
             ApplicationProcessPaymentStatus.RequiresAction => GrpcProcessPaymentStatus.RequiresAction,
+            ApplicationProcessPaymentStatus.Authorized => GrpcProcessPaymentStatus.RequiresCapture,
             ApplicationProcessPaymentStatus.Failed => GrpcProcessPaymentStatus.Failed,
             _ => GrpcProcessPaymentStatus.Unspecified,
         };
@@ -366,6 +368,7 @@ public sealed class PaymentGrpcService(
         {
             DomainPaymentStatus.Created => GrpcPaymentRecordStatus.Created,
             DomainPaymentStatus.PendingProviderConfirmation => GrpcPaymentRecordStatus.PendingProviderConfirmation,
+            DomainPaymentStatus.Authorized => GrpcPaymentRecordStatus.Authorized,
             DomainPaymentStatus.Succeeded => GrpcPaymentRecordStatus.Succeeded,
             DomainPaymentStatus.Failed => GrpcPaymentRecordStatus.Failed,
             DomainPaymentStatus.RefundPending => GrpcPaymentRecordStatus.RefundPending,

@@ -358,6 +358,13 @@ internal sealed class StripePaymentProvider(
                 ErrorCode: null,
                 ErrorMessage: null),
 
+            "requires_capture" => new ProcessPaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.RequiresCapture,
+                ProviderPaymentIntentId: paymentIntent.Id,
+                ClientSecret: paymentIntent.ClientSecret,
+                ErrorCode: null,
+                ErrorMessage: null),
+
             "canceled" => new ProcessPaymentProviderResult(
                 Status: ProviderProcessPaymentStatus.Failed,
                 ProviderPaymentIntentId: paymentIntent.Id,
@@ -467,6 +474,7 @@ internal sealed class StripePaymentProvider(
             Amount = amountInMinorUnits,
             Currency = currency,
             Confirm = false,
+            CaptureMethod = request.ManualCapture ? "manual" : "automatic",
             ReceiptEmail = request.CustomerEmail,
             Description = $"Order {request.OrderId}",
             Metadata = new Dictionary<string, string>

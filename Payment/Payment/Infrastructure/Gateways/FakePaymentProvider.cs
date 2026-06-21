@@ -96,6 +96,16 @@ internal sealed class FakePaymentProvider : IStripePaymentProvider
                 ErrorCode: null,
                 ErrorMessage: null);
         }
+        
+        if (request.ManualCapture)
+        {
+            return new ProcessPaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.RequiresCapture,
+                ProviderPaymentIntentId: $"pi_auth_{token}",
+                ClientSecret: null,
+                ErrorCode: null,
+                ErrorMessage: null);
+        }
 
         return new ProcessPaymentProviderResult(
             Status: ProviderProcessPaymentStatus.Succeeded,
