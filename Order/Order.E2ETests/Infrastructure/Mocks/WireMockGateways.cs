@@ -172,10 +172,61 @@ public class FakeGrpcPaymentGateway : IPaymentGateway
             2 => PaymentProcessingStatus.Pending,
             3 => PaymentProcessingStatus.Failed,
             4 => PaymentProcessingStatus.RequiresAction,
+            5 => PaymentProcessingStatus.Authorized,
             _ => response.Success
                 ? PaymentProcessingStatus.Succeeded
                 : PaymentProcessingStatus.Failed,
         };
+    }
+
+    public async Task<PaymentProcessingResult> AuthorizeAsync(
+        Guid orderId,
+        Guid customerId,
+        decimal amount,
+        string currency,
+        string paymentMethod,
+        CancellationToken cancellationToken)
+    {
+        var normalizedCurrency = NormalizeCurrency(currency);
+        var idempotencyKey = BuildIdempotencyKey(
+            "grpc-authorize",
+            $"{orderId}|{customerId}|{amount:F4}|{normalizedCurrency}");
+
+        var response = await _client.ProcessPaymentAsync(
+            new ProcessPaymentRequest
+            {
+                OrderId = orderId.ToString(),
+                CustomerId = customerId.ToString(),
+                Amount = amount.ToDecimalValue(),
+                Currency = normalizedCurrency,
+                PaymentMethod = paymentMethod,
+                IdempotencyKey = idempotencyKey,
+                CaptureMethod = "manual",
+            },
+            cancellationToken: cancellationToken);
+
+        var status = MapPaymentStatus(response);
+
+        if (status == PaymentProcessingStatus.Failed)
+        {
+            throw response.ErrorCode switch
+            {
+                "INSUFFICIENT_FUNDS" => new InsufficientFundsException(
+                    $"Authorization failed: insufficient funds. OrderId={orderId}"),
+                "PAYMENT_DECLINED" => new PaymentDeclinedException(
+                    $"Authorization declined. OrderId={orderId}, Reason={response.ErrorMessage}"),
+                _ => new InvalidOperationException(
+                    $"Authorization failed. OrderId={orderId}, Error={response.ErrorMessage}")
+            };
+        }
+
+        return new PaymentProcessingResult(
+            PaymentId: response.PaymentId,
+            Status: status,
+            ProviderPaymentIntentId: string.IsNullOrWhiteSpace(response.ProviderPaymentIntentId) ? null : response.ProviderPaymentIntentId,
+            ClientSecret: string.IsNullOrWhiteSpace(response.ClientSecret) ? null : response.ClientSecret,
+            ErrorCode: string.IsNullOrWhiteSpace(response.ErrorCode) ? null : response.ErrorCode,
+            ErrorMessage: string.IsNullOrWhiteSpace(response.ErrorMessage) ? null : response.ErrorMessage);
     }
 
     public async Task<string> RefundAsync(

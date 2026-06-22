@@ -310,6 +310,13 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
                 GatewayUnavailableReason.Timeout,
                 "simulated deadline exceeded");
 
+        public Task<PaymentProcessingResult> AuthorizeAsync(
+            Guid orderId, Guid customerId, decimal amount, string currency,
+            string paymentMethod, CancellationToken cancellationToken)
+            => throw new GatewayUnavailableException(
+                GatewayUnavailableReason.Timeout,
+                "simulated deadline exceeded");
+
         public Task<PaymentProcessingResult> CaptureAsync(
             Guid orderId, Guid customerId, string providerPaymentIntentId,
             decimal amount, string currency, CancellationToken cancellationToken)
@@ -346,6 +353,13 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             string currency,
             string paymentMethod,
             CancellationToken cancellationToken)
+            => throw new GatewayUnavailableException(
+                GatewayUnavailableReason.ServiceUnavailable,
+                "simulated service unavailable");
+
+        public Task<PaymentProcessingResult> AuthorizeAsync(
+            Guid orderId, Guid customerId, decimal amount, string currency,
+            string paymentMethod, CancellationToken cancellationToken)
             => throw new GatewayUnavailableException(
                 GatewayUnavailableReason.ServiceUnavailable,
                 "simulated service unavailable");
@@ -416,6 +430,11 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             Guid orderId, Guid customerId, decimal amount, string currency,
             string paymentMethod, CancellationToken cancellationToken)
             => Task.FromResult(new PaymentProcessingResult("PAY-NOOP", PaymentProcessingStatus.Succeeded));
+
+        public Task<PaymentProcessingResult> AuthorizeAsync(
+            Guid orderId, Guid customerId, decimal amount, string currency,
+            string paymentMethod, CancellationToken cancellationToken)
+            => Task.FromResult(new PaymentProcessingResult("PAY-NOOP", PaymentProcessingStatus.Authorized, "pi_noop"));
 
         public Task<PaymentProcessingResult> CaptureAsync(
             Guid orderId, Guid customerId, string providerPaymentIntentId,

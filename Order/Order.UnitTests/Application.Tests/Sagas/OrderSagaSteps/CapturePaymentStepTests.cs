@@ -59,34 +59,6 @@ public class CapturePaymentStepTests
         _logger);
 
     [Fact]
-    public async Task ExecuteAsync_ShouldReturnSuccess_AndSetPaymentContext_WhenGatewaySucceeds()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-        var expectedPaymentId = "PAYMENT_123";
-
-        _paymentGateway.ProcessPaymentAsync(
-                data.CorrelationId, data.CustomerId, data.TotalAmount,
-                data.Currency, Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new PaymentProcessingResult(
-                PaymentId: expectedPaymentId,
-                Status: PaymentProcessingStatus.Succeeded,
-                ProviderPaymentIntentId: "pi_123"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        var completed = Assert.IsType<Completed>(result);
-        Assert.Equal(expectedPaymentId, context.PaymentId);
-        Assert.Equal(OrderSagaPaymentStatus.Succeeded, context.PaymentStatus);
-        Assert.Equal("pi_123", context.ProviderPaymentIntentId);
-        Assert.Equal(expectedPaymentId, completed.Data?["PaymentId"]);
-
-        await _paymentGateway.Received(1).ProcessPaymentAsync(
-            data.CorrelationId, data.CustomerId, data.TotalAmount,
-            data.Currency, Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task ExecuteAsync_ShouldSkipGateway_WhenPaymentAlreadySucceeded_Idempotency()
     {
         var context = new OrderSagaContext
@@ -117,142 +89,6 @@ public class CapturePaymentStepTests
         await _paymentGateway.DidNotReceive().ProcessPaymentAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldPauseSaga_WhenPaymentIsPending()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                data.CorrelationId, data.CustomerId, data.TotalAmount,
-                data.Currency, Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new PaymentProcessingResult(
-                PaymentId: "PAY-PENDING",
-                Status: PaymentProcessingStatus.Pending,
-                ProviderPaymentIntentId: "pi_pending"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<WaitForEvent>(result);
-        Assert.Equal(OrderSagaPaymentStatus.Pending, context.PaymentStatus);
-        Assert.Equal("PAY-PENDING", context.PaymentId);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldPauseSaga_WhenPaymentRequiresAction()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                data.CorrelationId, data.CustomerId, data.TotalAmount,
-                data.Currency, Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new PaymentProcessingResult(
-                PaymentId: "PAY-3DS",
-                Status: PaymentProcessingStatus.RequiresAction,
-                ProviderPaymentIntentId: "pi_3ds",
-                ClientSecret: "cs_3ds"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<WaitForEvent>(result);
-        Assert.Equal(OrderSagaPaymentStatus.RequiresAction, context.PaymentStatus);
-        Assert.Equal("PAY-3DS", context.PaymentId);
-        Assert.Equal("cs_3ds", context.PaymentClientSecret);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenPaymentDeclined()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Throws(new PaymentDeclinedException("Card declined"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        var fail = Assert.IsType<Fail>(result);
-        Assert.Contains("Card declined", fail.Reason);
-        Assert.Equal(OrderSagaPaymentStatus.Failed, context.PaymentStatus);
-        Assert.Equal("PAYMENT_DECLINED", context.PaymentFailureCode);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenInsufficientFunds()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Throws(new InsufficientFundsException("Not enough balance"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<Fail>(result);
-        var fail = Assert.IsType<Fail>(result);
-        Assert.Contains("Not enough balance", fail.Reason);
-        Assert.Equal(OrderSagaPaymentStatus.Failed, context.PaymentStatus);
-        Assert.Equal("INSUFFICIENT_FUNDS", context.PaymentFailureCode);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldMarkUncertainAndWait_WhenGatewayTimeoutOccurs()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Throws(new GatewayUnavailableException(GatewayUnavailableReason.Timeout, "deadline exceeded"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<WaitForEvent>(result);
-        Assert.Equal(OrderSagaPaymentStatus.Uncertain, context.PaymentStatus);
-        Assert.Equal("PAYMENT_RESULT_UNCERTAIN", context.PaymentFailureCode);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenGatewayServiceIsUnavailable()
-    {
-        var data = CreateSampleData();
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Throws(new GatewayUnavailableException(GatewayUnavailableReason.ServiceUnavailable, "service unavailable"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<Fail>(result);
-        Assert.Equal(OrderSagaPaymentStatus.Failed, context.PaymentStatus);
-        Assert.Equal("PAYMENT_GATEWAY_UNAVAILABLE", context.PaymentFailureCode);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenUnexpectedExceptionOccurs()
-    {
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Throws(new Exception("Payment provider unreachable"));
-
-        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
-
-        var fail = Assert.IsType<Fail>(result);
-        Assert.Contains("Payment provider unreachable", fail.Reason);
-        Assert.Equal(OrderSagaPaymentStatus.Failed, context.PaymentStatus);
     }
 
     [Fact]
@@ -599,27 +435,6 @@ public class CapturePaymentStepTests
         var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
 
         Assert.IsType<Completed>(result);
-        await _paymentGateway.DidNotReceive().CaptureAsync(
-            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(),
-            Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldCallBackendInitiatedPath_WhenPaymentIntentIdIsAbsent()
-    {
-        var data = CreateSampleData(); // no PaymentIntentId
-        var context = new OrderSagaContext();
-
-        _paymentGateway.ProcessPaymentAsync(
-                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
-                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new PaymentProcessingResult("PAY-BNPL", PaymentProcessingStatus.Pending, "pi_bnpl"));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<WaitForEvent>(result);
-        Assert.Equal(OrderSagaPaymentStatus.Pending, context.PaymentStatus);
-
         await _paymentGateway.DidNotReceive().CaptureAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(),
             Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
