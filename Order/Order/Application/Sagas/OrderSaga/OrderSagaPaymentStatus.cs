@@ -8,4 +8,5 @@ public enum OrderSagaPaymentStatus
     Succeeded = 3,
     Failed = 4,
     Uncertain = 5,
+    Authorized = 6,
 }

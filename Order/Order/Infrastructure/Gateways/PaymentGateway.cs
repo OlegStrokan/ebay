@@ -122,6 +122,100 @@ public sealed class PaymentGateway(
         }
     }
 
+    public async Task<PaymentProcessingResult> AuthorizeAsync(
+        Guid orderId,
+        Guid customerId,
+        decimal amount,
+        string currency,
+        string paymentMethod,
+        CancellationToken cancellationToken)
+    {
+        var normalizedCurrency = NormalizeCurrency(currency);
+        var idempotencyKey = BuildIdempotencyKey(
+            "grpc-authorize",
+            $"{orderId}|{customerId}|{amount:F4}|{normalizedCurrency}");
+
+        var request = new ProcessPaymentRequest
+        {
+            OrderId = orderId.ToString(),
+            CustomerId = customerId.ToString(),
+            Amount = amount.ToDecimalValue(),
+            Currency = normalizedCurrency,
+            PaymentMethod = paymentMethod,
+            IdempotencyKey = idempotencyKey,
+            CustomerEmail = string.Empty,
+            CaptureMethod = "manual",
+        };
+
+        try
+        {
+            var response = await client.ProcessPaymentAsync(request, cancellationToken: cancellationToken);
+            var status = MapPaymentStatus(response);
+
+            var providerPaymentIntentId = string.IsNullOrWhiteSpace(response.ProviderPaymentIntentId)
+                ? null
+                : response.ProviderPaymentIntentId;
+            var clientSecret = string.IsNullOrWhiteSpace(response.ClientSecret) ? null : response.ClientSecret;
+            var errorCode = string.IsNullOrWhiteSpace(response.ErrorCode) ? null : response.ErrorCode;
+            var errorMessage = string.IsNullOrWhiteSpace(response.ErrorMessage) ? null : response.ErrorMessage;
+
+            if (status == PaymentProcessingStatus.Failed)
+            {
+                throw errorCode switch
+                {
+                    "INSUFFICIENT_FUNDS" => new InsufficientFundsException(
+                        $"Authorization failed: insufficient funds. OrderId={orderId}, Amount={amount} {normalizedCurrency}"),
+                    "PAYMENT_DECLINED" => new PaymentDeclinedException(
+                        $"Authorization declined by provider. OrderId={orderId}, Reason={errorMessage}"),
+                    _ => new InvalidOperationException(
+                        $"Authorization failed. OrderId={orderId}, Error={errorMessage}")
+                };
+            }
+
+            if (string.IsNullOrWhiteSpace(response.PaymentId))
+            {
+                throw new InvalidOperationException(
+                    $"Payment service returned empty PaymentId for non-failed authorization. OrderId={orderId}");
+            }
+
+            logger.LogInformation(
+                "Authorization placed. OrderId={OrderId}, PaymentId={PaymentId}, Status={Status}, Amount={Amount} {Currency}",
+                orderId, response.PaymentId, status, amount, normalizedCurrency);
+
+            return new PaymentProcessingResult(
+                PaymentId: response.PaymentId,
+                Status: status,
+                ProviderPaymentIntentId: providerPaymentIntentId,
+                ClientSecret: clientSecret,
+                ErrorCode: errorCode,
+                ErrorMessage: errorMessage);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.InvalidArgument)
+        {
+            throw new PaymentDeclinedException(
+                $"Invalid authorization data for OrderId={orderId}. Detail={ex.Status.Detail}");
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.FailedPrecondition)
+        {
+            throw new InsufficientFundsException(
+                $"Authorization precondition failed for OrderId={orderId}. Detail={ex.Status.Detail}");
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.DeadlineExceeded)
+        {
+            throw new GatewayUnavailableException(
+                GatewayUnavailableReason.Timeout,
+                $"Payment service deadline exceeded for authorization OrderId={orderId}. gRPC={ex.StatusCode}: {ex.Status.Detail}",
+                ex);
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Unavailable)
+        {
+            throw new GatewayUnavailableException(
+                GatewayUnavailableReason.ServiceUnavailable,
+                $"Payment service unavailable for authorization OrderId={orderId}. gRPC={ex.StatusCode}: {ex.Status.Detail}",
+                ex);
+        }
+    }
+
     private static PaymentProcessingStatus MapPaymentStatus(ProcessPaymentResponse response)
     {
         var rawStatus = (int)response.Status;
@@ -132,6 +226,7 @@ public sealed class PaymentGateway(
             2 => PaymentProcessingStatus.Pending,
             3 => PaymentProcessingStatus.Failed,
             4 => PaymentProcessingStatus.RequiresAction,
+            5 => PaymentProcessingStatus.Authorized,
             _ => response.Success
                 ? PaymentProcessingStatus.Succeeded
                 : PaymentProcessingStatus.Failed,
