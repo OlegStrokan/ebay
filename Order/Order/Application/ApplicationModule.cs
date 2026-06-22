@@ -30,6 +30,7 @@ public static class ApplicationModule
         // order saga steps
         services.AddScoped<ISagaStep<OrderSagaData, OrderSagaContext>, CancelOrderOnFailureStep>();
         services.AddScoped<ISagaStep<OrderSagaData, OrderSagaContext>, ReserveInventoryStep>();
+        services.AddScoped<ISagaStep<OrderSagaData, OrderSagaContext>, AuthorizePaymentStep>();
         services.AddScoped<ISagaStep<OrderSagaData, OrderSagaContext>, CapturePaymentStep>();
         services.AddScoped<ISagaStep<OrderSagaData, OrderSagaContext>, AwaitPaymentConfirmationStep>();
         services.AddScoped<ISagaStep<OrderSagaData, OrderSagaContext>, UpdateOrderStatusStep>();

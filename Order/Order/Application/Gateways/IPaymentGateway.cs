@@ -12,6 +12,15 @@ public interface IPaymentGateway
         CancellationToken cancellationToken
         );
 
+    Task<PaymentProcessingResult> AuthorizeAsync(
+        Guid orderId,
+        Guid customerId,
+        decimal amount,
+        string currency,
+        string paymentMethod,
+        CancellationToken cancellationToken
+        );
+
     Task<PaymentProcessingResult> CaptureAsync(
         Guid orderId,
         Guid customerId,
@@ -47,6 +56,7 @@ public enum PaymentProcessingStatus
     Pending = 1,
     RequiresAction = 2,
     Failed = 3,
+    Authorized = 4,
 }
 
 public enum RefundProcessingStatus
