@@ -67,19 +67,24 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - Saga timeout: 5 min total (per-saga, not per-step)
 - States: Running → Completed | WaitingForEvent | Failed | TimedOut | FailedToCompensate
 
-### OrderSaga Steps (8 steps)
+### OrderSaga Steps (authorize-early / capture-late)
 0. **CancelOrderOnFailureStep** — no-op on execute; compensation cancels order
 1. **ReserveInventoryStep** — calls InventoryGateway.ReserveAsync()
-2. **CapturePaymentStep** — branches by PaymentIntentId presence:
-   - B2C pre-auth: `CaptureAsync(paymentIntentId)` → immediate result
-   - Backend-initiated (B2B/COD/BNPL): `ProcessPaymentAsync()` → Succeeded/Pending/RequiresAction/Failed
-   - DeadlineExceeded → Uncertain + WaitForEvent (NOT immediate failure)
-   - Unavailable → Fail → compensation
-3. **AwaitPaymentConfirmationStep** — checks PaymentStatus; WaitForEvent if Pending/Uncertain
+2. **AuthorizePaymentStep** — places an authorization HOLD (money reserved, not moved):
+   - Frontend pre-auth: `data.PaymentIntentId` present → record the browser-created hold (3DS already done client-side) → status `Authorized`
+   - Backend-initiated (B2B/recurring/COD): `AuthorizeAsync()` (manual capture) → `Authorized`; immediate-settle methods (invoice) treated as authorized; `Pending`/`RequiresAction` (defensive server-side 3DS, unused for B2B) → WaitForEvent
+   - DeadlineExceeded → Uncertain + WaitForEvent
+   - Compensation: VOID the hold via `CancelAuthorizationAsync()` (free); no-op once captured
+3. **AwaitPaymentConfirmationStep** — `Authorized` proceeds; WaitForEvent if Pending/Uncertain
 4. **UpdateOrderStatusStep** — confirm inventory, set order to Paid
 5. **CreateShipmentStep** — create shipment, assign tracking
-6. **CompleteOrderStep** — approve + complete order
-7. **SendConfirmationEmailStep** — send email (3 retries; failure doesn't fail saga)
+6. **CapturePaymentStep** — captures the hold (MONEY MOVES) via `CaptureAsync(providerPaymentIntentId)`:
+   - Uses `context.ProviderPaymentIntentId` ?? `data.PaymentIntentId`
+   - Compensation: REFUND via `RefundWithStatusAsync()` (only meaningful once captured)
+7. **CompleteOrderStep** — approve + complete order
+8. **SendConfirmationEmailStep** — send email (3 retries; failure doesn't fail saga)
+
+**Money model**: authorize early (step 2) → capture late (step 6). A failure before capture only voids the hold (instant, free); only post-capture failures refund. `OrderSagaPaymentStatus` includes `Authorized`. The frontend does 3DS in the browser before submitting the order, so the backend authorize is synchronous.
 
 ### ReturnSaga Steps (6 steps)
 - ValidateReturnRequest → AwaitReturnShipment (waits days) → ConfirmReceived → ProcessRefund → UpdateAccounting → CompleteReturn
@@ -104,8 +109,9 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 ## Compensation & Refund Retry
 
 - Steps compensate in reverse order
-- Payment compensation behavior by status:
-   - Succeeded + PaymentId present: call `RefundWithStatusAsync()`
+- Payment compensation is split across the two money steps (reverse order: capture first, then authorize):
+   - **CapturePaymentStep** (captured): `Succeeded` + PaymentId → `RefundWithStatusAsync()`
+   - **AuthorizePaymentStep** (hold): `Authorized` → `CancelAuthorizationAsync()` (void, free); `Succeeded` (already captured) → no-op; void failure → critical incident `AuthorizationVoidFailed`
    - Uncertain + PaymentId present: enqueue deferred verification/retry row in `CompensationRefundRetries`
    - Uncertain + no PaymentId but paymentIntentId present: call `CancelAuthorizationAsync()` to release pre-auth hold
    - Uncertain + no identifiers: raise critical incident (manual reconciliation required)
@@ -175,6 +181,7 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - **Event sourcing is the source of truth** — never mutate state without raising a domain event
 - **Saga timeout is per-saga (5 min total), not per-step** — a slow step starves subsequent ones
 - **DeadlineExceeded ≠ failure** — it means Uncertain; wait for webhook/reconciliation to resolve
+- **Authorize early, capture late** — `AuthorizePaymentStep` (step 2) holds funds; `CapturePaymentStep` (step 6) moves them just before completion. Pre-capture failures VOID the hold (free); only post-capture failures REFUND. `AuthorizeAsync` calls Payment `ProcessPayment` with `capture_method=manual`
 - **Uncertain compensation must never silently no-op** — execute explicit safety path (deferred verification and/or authorization cancel + incident on missing identifiers)
 - **WaitingForEvent sagas must not be killed by watchdog** — verify GetStuckSagasAsync excludes them
 - **Outbox guarantees causal ordering within an aggregate** — but parallel across aggregates may reorder within a batch
