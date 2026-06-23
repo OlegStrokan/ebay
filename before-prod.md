@@ -18,3 +18,9 @@ dotnet ef migrations add InitialCreate --project ../Infrastructure --startup-pro
 
 cd Payment/Payment/Api
 dotnet ef migrations add InitialCreate --project ../Infrastructure --startup-project .
+
+
+
+
+
+add gRPC resilience policies: retry, timeout, or circuit breaker on any gRPC client.
