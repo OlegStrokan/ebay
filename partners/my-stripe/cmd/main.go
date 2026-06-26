@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -36,14 +37,14 @@ func main() {
 
 	go func() {
 		logger.Printf("[main] my stripe listening on :%s (test_mode)", cfg.Port)
-		if err := httpServer.ListenAndServe(); err != nil && !error.Is(err, http.ErrServerClosed) {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Fatalf("[main] http server error: %v", err)
 		}
 	}()
 
 
 	<-ctx.Done()
-	logger.Printf("[main] stutdown signal received")
+	logger.Printf("[main] shutdown signal received")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {

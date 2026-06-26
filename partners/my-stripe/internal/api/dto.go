@@ -34,7 +34,7 @@ type refundRequest struct {
 type paymentIntentResponse struct {
 	ID string `json:"id"`
 	Status string `json:"status"` // succeeded | failed | pending | requires_action
-	ClientSector string `json:"client_status,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
 	ErrorCode string `json:"error_code,omitempty"`
 	ErrorMessage string `json:"error_message,omitempty"`
 	TestMode bool `json:"test_mode"`

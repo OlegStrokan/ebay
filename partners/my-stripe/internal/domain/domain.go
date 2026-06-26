@@ -32,7 +32,7 @@ func DecideOutcome(idempotencyKey, email string, amountMinor int64) Outcome {
 		return OutcomeServerError
 	case contains(k, "fail") || contains(e, "fail"):
 		return OutcomeFailed
-	case contains(k, "aciton") || contains(k, "3ds"):
+	case contains(k, "action") || contains(k, "3ds"):
 		return OutcomeRequiresAction
 	case contains(k, "pending"):
 		return OutcomePending

@@ -31,8 +31,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /v1/payment-intents/{id}/capture", s.auth(http.HandlerFunc(s.handleCapture)))
 	mux.Handle("POST /v1/payment-intents/{id}/cancel", s.auth(http.HandlerFunc(s.handleCancel)))
 	mux.Handle("GET /v1/payment-intents/{id}", s.auth(http.HandlerFunc(s.handleGetPaymentStatus)))
-	mux.Handle("POST /v1/refunds", s.auth(http.HandlerAsync(s.handleRefund)))
-	mux.Handle("GET /v/refunds/{id}", s.auth(http.HandleFunc(HandlerFunc(s.handleGetRefundStatus))))
+	mux.Handle("POST /v1/refunds", s.auth(http.HandlerFunc(s.handleRefund)))
+	mux.Handle("GET /v1/refunds/{id}", s.auth(http.HandlerFunc(s.handleGetRefundStatus)))
 	
 	return s.recover(s.logRequests(mux))
 }

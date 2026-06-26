@@ -17,7 +17,7 @@ type PaymentIntent struct {
 	Currency string
 	PaymentMethod string
 	Status string // succeed, failed, pending, requires_action, requires_capture, canceled, expired
-	ClientSecrect string
+	ClientSecret string
 	ErrorCode string
 	ErrorMessage string
 
@@ -175,7 +175,7 @@ func (s *Store) ExpiresStaleAuthorization(now time.Time) []string {
 		}
 
 		pi.Status = "expired"
-		pi.ErrorCode = "autorization_expired"
+		pi.ErrorCode = "authorization_expired"
 		pi.ErrorMessage = "Authorization hold expired before capture."
 		pi.UpdatedAt = now
 		expired = append(expired, pi.ID)
@@ -201,7 +201,7 @@ func (s *Store) TakeDueFinalizations(now time.Time) []Finalization {
 		}
 
 		pi.Finalized = true
-		pi.Status = pi.FinalizeCode
+		pi.Status = pi.FinalizedTo
 		pi.ErrorCode = pi.FinalizeCode
 		pi.ErrorMessage = pi.FinalizeMsg
 		pi.UpdatedAt = now

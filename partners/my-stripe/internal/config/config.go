@@ -38,7 +38,7 @@ func Load() Config {
 		FinalizeDelay: getEnvDuration("FINALIZE_DELAY", 3*time.Second),
 		WebhookMaxAttempts: getEnvInt("WEBHOOK_MAX_ATTEMPTS", 8),
 		WebhookBaseDelay: getEnvDuration("WORKER_BASE_DELAY", 2*time.Second),
-		WorkerInterval: getEnvDuration("WORKET_INTERVAL", time.Second),
+		WorkerInterval: getEnvDuration("WORKER_INTERVAL", time.Second),
 		AuthHoldTTL: getEnvDuration("AUTH_HOLD_TTL", 8*24*time.Hour),
 	}
 

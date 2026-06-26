@@ -2,8 +2,8 @@ package webhook
 
 import (
 	"encoding/json"
-	"fintech-sandbox/internal/domain"
-	"fintech-sandbox/internal/store"
+	"my-stripe/internal/domain"
+	"my-stripe/internal/store"
 )
 
 // turns a settled intent/refund into a stripe-shaped event body
@@ -42,7 +42,7 @@ func BuildEnvelope(f store.Finalization) (eventID string, eventType string, body
 			eventType = "payment_intent.payment_failed"
 			object["status"] = "require_payment_method"
 			object["last_payment_error"] = map[string]any{
-				"code": nonEmpty(f.ErrorCode, "payment_fialed"),
+				"code": nonEmpty(f.ErrorCode, "payment_failed"),
 				"message": nonEmpty(f.ErrorMessage, "Simulated payment failure."),
 			}
 		}

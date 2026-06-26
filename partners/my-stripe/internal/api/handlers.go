@@ -20,7 +20,7 @@ const (
 func (s *Server) handleProcessPayment(w http.ResponseWriter, r *http.Request) {
 	var req processPaymentRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{"invalid_request", "Mailformed JSON body"})
+		writeJSON(w, http.StatusBadRequest, errorResponse{"invalid_request", "Malformed JSON body"})
 		return
 	}
 
@@ -64,7 +64,7 @@ func (s *Server) handleProcessPayment(w http.ResponseWriter, r *http.Request) {
 
 	// in manual capture mode a successful authorization stops at "requires_action" insatead
 	// of moving money. the funds are only captured by later /{id}capture or released by cancel
-	manual := strings.EqualFold(req.CapturedMethod, "manual")
+	manual := strings.EqualFold(req.CaptureMethod, "manual")
 	authorizedStatus := "succeeded"
 	if manual {
 		authorizedStatus = "requires_capture"
@@ -79,7 +79,7 @@ func (s *Server) handleProcessPayment(w http.ResponseWriter, r *http.Request) {
 		resp = paymentIntentResponse{
 			ID: intentID,
 			Status: authorizedStatus, 
-			TestMode: true
+			TestMode: true,
 		}
 
 	case domain.OutcomeFailed:
@@ -101,18 +101,18 @@ func (s *Server) handleProcessPayment(w http.ResponseWriter, r *http.Request) {
 		resp = paymentIntentResponse{
 			ID: intentID,
 			Status: "pending",
-			TestMode: true
+			TestMode: true,
 		}
 
 	case domain.OutcomeRequiresAction:
 		pi.Status = "requires_action"
-		pi.ClientSecrect = domain.NewClientSecret(intentID)
+		pi.ClientSecret = domain.NewClientSecret(intentID)
 		s.scheduleFinalize(&pi.FinalizeAt, &pi.FinalizedTo, &pi.FinalizeCode, &pi.FinalizeMsg,
 		req.IdempotencyKey, authorizedStatus, now)
 		resp = paymentIntentResponse{
 			ID: intentID,
 			Status: "requires_action",
-			ClientSecret: pi.ClientSecrect,
+			ClientSecret: pi.ClientSecret,
 			TestMode: true,
 		}
 	}
@@ -122,11 +122,11 @@ func (s *Server) handleProcessPayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
-	intentID = r.PathValue("id")
+	intentID := r.PathValue("id")
 
 	var req capturePaymentRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{"invalid_request", "Mailformed JSON body"})
+		writeJSON(w, http.StatusBadRequest, errorResponse{"invalid_request", "Malformed JSON body"})
 		return
 	}
 
@@ -135,13 +135,13 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existing, ok = s.store.GetIntent(intentID); ok && existing.Status == "canceled" {
+	if existing, ok := s.store.GetIntent(intentID); ok && existing.Status == "canceled" {
 		resp := captureResponse{
 			ID: intentID,
-			Status: "failed"
+			Status: "failed",
 			ErrorCode: "intent_canceled",
 			ErrorMessage: "Cannot capture a canceled authorization",
-			TestMode: true
+			TestMode: true,
 		}
 		s.writeAndCache(w, scopeCapture, req.IdempotencyKey, resp)
 		return
@@ -153,7 +153,7 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 			Status: "failed",
 			ErrorCode: "authorization_expired",
 			ErrorMessage: "Authorization hold expired before capture",
-			TestMode: true
+			TestMode: true,
 		}
 		s.writeAndCache(w, scopeCapture, req.IdempotencyKey, resp)
 		return
@@ -161,23 +161,23 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 
 	// fail is client simulated failure case, success othervise + the intent may
 	// not exists in the store, so we tolerate a missing record like real stripe
-	failed := string.Contains(string.ToLower(intentID), "fail")
+	failed := strings.Contains(strings.ToLower(intentID), "fail")
 
 	var resp captureResponse
 	if failed {
 		resp = captureResponse{
 			ID: intentID,
-			Status: "failed"
+			Status: "failed",
 			ErrorCode: "capture_failed",
 			ErrorMessage: "Simulated capture failure.",
-			TestMode: true
+			TestMode: true,
 		}
 		s.store.UpdateIntentStatus(intentID, "failed", resp.ErrorCode, resp.ErrorMessage)
 	} else {
 		resp = captureResponse{
 			ID: intentID,
 			Status: "succeeded",
-			TestMode: true
+			TestMode: true,
 		}
 		s.store.UpdateIntentStatus(intentID, "succeeded", "", "")
 	}
@@ -187,7 +187,7 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	intentID := r.PathValue("id")
 	s.store.UpdateIntentStatus(intentID, "canceled", "", "")
-	writeJSON(w, http.StatusOK, cancelResponse, cancelResponse{
+	writeJSON(w, http.StatusOK, cancelResponse{
 		ID: intentID,
 		Status: "canceled",
 		TestMode: true,
@@ -207,13 +207,13 @@ func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.AmountMinor <= 0 {
-		writeJson(w, http.StatusOK, cached)
+		writeJSON(w, http.StatusBadRequest, errorResponse{"invalid_amount", "Refund amount must be greater than zero"})
 		return
 	}
 
 	if req.PaymentIntentID == "" {
 		writeJSON(w, http.StatusBadRequest, errorResponse{
-			"missing_payment_intent_id", "payment_intent_id is required for refunds"
+			"missing_payment_intent_id", "payment_intent_id is required for refunds",
 		})
 		return
 	}
@@ -225,7 +225,7 @@ func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
 		PaymentIntentID: req.PaymentIntentID,
 		PaymentID: req.PaymentID,
 		AmountMinor: req.AmountMinor,
-		Currency: strings.ToUpper(req.Currenty),
+		Currency: strings.ToUpper(req.Currency),
 		Reason: req.Reason,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -233,26 +233,26 @@ func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
 
 	var resp refundResponse
 	switch domain.RefundOutcome(req.IdempotencyKey, req.AmountMinor) {
-	case: domain.OutcomeFailed:
+	case domain.OutcomeFailed:
 		refund.Status = "failed"
 		refund.ErrorCode = "refund_failed"
-		refund.ErrorCode = "Simulated refund failure"
+		refund.ErrorMessage = "Simulated refund failure"
 		resp = refundResponse{
 			ID: refundID,
 			Status: "failed",
 			ErrorCode: refund.ErrorCode,
 			ErrorMessage: refund.ErrorMessage,
-			TestMode: true
+			TestMode: true,
 		}
 
-	case: domain.OutcomePending:
+	case domain.OutcomePending:
 		refund.Status = "pending"
 		refund.FinalizeAt = now.Add(s.cfg.FinalizeDelay)
 		refund.FinalizeTo = "succeeded"
 		resp = refundResponse{
 			ID: refundID,
 			Status: "pending", 
-			TestMode: true
+			TestMode: true,
 		}
 
 	default:
@@ -260,7 +260,7 @@ func (s *Server) handleRefund(w http.ResponseWriter, r *http.Request) {
 		resp = refundResponse{
 			ID: refundID,
 			Status: "succeeded",
-			TestMode: true
+			TestMode: true,
 		}
 	}
 
@@ -276,7 +276,7 @@ func (s *Server) handleGetPaymentStatus(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, statusResponse{
 			ID: intentID,
 			Status: "unknown",
-			TestMode: true
+			TestMode: true,
 		})
 		return
 	}
@@ -285,19 +285,19 @@ func (s *Server) handleGetPaymentStatus(w http.ResponseWriter, r *http.Request) 
 		Status: lifecycle(pi.Status),
 		ErrorCode: pi.ErrorCode,
 		ErrorMessage: pi.ErrorMessage,
-		TestMode: true
+		TestMode: true,
 	})
 }
 
 func (s *Server) handleGetRefundStatus(w http.ResponseWriter, r *http.Request) {
 	refundID := r.PathValue("id")
-	refund, ok := s.store.GetIntent(refundID)
+	refund, ok := s.store.GetRefund(refundID)
 
 	if !ok {
 		writeJSON(w, http.StatusNotFound, statusResponse{
 			ID: refundID,
 			Status: "unknown",
-			TestMode: true
+			TestMode: true,
 		})
 		return
 	}
@@ -306,7 +306,7 @@ func (s *Server) handleGetRefundStatus(w http.ResponseWriter, r *http.Request) {
 		Status: lifecycle(refund.Status),
 		ErrorCode: refund.ErrorCode,
 		ErrorMessage: refund.ErrorMessage,
-		TestMode: true
+		TestMode: true,
 	})
 }
 
@@ -325,7 +325,7 @@ func (s *Server) scheduleFinalize(at *time.Time, to, code, msg *string, idempote
 }
 
 func (s *Server) respondProcessError(w http.ResponseWriter, code, message string) {
-	writeJSON(w, http.StatusOK, paymentIntentResponse{
+	writeJSON(w, http.StatusBadRequest, paymentIntentResponse{
 		Status: "failed", ErrorCode: code, ErrorMessage: message, TestMode: true,
 	})
 }
@@ -355,6 +355,6 @@ func lifecycle(status string) string {
 	case "pending", "requires_action", "requires_capture":
 		return "pending"
 	default:
-		return "unkown"
+		return "unknown"
 	}
 }
