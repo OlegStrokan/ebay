@@ -14,6 +14,7 @@ namespace Application.Sagas.OrderSaga.Steps;
 public sealed class CreateShipmentStep(
     IShippingGateway shippingGateway,
     IOrderPersistenceService orderPersistenceService,
+    IPplPendingBookingRepository pplPendingBookingRepository,
     IIncidentReporter incidentReporter,
     ILogger<CreateShipmentStep> logger
     ) : ISagaStep<OrderSagaData, OrderSagaContext>
@@ -95,14 +96,33 @@ public sealed class CreateShipmentStep(
 
             return new Fail($"Invalid delivery address: {ex.Message}");
         }
+        catch (PplBookingPendingException ex)
+        {
+            // PPL depot did not settle within the initial poll window.
+            // Persist the reference for the background reconciliation worker and let the
+            // saga continue — the order completes without a tracking number for now.
+            await pplPendingBookingRepository.EnqueueAsync(
+                data.CorrelationId, ex.ReferenceId, cancellationToken);
+
+            logger.LogWarning(
+                ex,
+                "PPL booking did not settle within poll window for order {OrderId}. ReferenceId={ReferenceId}. Enqueued for reconciliation.",
+                data.CorrelationId, ex.ReferenceId);
+
+            return new Completed(new Dictionary<string, object>
+            {
+                ["ShipmentStatus"] = "PplPendingReconciliation",
+                ["PplReferenceId"] = ex.ReferenceId,
+            });
+        }
         catch (Exception ex)
         {
             logger.LogWarning(
                 ex,
-                "Invalid delivery address for order {OrderId}",
-                data.CorrelationId);
+                "CreateShipment failed for order {OrderId}: {Message}",
+                data.CorrelationId, ex.Message);
 
-            return new Fail($"Invalid delivery address: {ex.Message}");
+            return new Fail($"CreateShipment failed: {ex.Message}");
         }
     }
 
@@ -153,7 +173,7 @@ public sealed class CreateShipmentStep(
                 "Successfully compensated shipment step for order {OrderId}",
                 data.CorrelationId);
         }
-        catch (OrderNotFoundException ex)
+        catch (OrderNotFoundException)
         {
             logger.LogWarning("Compensate skipped: Order {OrderId} not found. It may have never been created.", data.CorrelationId);
         }

@@ -17,6 +17,14 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
     protected readonly IEnumerable<ISagaStep<TData, TContext>> Steps;
     protected abstract string SagaType { get; }
     protected virtual TimeSpan SagaTimeout => TimeSpan.FromMinutes(5);
+    // Maximum time compensation may run. Kept explicit and bounded so that LockBudget
+    // is finite and the distributed lock TTL can guarantee no concurrent writer enters
+    // while compensation is still running.
+    protected virtual TimeSpan CompensationTimeout => TimeSpan.FromMinutes(3);
+    // The total time a distributed lock must cover: forward execution (SagaTimeout) +
+    // worst-case compensation (CompensationTimeout). SagaContinuationEventHandler adds
+    // a safety margin on top when computing the Redis lock TTL.
+    public TimeSpan LockBudget => SagaTimeout + CompensationTimeout;
 
     protected SagaBase(
         ISagaRepository sagaRepository,
@@ -117,7 +125,10 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                     sagaState.Status = SagaStatus.Failed;
                     await _sagaRepository.SaveAsync(sagaState, sagaCancellationToken);
 
-                    await CompensateAsync(sagaId, sagaCancellationToken);
+                    // Use serviceCancellationToken, not sagaCancellationToken: a step that
+                    // fails near the SagaTimeout boundary would leave compensation almost no
+                    // time. CompensateAsync adds its own CompensationTimeout bound internally.
+                    await CompensateAsync(sagaId, serviceCancellationToken);
                     return SagaResult.Failed(sagaId, stepFailure.Reason);
                 }
 
@@ -244,7 +255,8 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
                 if (stepResult is Fail resumeFailure)
                 {
-                    await CompensateAsync(sagaState.Id, resumeCancellationToken);
+                    // Use serviceCancellationToken: resumeCancellationToken may be near timeout
+                    await CompensateAsync(sagaState.Id, serviceCancellationToken);
                     return SagaResult.Failed(sagaState.Id, resumeFailure.Reason);
                 }
 
@@ -341,7 +353,15 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
     public async Task<SagaResult> CompensateAsync(Guid sagaId, CancellationToken cancellationToken)
     {
-        var sagaState = await _sagaRepository.GetByIdAsync(sagaId, cancellationToken);
+        // Compensation must complete within CompensationTimeout. Without this bound an
+        // unbounded compensation run can outlast the distributed lock TTL, creating a
+        // window where a concurrent resumer acquires the lock mid-compensation and races
+        // with it (double-compensation / refund+re-charge interleave).
+        using var compensationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        compensationCts.CancelAfter(CompensationTimeout);
+        var ct = compensationCts.Token;
+
+        var sagaState = await _sagaRepository.GetByIdAsync(sagaId, ct);
         if (sagaState == null)
             throw new InvalidOperationException($"Saga {sagaId} not found");
 
@@ -351,7 +371,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         }
 
         sagaState.Status = SagaStatus.Compensating;
-        await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+        await _sagaRepository.SaveAsync(sagaState, ct);
 
         var data = JsonSerializer.Deserialize<TData>(sagaState.Payload)!;
         var context = JsonSerializer.Deserialize<TContext>(sagaState.Context) ?? new TContext();
@@ -373,12 +393,12 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
             {
                 try
                 {
-                    await step.CompensateAsync(data, context, cancellationToken);
+                    await step.CompensateAsync(data, context, ct);
 
                     var stepLog = sagaState.Steps.First(s => s.StepName == step.StepName);
                     stepLog.Status = StepStatus.Compensated;
                     await _sagaRepository.SaveCompensationStateAsync(
-                        sagaState, stepLog, cancellationToken);
+                        sagaState, stepLog, ct);
 
                     break;
                 }
@@ -392,7 +412,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                     _logger.LogWarning(ex, "Compensation transient failure for {StepName}. Retry {Count}/{Max}",
                         step.StepName, retryCount, maxRetries);
 
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)), cancellationToken);
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)), ct);
                 }
                 catch (Exception ex)
                 {
@@ -400,7 +420,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                         step.StepName, sagaId);
 
                     sagaState.Status = SagaStatus.FailedToCompensate;
-                    await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+                    await _sagaRepository.SaveAsync(sagaState, ct);
                     throw;
                 }
             }
@@ -408,7 +428,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
         sagaState.Status = SagaStatus.Compensated;
         sagaState.UpdatedAt = DateTime.UtcNow;
-        await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+        await _sagaRepository.SaveAsync(sagaState, ct);
 
         return SagaResult.Compensated(sagaId);
     }

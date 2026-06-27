@@ -15,9 +15,9 @@ public abstract class SagaContinuationEventHandler<TEvent, TData, TContext>
     private readonly ISagaDistributedLock _distributedLock;
     private readonly ILogger _logger;
 
-    // How long one saga execution may hold the lock before it expires automatically.
-    // Must be greater than SagaBase.SagaTimeout (5 min) so a stuck saga never blocks the key forever.
-    private readonly TimeSpan _lockExpiry = TimeSpan.FromMinutes(6);
+    // Derived from the saga's own LockBudget (SagaTimeout + CompensationTimeout) so the lock
+    // always outlives the full critical section regardless of which saga subclass is used.
+    private readonly TimeSpan _lockExpiry;
 
     // If a concurrent instance holds the lock, retry a few times before giving up.
     // The holder will complete and release quickly in the normal case (duplicate delivery).
@@ -41,6 +41,10 @@ public abstract class SagaContinuationEventHandler<TEvent, TData, TContext>
         _sagaRepository = sagaRepository;
         _distributedLock = distributedLock;
         _logger = logger;
+        // Lock must outlive forward execution (SagaTimeout) + worst-case compensation
+        // (CompensationTimeout) + a 1-minute safety margin. This is the invariant the
+        // review calls "lock TTL > saga timeout + compensation budget".
+        _lockExpiry = saga.LockBudget + TimeSpan.FromMinutes(1);
     }
     
     public async Task HandleAsync(string eventPayload, CancellationToken cancellationToken)
