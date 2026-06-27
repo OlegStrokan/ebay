@@ -31,7 +31,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
 	var initializer = scope.ServiceProvider.GetRequiredService<InventoryDbInitializer>();
-	await initializer.EnsureCreatedAsync();
+	await initializer.MigrateAsync();
 }
 
 app.MapGrpcService<InventoryGrpcService>();

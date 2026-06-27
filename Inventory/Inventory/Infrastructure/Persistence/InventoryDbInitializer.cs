@@ -7,11 +7,10 @@ public sealed class InventoryDbInitializer(
     IDbContextFactory<InventoryDbContext> dbContextFactory,
     ILogger<InventoryDbInitializer> logger)
 {
-    public async Task EnsureCreatedAsync(CancellationToken cancellationToken = default)
+    public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await dbContext.Database.EnsureDeletedAsync(cancellationToken);
-        await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-        logger.LogInformation("Inventory database schema ensured.");
+        await dbContext.Database.MigrateAsync(cancellationToken);
+        logger.LogInformation("Inventory database migrations applied.");
     }
 }
