@@ -12,6 +12,11 @@ internal sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
 
         builder.HasKey(x => x.Id);
 
+        // prevents two concurrent writers (webhook + reconciliation)
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .IsRowVersion();
+
         builder.Property(x => x.Id)
             .HasColumnName("id")
             .HasMaxLength(64)

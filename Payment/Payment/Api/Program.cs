@@ -3,6 +3,7 @@ using Api.GrpcServices;
 using Api.Middleware;
 using Application;
 using Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,8 +23,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.PaymentDbContext>();
-    await db.Database.EnsureDeletedAsync();
-    await db.Database.EnsureCreatedAsync();
+    await db.Database.MigrateAsync();
 }
 
 app.MapGrpcService<PaymentGrpcService>();

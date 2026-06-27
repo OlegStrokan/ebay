@@ -26,7 +26,11 @@ public sealed class Payment : AggregateRoot<PaymentId>
     public ProviderRefundId? ProviderRefundId { get; private set; }
     
     public decimal TotalRefundedAmount { get; private set; }
-    
+
+    // Tracks which RefundIds have already been folded into TotalRefundedAmount.
+    // Prevents double-counting if MarkRefunded is called twice for the same refund
+    public List<string> AppliedRefundIds { get; private set; } = new();
+
     public FailureReason? FailureReason { get; private set; }
     
     public DateTime CreatedAt { get; private set; }
@@ -198,8 +202,9 @@ public sealed class Payment : AggregateRoot<PaymentId>
         ProviderRefundId = providerRefundId ?? ProviderRefundId;
         FailureReason = null;
 
-        if (amountRefunded is not null)
+        if (amountRefunded is not null && !AppliedRefundIds.Contains(refundId.Value))
         {
+            AppliedRefundIds.Add(refundId.Value);
             TotalRefundedAmount += amountRefunded.Amount;
         }
 

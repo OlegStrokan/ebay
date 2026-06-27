@@ -17,7 +17,7 @@ internal sealed class OrderCallbackQueueService(
         Payment payment,
         CancellationToken cancellationToken = default)
     {
-        var callbackEventId = Guid.NewGuid().ToString("N");
+        var callbackEventId = $"{payment.Id.Value}:payment_succeeded";
         var payload = payloadSerializer.SerializePaymentSucceeded(callbackEventId, payment);
 
         return QueueInternalAsync(
@@ -33,7 +33,7 @@ internal sealed class OrderCallbackQueueService(
         FailureReason reason,
         CancellationToken cancellationToken = default)
     {
-        var callbackEventId = Guid.NewGuid().ToString("N");
+        var callbackEventId = $"{payment.Id.Value}:payment_failed";
         var payload = payloadSerializer.SerializePaymentFailed(callbackEventId, payment, reason);
 
         return QueueInternalAsync(
@@ -49,7 +49,8 @@ internal sealed class OrderCallbackQueueService(
         Refund refund,
         CancellationToken cancellationToken = default)
     {
-        var callbackEventId = Guid.NewGuid().ToString("N");
+
+        var callbackEventId = $"{refund.Id.Value}:refund_succeeded";
         var payload = payloadSerializer.SerializeRefundSucceeded(callbackEventId, payment, refund);
 
         return QueueInternalAsync(
@@ -66,7 +67,7 @@ internal sealed class OrderCallbackQueueService(
         FailureReason reason,
         CancellationToken cancellationToken = default)
     {
-        var callbackEventId = Guid.NewGuid().ToString("N");
+        var callbackEventId = $"{refund.Id.Value}:refund_failed";
         var payload = payloadSerializer.SerializeRefundFailed(callbackEventId, payment, refund, reason);
 
         return QueueInternalAsync(
