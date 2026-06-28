@@ -90,6 +90,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+builder.Services.AddMemoryCache();
 builder.Services.AddExceptionHandler<GrpcExceptionHandler>();
 builder.Services.AddProblemDetails();
 

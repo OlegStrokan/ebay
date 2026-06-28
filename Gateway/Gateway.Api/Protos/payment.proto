@@ -11,6 +11,8 @@ service PaymentService {
   rpc RefundPayment (RefundPaymentRequest) returns (RefundPaymentResponse);
   rpc GetPayment (GetPaymentRequest) returns (GetPaymentResponse);
   rpc GetPaymentByOrderAndIdempotency (GetPaymentByOrderAndIdempotencyRequest) returns (GetPaymentByOrderAndIdempotencyResponse);
+  rpc CapturePayment (CapturePaymentRequest) returns (CapturePaymentResponse);
+  rpc CancelAuthorization (CancelAuthorizationRequest) returns (CancelAuthorizationResponse);
 }
 
 enum ProcessPaymentStatus {
@@ -19,6 +21,7 @@ enum ProcessPaymentStatus {
   PROCESS_PAYMENT_STATUS_PENDING = 2;
   PROCESS_PAYMENT_STATUS_FAILED = 3;
   PROCESS_PAYMENT_STATUS_REQUIRES_ACTION = 4;
+  PROCESS_PAYMENT_STATUS_REQUIRES_CAPTURE = 5;
 }
 
 enum RefundPaymentStatus {
@@ -37,6 +40,7 @@ enum PaymentRecordStatus {
   PAYMENT_RECORD_STATUS_REFUND_PENDING = 5;
   PAYMENT_RECORD_STATUS_REFUNDED = 6;
   PAYMENT_RECORD_STATUS_REFUND_FAILED = 7;
+  PAYMENT_RECORD_STATUS_AUTHORIZED = 8;
 }
 
 message ProcessPaymentRequest {
@@ -47,6 +51,8 @@ message ProcessPaymentRequest {
   string payment_method = 5;
   string idempotency_key = 6;
   string customer_email = 10;
+  // "automatic" (default: authorize + capture) or "manual" (authorize only).
+  string capture_method = 11;
 }
 
 message ProcessPaymentResponse {
@@ -114,4 +120,32 @@ message GetPaymentByOrderAndIdempotencyResponse {
   bool success = 1;
   string error_message = 2;
   PaymentDetails payment = 3;
+}
+
+message CapturePaymentRequest {
+  string order_id = 1;
+  string customer_id = 2;
+  string provider_payment_intent_id = 3;
+  common.DecimalValue amount = 4;
+  string currency = 5;
+  string idempotency_key = 6;
+}
+
+message CapturePaymentResponse {
+  bool success = 1;
+  string payment_id = 2;
+  string error_code = 3;
+  string error_message = 4;
+  ProcessPaymentStatus status = 5;
+  string provider_payment_intent_id = 6;
+}
+
+message CancelAuthorizationRequest {
+  string provider_payment_intent_id = 1;
+}
+
+message CancelAuthorizationResponse {
+  bool success = 1;
+  string error_code = 2;
+  string error_message = 3;
 }
