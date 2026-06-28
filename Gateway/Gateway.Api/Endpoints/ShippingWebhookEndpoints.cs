@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Gateway.Api.Contracts.Shipping;
 using Gateway.Api.Services;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Gateway.Api.Endpoints;
 
@@ -23,6 +24,7 @@ public static class ShippingWebhookEndpoints
         group.MapPost("/returns/delivered", async (
             HttpContext httpContext,
             IConfiguration configuration,
+            IMemoryCache memoryCache,
             IOrderSagaEventPublisher sagaPublisher,
             ILoggerFactory loggerFactory,
             CancellationToken ct) =>
@@ -55,12 +57,18 @@ public static class ShippingWebhookEndpoints
 
             var carrier = (envelope.Carrier ?? string.Empty).Trim().ToLowerInvariant();
 
+            var nowSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var toleranceSeconds = configuration.GetValue<int>("WebhookSecurity:DpdTimestampToleranceSeconds");
+            if (toleranceSeconds <= 0) toleranceSeconds = 300;
+
             var authorized = carrier switch
             {
                 "dpd" => VerifyDpdHmac(
                     httpContext.Request.Headers["Stripe-Signature"],
                     rawBody,
-                    configuration["WebhookSecurity:ShippingSharedSecret"]),
+                    configuration["WebhookSecurity:ShippingSharedSecret"],
+                    nowSeconds,
+                    toleranceSeconds),
                 "ppl" => VerifyPplSecret(
                     httpContext,
                     configuration["WebhookSecurity:PplSharedSecret"]),
@@ -71,6 +79,27 @@ public static class ShippingWebhookEndpoints
             {
                 logger.LogWarning("Rejected shipping webhook from carrier '{Carrier}': authentication failed.", carrier);
                 return Results.Unauthorized();
+            }
+
+            // Event-ID dedup: reject replayed webhooks that were already accepted.
+            // DPD events are cached for 2× the tolerance window (replays older than the
+            // window are already rejected by the timestamp check). PPL events have no
+            // timestamp so we keep the seen-set for 24 hours.
+            if (!string.IsNullOrWhiteSpace(envelope.Id))
+            {
+                var dedupKey = $"webhook:shipping:{carrier}:{envelope.Id}";
+                if (memoryCache.TryGetValue(dedupKey, out _))
+                {
+                    logger.LogWarning(
+                        "Rejected duplicate shipping webhook event '{EventId}' from carrier '{Carrier}'.",
+                        envelope.Id, carrier);
+                    return Results.Accepted();
+                }
+
+                var dedupTtl = string.Equals(carrier, "dpd", StringComparison.Ordinal)
+                    ? TimeSpan.FromSeconds(toleranceSeconds * 2)
+                    : TimeSpan.FromHours(24);
+                memoryCache.Set(dedupKey, true, dedupTtl);
             }
 
             // Only the terminal delivered event resumes the saga. Intermediate progressive
@@ -120,12 +149,18 @@ public static class ShippingWebhookEndpoints
     }
 
     // DPD reuses the Stripe HMAC scheme: signature header "t={ts},v1={hex}", signed payload
-    // "{ts}.{rawBody}", HMAC-SHA256 keyed by the shared secret
-    private static bool VerifyDpdHmac(string? signatureHeader, string rawBody, string? secret)
+    // "{ts}.{rawBody}", HMAC-SHA256 keyed by the shared secret.
+    // nowSeconds is the caller's UTC epoch; toleranceSeconds is the maximum allowed skew.
+    private static bool VerifyDpdHmac(
+        string? signatureHeader,
+        string rawBody,
+        string? secret,
+        long nowSeconds,
+        int toleranceSeconds)
     {
         if (string.IsNullOrWhiteSpace(secret))
         {
-            return true; // unconfigured (e.g. local dev) -> accept
+            return false; // no secret configured -> fail closed, never accept unauthenticated webhooks
         }
         if (string.IsNullOrWhiteSpace(signatureHeader))
         {
@@ -157,6 +192,11 @@ public static class ShippingWebhookEndpoints
             return false;
         }
 
+        if (Math.Abs(nowSeconds - timestamp) > toleranceSeconds)
+        {
+            return false; // timestamp outside allowed tolerance — reject replays
+        }
+
         var signedPayload = $"{timestamp}.{rawBody}";
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
         var computed = hmac.ComputeHash(Encoding.UTF8.GetBytes(signedPayload));
@@ -179,7 +219,7 @@ public static class ShippingWebhookEndpoints
     {
         if (string.IsNullOrWhiteSpace(secret))
         {
-            return true; // unconfigured (e.g. local dev) -> accept
+            return false; // no secret configured -> fail closed, never accept unauthenticated webhooks
         }
 
         var provided = httpContext.Request.Headers["X-PPL-Webhook-Secret"].ToString();
