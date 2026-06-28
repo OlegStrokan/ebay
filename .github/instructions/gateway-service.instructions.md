@@ -9,12 +9,12 @@ description: "Use when working on the Gateway — REST-to-gRPC API gateway with 
 
 REST API gateway that translates HTTP requests to gRPC calls against backend services. Single entry point for all external clients. Uses ASP.NET Core Minimal APIs with JWT Bearer authentication and Swagger documentation.
 
-Gateway also receives external shipping provider callbacks for return deliveries and publishes normalized saga continuation events to Kafka (`ReturnShipmentDeliveredEvent` to `order.events`).
+Gateway also receives external shipping provider callbacks for return deliveries and publishes normalized saga continuation events to Kafka (`ReturnShipmentDeliveredEvent` to `order.events`). The single callback endpoint branches on a `carrier` tag in the payload to pick the right authentication scheme — **DPD** signs the body with HMAC-SHA256 (`Stripe-Signature`), **PPL** sends a plain `X-PPL-Webhook-Secret` header. Fake carrier simulators live in `partners/my-dpd` and `partners/my-ppl`.
 
 ## Architecture (API Gateway Pattern)
 
 - **Endpoints/** — Minimal API route groups per domain: `ProductEndpoints`, `SearchEndpoints`, `OrderEndpoints`, `PaymentEndpoints`, `InventoryEndpoints`, `AuthEndpoints`, `UserEndpoints`, `RoleEndpoints`, `B2BOrderEndpoints`, `RecurringOrderEndpoints`, `UserEventEndpoints`, `ShippingWebhookEndpoints`
-- **Contracts/** — Immutable C# records organized by domain (REST DTOs), including `UserEvents/` for behavioral tracking
+- **Contracts/** — Immutable C# records organized by domain (REST DTOs), including `UserEvents/` for behavioral tracking and `Shipping/ShippingWebhookEnvelope` for the carrier callback `{ type, carrier, data }` payload
 - **Services/** — `KafkaUserEventPublisher` (publishes user behavioral events to `user.events`) and `KafkaOrderSagaEventPublisher` (publishes shipping webhook continuation events to `order.events`)
 - **Mappers/** — `DecimalValueMapper` and proto ↔ DTO conversions
 - **Extensions/** — `ServiceCollectionExtensions` (gRPC client registration), `EndpointRouteBuilderExtensions` (health endpoints)
@@ -43,7 +43,7 @@ Gateway also receives external shipping provider callbacks for return deliveries
 - **SSE streaming**: `/api/v1/search/stream` sends progressive results as Server-Sent Events (keyword phase → merged)
 - **OpenAPI metadata**: `WithName()`, `WithTags()`, `WithOpenApi()` on every endpoint
 - **Rate limiting**: `RequireRateLimiting("auth-strict")` on `/login` and `/password-reset/request`; `RequireRateLimiting("search")` on the whole search group. Policies are `SlidingWindowLimiter` keyed by remote IP. Registered once in `Program.cs` via `AddRateLimiter`. Rejected requests receive `429 Too Many Requests`. Never add a new sensitive endpoint without attaching an appropriate policy.
-- **Shipping webhook ingress**: `/api/v1/webhooks/shipping/returns/delivered` accepts carrier callback payload, validates required fields (and optional shared-secret header), and publishes `ReturnShipmentDeliveredEvent` envelope to Kafka saga topic.
+- **Shipping webhook ingress**: `/api/v1/webhooks/shipping/returns/delivered` reads the **raw body** (`EnableBuffering`, needed because DPD's HMAC is computed over the exact bytes), deserializes the `{ type, carrier, data }` envelope, and branches on `carrier`: `dpd` → `VerifyDpdHmac` (`Stripe-Signature: t={ts},v1={hmac}` over `{ts}.{rawBody}` keyed by `WebhookSecurity:ShippingSharedSecret`); `ppl` → `VerifyPplSecret` (`X-PPL-Webhook-Secret` == `WebhookSecurity:PplSharedSecret`). Verification **fails closed**: a missing/empty configured secret rejects all webhooks (a secret must be configured for the endpoint to accept anything). Only `type == "return.delivered"` publishes `ReturnShipmentDeliveredEvent`; progressive intermediates (`*.in_transit`, `*.out_for_delivery`) are logged and `202`-discarded. `orderId` is taken from the callback query string first, then `data.orderId`; `shipmentId` from `data.returnShipmentId`.
 
 ## Authentication
 
@@ -62,7 +62,7 @@ Gateway also receives external shipping provider callbacks for return deliveries
 
 - `GrpcServices` section: `AuthUrl`, `UserUrl`, `ProductUrl`, `OrderUrl`, `PaymentUrl`, `InventoryUrl`, `SearchUrl`
 - `Kafka` section: `BootstrapServers`, `UserEventsTopic`, `SagaTopic`
-- `WebhookSecurity` section: `ShippingSharedSecret` (optional header check for shipping callbacks)
+- `WebhookSecurity` section: `ShippingSharedSecret` (DPD HMAC secret) and `PplSharedSecret` (PPL plain-header secret); an empty value disables the check (local dev only)
 - JWT: Authority, SecretKey (dev)
 - Health: `/health/live`, `/health/ready`
 - Rate limiting policies are defined in code (no config knobs); adjust `PermitLimit` / `Window` values in `Program.cs` if limits need tuning
@@ -72,6 +72,8 @@ Gateway also receives external shipping provider callbacks for return deliveries
 - Gateway is mapping-only — no business logic, no database, no domain models
 - All backend communication is gRPC — never call backend services over HTTP (exception: Kafka for user event fire-and-forget publishing)
 - Shipping webhook ingress is the controlled public callback entrypoint — do not expose Order internals for carrier callbacks
+- Carrier auth is per-carrier — never validate a PPL callback with HMAC or a DPD callback with the plain secret; branch on the `carrier` tag
+- Only `return.delivered` resumes the saga — never publish a continuation event for an intermediate progressive event
 - Proto files must stay in sync with backend service proto definitions
 - `DecimalValue` conversion is shared — always use the mapper, don't inline nanos math
 - `RpcException` must be caught and translated — never leak gRPC errors to REST clients
