@@ -8,29 +8,78 @@ Event-driven microservices e-commerce platform built with .NET 8, gRPC, Kafka, a
 
 ## Architecture Overview
 
-```
-                           ┌──────────────────────────────────────────┐
-                           │              Gateway (REST)              │
-                           │           HTTP :8080 + Swagger           │
-                           └────┬───┬───┬───┬───┬───┬───┬────────────┘
-                                │   │   │   │   │   │   │   (gRPC to all services)
-          ┌─────────────────────┼───┼───┼───┼───┼───┼───┼──────────────────┐
-          │                     │   │   │   │   │   │   │                  │
-     ┌────▼───┐ ┌────▼──┐ ┌───▼────┐ ┌▼────▼┐ ┌▼───▼──┐ ┌──▼──────┐ ┌──▼────┐
-     │  Auth  │ │ User  │ │Product │ │Order │ │Payment│ │Inventory│ │Search │
-     │ :8080  │ │ :8080 │ │ :8080  │ │:8080 │ │ :8080 │ │  :8080  │ │ :8080 │
-     └───┬────┘ └───┬───┘ └───┬────┘ └──┬───┘ └───┬───┘ └────┬────┘ └───┬───┘
-         │          │         │         │         │           │          │
-    Postgres   Postgres  Postgres   Postgres  Postgres   Postgres       │
-     :5432      :5433     :5435    :5437/:5438  :5436     :5434         │
-                                                                        │
-                                                              ┌─────────▼──────────┐
-                                                              │  AiSearchService   │
-                                                              │   gRPC :50051      │
-                                                              └──┬──────┬──────┬───┘
-                                                                 │      │      │
-                                                            Ollama  Qdrant  Elasticsearch
-                                                            :11434  :6333    :9200
+```mermaid
+flowchart TD
+    ProductAdmin["ProductAdmin (REST)<br/>HTTP :5000 · API key (X-Admin-Api-Key)"]
+    Gateway["Gateway (REST)<br/>HTTP :8080 + Swagger"]
+
+    subgraph Core["Core Services · gRPC :8080"]
+        Auth["Auth"]
+        User["User"]
+        Product["Product"]
+        Order["Order"]
+        Payment["Payment"]
+        Inventory["Inventory"]
+        Search["Search"]
+    end
+
+    subgraph AISearch["AI Search"]
+        AiSearch["AiSearchService<br/>gRPC :50051"]
+        Ollama["Ollama :11434"]
+        Qdrant["Qdrant :6333"]
+        Elastic["Elasticsearch :9200"]
+    end
+
+    subgraph Partners["Partner Fakes · deterministic, dev / E2E"]
+        Stripe["my-stripe :8090<br/>Stripe API fake · HMAC webhooks"]
+        Dpd["my-dpd :8091<br/>DPD carrier fake · sync · HMAC webhooks"]
+        Ppl["my-ppl :8092<br/>PPL carrier fake · 2-phase booking · plain-secret webhooks"]
+    end
+
+    AuthDB[("Postgres :5432")]
+    UserDB[("Postgres :5433")]
+    ProductDB[("Postgres :5435")]
+    OrderDB[("Postgres :5437 / :5438")]
+    PaymentDB[("Postgres :5436")]
+    InventoryDB[("Postgres :5434")]
+
+    ProductAdmin -- "gRPC · direct, bypasses Gateway" --> Product
+
+    Gateway -- gRPC --> Auth
+    Gateway -- gRPC --> User
+    Gateway -- gRPC --> Product
+    Gateway -- gRPC --> Order
+    Gateway -- gRPC --> Payment
+    Gateway -- gRPC --> Inventory
+    Gateway -- gRPC --> Search
+
+    Auth --> AuthDB
+    User --> UserDB
+    Product --> ProductDB
+    Order --> OrderDB
+    Payment --> PaymentDB
+    Inventory --> InventoryDB
+
+    Search -- gRPC --> AiSearch
+    AiSearch --> Ollama
+    AiSearch --> Qdrant
+    AiSearch --> Elastic
+
+    Payment -- HTTP --> Stripe
+    Order -- HTTP --> Dpd
+    Order -- HTTP --> Ppl
+    Stripe -. webhook .-> Payment
+    Dpd -. "webhook · return.delivered" .-> Gateway
+    Ppl -. "webhook · return.delivered" .-> Gateway
+
+    classDef entry fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a;
+    classDef db fill:#fef3c7,stroke:#b45309,color:#7c2d12;
+    classDef ai fill:#ede9fe,stroke:#6d28d9,color:#4c1d95;
+    classDef partner fill:#dcfce7,stroke:#15803d,color:#14532d;
+    class ProductAdmin,Gateway entry;
+    class AuthDB,UserDB,ProductDB,OrderDB,PaymentDB,InventoryDB db;
+    class AiSearch,Ollama,Qdrant,Elastic ai;
+    class Stripe,Dpd,Ppl partner;
 ```
 
 All inter-service communication uses **gRPC**. The Gateway translates external HTTP/REST requests into gRPC calls. Kafka handles async event distribution between services.
@@ -154,6 +203,31 @@ User search → Gateway → Search Service → AiSearchService (gRPC)
 
 ---
 
+## Partner Simulators (Fakes)
+
+Deterministic fakes of external providers, under `/partners`, used for local development and end-to-end saga tests. No real money or parcels move — every outcome is a pure function of the request (magic tokens in `orderId` / idempotency key, or a postal-code suffix), so saga branches are fully reproducible. The carrier fakes use SQLite (not in-memory) so a restart does not lose webhooks parked by the long-running return saga.
+
+### my-stripe
+In-memory fake of the Stripe payment API. Returns webhook-shaped JSON signed with the same HMAC scheme as real Stripe. Drives the Payment service's dual-path finalization (sync response + async webhook).
+
+- **Used by**: Payment
+
+### my-dpd
+Go + SQLite fake of the **DPD** parcel carrier. Synchronous and reliable: immediate authoritative responses, idempotent cancel, HMAC-signed delivery webhooks (`Stripe-Signature`).
+
+- **Port**: HTTP :8091
+- **Used by**: Order (`DpdShippingAdapter`)
+
+### my-ppl
+Go + SQLite fake of the **PPL** parcel carrier. Two-phase async booking (submit → poll until accepted), cancellation refused once in transit (`409`), and progressive status webhooks authenticated with a plain `X-PPL-Webhook-Secret` header (no body signature).
+
+- **Port**: HTTP :8092
+- **Used by**: Order (`PplShippingAdapter`)
+
+The Order return saga registers a delivery webhook; carriers call back into the **Gateway** (`POST /api/v1/webhooks/shipping/returns/delivered`), which branches on a `carrier` tag to verify DPD HMAC vs PPL plain-secret, then publishes `ReturnShipmentDeliveredEvent` to Kafka to resume the saga.
+
+---
+
 ## Infrastructure
 
 | Component       | Technology                        | Port(s)          | Purpose                                    |
@@ -199,6 +273,7 @@ Gateway ──gRPC──→ Auth ──gRPC──→ User
                   ├──gRPC──→ Order ──gRPC──→ Payment (+ Stripe)
                   │              │──gRPC──→ Inventory
                   │              │──Kafka──→ Email ──SMTP──→ MailHog
+                  │              │──HTTP──→ DPD / PPL carriers (shipping + returns)
                   │              └──Redis (saga locks)
                   │
                   └──gRPC──→ Search ──gRPC──→ AiSearchService
@@ -315,6 +390,10 @@ free-ebay/
 ├── Inventory/                # Stock reservation service (gRPC)
 ├── k8s/                      # Kubernetes manifests (Kustomize)
 ├── Order/                    # Order saga orchestration (gRPC, Event Sourcing, CQRS)
+├── partners/                 # Deterministic fakes of external providers (dev/test)
+│   ├── my-stripe/            #   Fake Stripe payment API (HMAC webhooks)
+│   ├── my-dpd/               #   Fake DPD carrier (sync, HMAC webhooks)
+│   └── my-ppl/               #   Fake PPL carrier (two-phase booking, plain-secret webhooks)
 ├── Payment/                  # Payment processing via Stripe (gRPC + webhooks)
 ├── Product/                  # Product catalog CRUD (gRPC, Kafka publisher)
 ├── Search/                   # Search facade with AI fallback (gRPC)
