@@ -123,17 +123,25 @@ public sealed class InventoryKafkaConsumerBackgroundService(
     {
         try
         {
+            var headers = new Headers();
+            if (original.Message.Headers is not null)
+            {
+                foreach (var header in original.Message.Headers)
+                {
+                    headers.Add(header.Key, header.GetValueBytes());
+                }
+            }
+
+            headers.Add("dlq-source-topic", Encoding.UTF8.GetBytes(original.Topic));
+            headers.Add("dlq-source-partition", Encoding.UTF8.GetBytes(original.Partition.Value.ToString()));
+            headers.Add("dlq-source-offset", Encoding.UTF8.GetBytes(original.Offset.Value.ToString()));
+            headers.Add("dlq-failed-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")));
+
             var dlqMessage = new Message<string, string>
             {
                 Key = original.Message.Key,
                 Value = original.Message.Value,
-                Headers = new Headers(original.Message.Headers)
-                {
-                    { "dlq-source-topic", Encoding.UTF8.GetBytes(original.Topic) },
-                    { "dlq-source-partition", Encoding.UTF8.GetBytes(original.Partition.Value.ToString()) },
-                    { "dlq-source-offset", Encoding.UTF8.GetBytes(original.Offset.Value.ToString()) },
-                    { "dlq-failed-at", Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O")) },
-                }
+                Headers = headers
             };
 
             await dlqProducer.ProduceAsync(dlqTopic, dlqMessage, ct);
