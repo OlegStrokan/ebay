@@ -1,6 +1,6 @@
 service which looks like a stipe but imitates a real card processor without moving any money
 
-will support webhook sripe-shaped json, signed with the same HMAC scheme
+will support webhook stripe-shaped json, signed with the same HMAC scheme
 
 should support deterministic test requests
 for example if idempotency key containes "fail" - request will return "declined"
