@@ -1,0 +1,29 @@
+# Fake DPD carrier. Self-hosted; the only outward dependency is the Gateway webhook
+# callback URL the Order service registers per shipment at runtime.
+
+name: my-dpd
+
+services:
+  my-dpd:
+    build: .
+    container_name: my-dpd
+    environment:
+      PORT: "8091"
+      API_KEY: "dpd_sandbox_key"
+      WEBHOOK_SECRET: "dev_dpd_secret"
+      DB_PATH: "/data/dpd.db"
+      WORKER_INTERVAL: "1s"
+      SHIPMENT_FINALIZE_DELAY: "5s"
+      RETURN_FINALIZE_DELAY: "10s"
+      STATUS_ADVANCE_GAP: "2s"
+      WEBHOOK_MAX_ATTEMPTS: "8"
+      WEBHOOK_BASE_DELAY: "2s"
+    ports:
+      - "8091:8091"
+    volumes:
+      - dpd-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  dpd-data:
