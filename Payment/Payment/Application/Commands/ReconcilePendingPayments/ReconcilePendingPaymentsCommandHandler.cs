@@ -111,7 +111,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                         "Failed to save reconciliation result for payment {PaymentId}; skipping",
                         payment.Id.Value);
 
-                    unitOfWork.ClearTrackedChanges();
+                    unitOfWork.DetachUncommittedChanges();
                 }
             }
 
@@ -223,7 +223,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                         "Failed to save reconciliation result for refund {RefundId}; skipping",
                         refund.Id.Value);
 
-                    unitOfWork.ClearTrackedChanges();
+                    unitOfWork.DetachUncommittedChanges();
                 }
             }
 

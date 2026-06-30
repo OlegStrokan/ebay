@@ -128,7 +128,7 @@ public class ReconcilePendingPaymentsCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ShouldClearTrackedChanges_WhenPaymentSaveFails_AndContinueWithNextPayment()
+    public async Task Handle_ShouldDetachUncommittedChanges_WhenPaymentSaveFails_AndContinueWithNextPayment()
     {
         var firstPayment = CreatePendingPayment(
             paymentId: "pay-1",
@@ -180,6 +180,7 @@ public class ReconcilePendingPaymentsCommandHandlerTests
         Assert.Equal(2, result.Value.PaymentsSucceeded);
 
         await _unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
-        _unitOfWork.Received(1).ClearTrackedChanges();
+        _unitOfWork.Received(1).DetachUncommittedChanges();
+        _unitOfWork.DidNotReceive().ClearTrackedChanges();
     }
 }
