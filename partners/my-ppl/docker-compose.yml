@@ -1,0 +1,29 @@
+# Fake PPL carrier. Self-hosted; the only outward dependency is the Gateway webhook
+# callback URL the Order service registers per shipment at runtime.
+
+name: my-ppl
+
+services:
+  my-ppl:
+    build: .
+    container_name: my-ppl
+    environment:
+      PORT: "8092"
+      API_KEY: "ppl_sandbox_key"
+      WEBHOOK_SECRET: "dev_ppl_secret"
+      DB_PATH: "/data/ppl.db"
+      WORKER_INTERVAL: "1s"
+      BOOKING_ACCEPT_DELAY: "3s"
+      EVENT_SPACING: "2s"
+      RETURN_QR_SCAN_WINDOW: "5s"
+      WEBHOOK_MAX_ATTEMPTS: "8"
+      WEBHOOK_BASE_DELAY: "2s"
+    ports:
+      - "8092:8092"
+    volumes:
+      - ppl-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  ppl-data:
