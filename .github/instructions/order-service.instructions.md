@@ -16,7 +16,7 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - **Api/** — gRPC services (`OrderGrpcService`, `B2BOrderGrpcService`, `RecurringOrderGrpcService`), validators, Program.cs
 - **Application/** — Commands, Queries, Sagas (with steps and event handlers), Consumers, DTOs, `ApplicationModule.cs`
 - **Domain/** — Aggregate roots (Order, B2BOrder, RequestReturn), Value Objects (OrderStatus, Money, Address, strongly-typed IDs), Domain Events, Services (ReturnPolicyService), Exceptions
-- **Infrastructure/** — Event store, Saga repository, Read repositories, Outbox, Kafka messaging, Background services, Redis locking, Region affinity, Serialization, `InfrastructureModule.cs`
+- **Infrastructure/** — Event store, Saga repository, Read repositories, Outbox, Kafka messaging, Background services, Redis locking, Region affinity, Serialization, Carrier shipping gateways (`Gateways/Carrier/`: `ShippingGatewayRouter` + `DpdShippingAdapter`/`PplShippingAdapter`, `DpdApiOptions`/`PplApiOptions`), `InfrastructureModule.cs`
 - **Protos/** — Separate class library
 
 ## Tech Stack
@@ -95,6 +95,13 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - External carrier callback is received by Gateway and published to `order.events` as `ReturnShipmentDeliveredEvent`
 - `ReturnShipmentDeliveredEventHandler` resumes `ReturnSaga` at `ConfirmReturnReceived`
 
+### Shipping carrier gateways
+- `ShippingGatewayRouter` selects an adapter by `ShippingCarrier` enum (`Dpd`, `Ppl`) and wraps/unwraps external IDs as `{Carrier}:{rawId}` (e.g. `Ppl:ppl-ret-...`) so the saga stays carrier-agnostic
+- `DpdShippingAdapter` — synchronous: create returns the shipment + tracking immediately; cancel is idempotent; Bearer auth
+- `PplShippingAdapter` — **two-phase**: `CreateShipmentAsync` reads the `202` booking then polls `GET api/v1/parcels/{referenceId}` up to `PplApiOptions.MaxPolls` (delay `PollIntervalMs`): `accepted` → `ShipmentResultDto`, `rejected` → `InvalidAddressException`, exhaustion → `PplBookingPendingException` (NOT `TimeoutException`); Bearer auth. Also implements `IPplBookingPoller.PollAsync` for the reconciliation worker.
+- `PplBookingPendingException` carries `ReferenceId`; caught in `CreateShipmentStep` which enqueues a `PplPendingBookings` row and returns `Completed` — saga finishes without tracking. `PplBookingReconciliationWorker` resolves it asynchronously.
+- Adapters target deterministic fakes in `partners/my-dpd` (`:8091`) and `partners/my-ppl` (`:8092`); the carrier-tagged webhook each fires is validated and branch-authenticated by the Gateway
+
 ### Saga Event Handlers
 - **Creation**: `OrderCreatedEventHandler` — starts saga on OrderCreatedEvent from Kafka
 - **Continuation**: `PaymentSucceededEventHandler`/`PaymentFailedEventHandler` — resumes paused saga with Redis lock
@@ -154,11 +161,12 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 | SagaWatchdogService | 1 min | Monitor stuck sagas (>5 min Running), force compensation |
 | RecurringOrderSchedulerService | 60s poll | Execute due recurring orders |
 | CompensationRefundRetryWorker | 30s poll | Retry failed refunds with exponential backoff |
+| PplBookingReconciliationWorker | 30 min poll | Retry PPL booking status checks; on accepted assigns tracking; on exhaustion fires Telegram intervention ticket |
 | KafkaReadModelSynchronizer | Real-time | Sync read models from events |
 
 ## Database Schema (AppDbContext + ReadDbContext)
 
-**Write side**: DomainEvents, AggregateSnapshot, OutboxMessage, DeadLetterMessage, SagaState, SagaStepLog, IdempotencyRecord, CompensationRefundRetry, ProcessedEvent, KafkaRetryRecord
+**Write side**: DomainEvents, AggregateSnapshot, OutboxMessage, DeadLetterMessage, SagaState, SagaStepLog, IdempotencyRecord, CompensationRefundRetry, ProcessedEvent, KafkaRetryRecord, PplPendingBookings
 **Read side**: OrderReadModel, B2BOrderReadModel, RecurringOrderReadModel, ReturnRequestReadModel, RequestReturnLookup
 
 ## Configuration
@@ -166,9 +174,11 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - Outbox: BatchSize=20, MaxRetries=5, MaxAgeDays=7, PollIntervalMs=2000, MaxParallelism=5
 - RecurringOrder: SchedulerIntervalSeconds=60, BatchSize=50
 - CompensationRefundRetry: BatchSize=20, MaxRetries=3, PollIntervalSeconds=30, BaseRetryDelaySeconds=30, MaxRetryDelaySeconds=900
+- PplBookingReconciliation: BatchSize=10, MaxAttempts=48 (~24h), PollIntervalSeconds=1800, RetryIntervalSeconds=1800
 - Kafka: BootstrapServers, OrderEventsTopic, ReturnEventsTopic, SagaTopic
 - WriteRouting: Enabled, CurrentRegion, Regions list
 - Shipping: `WebhookCallUrl` for return webhook registration target (Gateway public webhook endpoint)
+- Shipping carriers: `Shipping:Dpd` and `Shipping:Ppl` (`BaseUrl`, `ApiKey`, `TimeoutSeconds`); `Ppl` adds `MaxPolls` and `PollIntervalMs` for the two-phase booking poll loop
 
 ## Testing
 
@@ -190,4 +200,7 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - **Proto uses `double` for money** — precision loss exists at proto boundary (known issue)
 - **String matching on concurrency exceptions is fragile** — known tech debt
 - **Never hardcode webhook callback URLs in saga steps** — always resolve from config/provider
+- **PPL booking is two-phase** — the adapter must poll after the `202`; a `rejected` poll is an `InvalidAddressException`, poll-window exhaustion is a `PplBookingPendingException` (never treat the initial `202` as success, never throw `TimeoutException`)
+- **PPL poll exhaustion must not fail the saga** — catch `PplBookingPendingException` in `CreateShipmentStep`, enqueue to `PplPendingBookings`, return `Completed`; `PplBookingReconciliationWorker` resolves it; exhaustion after `MaxAttempts` fires a Telegram intervention ticket
+- **PPL cancel can be refused (`409`) once in transit** — `CreateShipmentStep` compensation logs it non-retryable and raises an intervention ticket while the other steps still compensate
 - **Carrier callbacks ingress through Gateway, not directly into Order** — Gateway translates webhook payload to Kafka saga events
