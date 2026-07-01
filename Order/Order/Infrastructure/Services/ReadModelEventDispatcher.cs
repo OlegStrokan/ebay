@@ -82,8 +82,9 @@ public sealed class ReadModelEventDispatcher(
     private static Guid ExtractEventId(string eventData)
     {
         using var doc = System.Text.Json.JsonDocument.Parse(eventData);
-        if (doc.RootElement.TryGetProperty("EventId", out var eventIdElement))
-            return Guid.Parse(eventIdElement.GetString()!);
+        if (doc.RootElement.TryGetProperty("EventId", out var eventIdElement)
+            && Guid.TryParse(eventIdElement.GetString(), out var id))
+            return id;
 
         throw new InvalidOperationException("Message is missing a valid 'EventId' property");
     }
