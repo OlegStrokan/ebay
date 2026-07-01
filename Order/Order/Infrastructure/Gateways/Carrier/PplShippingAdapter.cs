@@ -2,18 +2,21 @@ using System.Net;
 using System.Text.Json;
 using Application.DTOs;
 using Application.DTOs.ShipmentGateway;
+using Application.Gateways;
 using Application.Gateways.Exceptions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Gateways.Carrier;
 
-public sealed class PplShippingAdapter : ICarrierAdapter
+public sealed class PplShippingAdapter : ICarrierAdapter, IPplBookingPoller
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
     private readonly ILogger<PplShippingAdapter> _logger;
+    private readonly int _maxPolls;
+    private readonly TimeSpan _pollInterval;
 
     public PplShippingAdapter(
         HttpClient httpClient,
@@ -29,12 +32,21 @@ public sealed class PplShippingAdapter : ICarrierAdapter
 
         if (!string.IsNullOrWhiteSpace(opt.ApiKey))
         {
-            _http.DefaultRequestHeaders.Remove("X-Api-Key");
-            _http.DefaultRequestHeaders.Add("X-Api-Key", opt.ApiKey);
+            _http.DefaultRequestHeaders.Remove("Authorization");
+            _http.DefaultRequestHeaders.Add("Authorization", $"Bearer {opt.ApiKey}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(opt.TestScenario))
+        {
+            _http.DefaultRequestHeaders.Remove("X-Carrier-Test-Scenario");
+            _http.DefaultRequestHeaders.Add("X-Carrier-Test-Scenario", opt.TestScenario);
         }
 
         if (opt.TimeoutSeconds > 0)
             _http.Timeout = TimeSpan.FromSeconds(opt.TimeoutSeconds);
+
+        _maxPolls = opt.MaxPolls > 0 ? opt.MaxPolls : 10;
+        _pollInterval = TimeSpan.FromMilliseconds(opt.PollIntervalMs > 0 ? opt.PollIntervalMs : 500);
     }
 
     public async Task<ShipmentResultDto> CreateShipmentAsync(
@@ -72,14 +84,52 @@ public sealed class PplShippingAdapter : ICarrierAdapter
                 $"PPL create shipment failed. Status={(int)response.StatusCode}, Body={err}");
         }
 
-        var dto = await response.Content.ReadFromJsonAsync<CreateShipmentResponse>(JsonOptions, cancellationToken)
-                  ?? throw new InvalidOperationException("PPL create shipment response is empty.");
+        var booking = await response.Content.ReadFromJsonAsync<CreateBookingResponse>(JsonOptions, cancellationToken)
+                      ?? throw new InvalidOperationException("PPL create shipment response is empty.");
 
-        _logger.LogInformation(
-            "PPL shipment created. OrderId={OrderId}, ShipmentId={ShipmentId}, TrackingNumber={TrackingNumber}",
-            orderId, dto.ShipmentId, dto.TrackingNumber);
+        if (string.IsNullOrWhiteSpace(booking.ReferenceId))
+            throw new InvalidOperationException("PPL booking response did not contain a referenceId.");
 
-        return new ShipmentResultDto(dto.ShipmentId, dto.TrackingNumber);
+        // PPL booking is two-phase: the depot accepts asynchronously. Poll the booking
+        // reference until it settles as accepted (-> parcel ids) or rejected (-> invalid
+        // address), or give up once the polling budget is exhausted.
+        for (var attempt = 0; attempt < _maxPolls; attempt++)
+        {
+            await Task.Delay(_pollInterval, cancellationToken);
+
+            using var pollResponse = await _http.GetAsync(
+                $"api/v1/parcels/{booking.ReferenceId}",
+                cancellationToken);
+
+            if (!pollResponse.IsSuccessStatusCode)
+            {
+                var pollErr = await SafeReadAsync(pollResponse, cancellationToken);
+                throw new HttpRequestException(
+                    $"PPL booking poll failed. ReferenceId={booking.ReferenceId}, Status={(int)pollResponse.StatusCode}, Body={pollErr}");
+            }
+
+            var poll = await pollResponse.Content.ReadFromJsonAsync<PollBookingResponse>(JsonOptions, cancellationToken)
+                       ?? throw new InvalidOperationException("PPL booking poll response is empty.");
+
+            switch (poll.Status?.ToLowerInvariant())
+            {
+                case "accepted":
+                    _logger.LogInformation(
+                        "PPL booking accepted. OrderId={OrderId}, ParcelId={ParcelId}, TrackingNumber={TrackingNumber}",
+                        orderId, poll.ParcelId, poll.TrackingNumber);
+                    return new ShipmentResultDto(
+                        poll.ParcelId ?? throw new InvalidOperationException("PPL accepted booking is missing parcelId."),
+                        poll.TrackingNumber ?? throw new InvalidOperationException("PPL accepted booking is missing trackingNumber."));
+
+                case "rejected":
+                    throw new InvalidAddressException(
+                        $"PPL rejected booking {booking.ReferenceId}. Reason: {poll.Reason ?? "unspecified"}");
+
+                // "pending" -> keep polling
+            }
+        }
+
+        throw new PplBookingPendingException(booking.ReferenceId, orderId);
     }
 
     public async Task CancelShipmentAsync(string shipmentId, CancellationToken cancellationToken)
@@ -262,6 +312,28 @@ public sealed class PplShippingAdapter : ICarrierAdapter
             DeliveredAt: apiResponse.DeliveredAt);
     }
 
+    public async Task<PplBookingPollResult> PollAsync(string referenceId, CancellationToken cancellationToken)
+    {
+        using var response = await _http.GetAsync($"api/v1/parcels/{referenceId}", cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await SafeReadAsync(response, cancellationToken);
+            throw new HttpRequestException(
+                $"PPL booking poll failed. ReferenceId={referenceId}, Status={(int)response.StatusCode}, Body={err}");
+        }
+
+        var poll = await response.Content.ReadFromJsonAsync<PollBookingResponse>(JsonOptions, cancellationToken)
+                   ?? throw new InvalidOperationException("PPL booking poll response is empty.");
+
+        return poll.Status?.ToLowerInvariant() switch
+        {
+            "accepted" => new PplBookingPollResult(PplBookingPollStatus.Accepted, poll.ParcelId, poll.TrackingNumber, null),
+            "rejected" => new PplBookingPollResult(PplBookingPollStatus.Rejected, null, null, poll.Reason),
+            _ => new PplBookingPollResult(PplBookingPollStatus.Pending, null, null, null),
+        };
+    }
+
     private static async Task<string> SafeReadAsync(HttpResponseMessage response, CancellationToken ct)
     {
         try { return await response.Content.ReadAsStringAsync(ct); }
@@ -274,7 +346,14 @@ public sealed class PplShippingAdapter : ICarrierAdapter
         AddressPayload Address,
         IReadOnlyCollection<PackagePayload> Packages);
 
-    private sealed record CreateShipmentResponse(string ShipmentId, string TrackingNumber);
+    private sealed record CreateBookingResponse(string ReferenceId, string Status);
+
+    private sealed record PollBookingResponse(
+        string ReferenceId,
+        string Status,
+        string? ParcelId,
+        string? TrackingNumber,
+        string? Reason);
 
     private sealed record ShipmentStatusResponse(
         string TrackingNumber,
