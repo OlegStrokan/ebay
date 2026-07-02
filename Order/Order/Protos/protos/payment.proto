@@ -40,6 +40,7 @@ enum PaymentRecordStatus {
   PAYMENT_RECORD_STATUS_REFUND_PENDING = 5;
   PAYMENT_RECORD_STATUS_REFUNDED = 6;
   PAYMENT_RECORD_STATUS_REFUND_FAILED = 7;
+  PAYMENT_RECORD_STATUS_AUTHORIZED = 8;
 }
 
 message ProcessPaymentRequest {
@@ -50,6 +51,7 @@ message ProcessPaymentRequest {
   string payment_method = 5;
   string idempotency_key = 6;
   string customer_email = 10;
+  // "automatic" (default: authorize + capture) or "manual" (authorize only).
   string capture_method = 11;
 }
 
