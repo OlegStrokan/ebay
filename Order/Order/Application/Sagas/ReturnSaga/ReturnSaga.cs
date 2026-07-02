@@ -9,8 +9,9 @@ public sealed class ReturnSaga(
     ISagaRepository sagaRepository,
     IEnumerable<ISagaStep<ReturnSagaData, ReturnSagaContext>> steps,
     ISagaErrorClassifier errorClassifier,
-    ILogger<ReturnSaga> logger)
-    : SagaBase<ReturnSagaData, ReturnSagaContext>(sagaRepository, steps, errorClassifier, logger), IReturnSaga
+    ILogger<ReturnSaga> logger,
+    IFailedCompensationRetryRepository failedCompensationRetryRepository)
+    : SagaBase<ReturnSagaData, ReturnSagaContext>(sagaRepository, steps, errorClassifier, logger, failedCompensationRetryRepository), IReturnSaga
 {
     protected override string SagaType => "ReturnSaga";
 }
