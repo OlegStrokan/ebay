@@ -2,6 +2,7 @@ using Api.GrpcServices;
 using Application;
 using FluentValidation;
 using Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -37,11 +38,9 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var writeDb = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.AppDbContext>();
-    await writeDb.Database.EnsureDeletedAsync();
-    await writeDb.Database.EnsureCreatedAsync();
+    await writeDb.Database.MigrateAsync();
     var readDb = scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.DbContext.ReadDbContext>();
-    await readDb.Database.EnsureDeletedAsync();
-    await readDb.Database.EnsureCreatedAsync();
+    await readDb.Database.MigrateAsync();
 }
 
 app.MapGrpcService<OrderGrpcService>();
