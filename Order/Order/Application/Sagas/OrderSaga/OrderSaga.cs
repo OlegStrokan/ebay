@@ -10,8 +10,9 @@ public sealed class OrderSaga(
     ISagaRepository sagaRepository,
     IEnumerable<ISagaStep<OrderSagaData, OrderSagaContext>> steps,
     ISagaErrorClassifier errorClassifier,
-    ILogger<OrderSaga> logger)
-    : SagaBase<OrderSagaData, OrderSagaContext>(sagaRepository, steps,errorClassifier, logger), IOrderSaga
+    ILogger<OrderSaga> logger,
+    IFailedCompensationRetryRepository failedCompensationRetryRepository)
+    : SagaBase<OrderSagaData, OrderSagaContext>(sagaRepository, steps, errorClassifier, logger, failedCompensationRetryRepository), IOrderSaga
 {
     protected override string SagaType => "OrderSaga";
 }

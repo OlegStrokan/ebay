@@ -14,6 +14,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
     private readonly ISagaRepository _sagaRepository;
     private readonly ILogger _logger;
     private readonly ISagaErrorClassifier _errorClassifier;
+    private readonly IFailedCompensationRetryRepository _failedCompensationRetryRepository;
     protected readonly IEnumerable<ISagaStep<TData, TContext>> Steps;
     protected abstract string SagaType { get; }
     protected virtual TimeSpan SagaTimeout => TimeSpan.FromMinutes(5);
@@ -30,11 +31,13 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         ISagaRepository sagaRepository,
         IEnumerable<ISagaStep<TData, TContext>> steps,
         ISagaErrorClassifier errorClassifier,
-        ILogger logger)
+        ILogger logger,
+        IFailedCompensationRetryRepository failedCompensationRetryRepository)
     {
         _sagaRepository = sagaRepository;
         _logger = logger;
         _errorClassifier = errorClassifier;
+        _failedCompensationRetryRepository = failedCompensationRetryRepository;
         Steps = steps.OrderBy(s => s.Order).ToList();
     }
 
@@ -416,12 +419,15 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical(ex, "FATAL: Compensation failed permanently for {StepName} in saga {SagaId}",
+                    _logger.LogCritical(ex, "FATAL: Compensation failed permanently for {StepName} in saga {SagaId}. Scheduling automated retry.",
                         step.StepName, sagaId);
 
                     sagaState.Status = SagaStatus.FailedToCompensate;
-                    await _sagaRepository.SaveAsync(sagaState, ct);
-                    throw;
+                    await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+                    await _failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
+                        sagaId, sagaState.SagaType, step.StepName, ex.Message, cancellationToken);
+
+                    return SagaResult.CriticalFailure(sagaId, ex.Message);
                 }
             }
         }
