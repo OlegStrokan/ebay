@@ -176,89 +176,82 @@ public class SagaWatchdogService : BackgroundService
     {
         var sagaRepository = scope.ServiceProvider.GetRequiredService<ISagaRepository>();
 
-        saga.Status = SagaStatus.Failed;
-        saga.UpdatedAt = DateTime.UtcNow;
-        await sagaRepository.SaveAsync(saga, cancellationToken);
+        var sagaInstance = ResolveSaga(saga.SagaType, scope);
+        if (sagaInstance is null)
+        {
+            saga.Status = SagaStatus.Failed;
+            saga.UpdatedAt = DateTime.UtcNow;
+            await sagaRepository.SaveAsync(saga, cancellationToken);
+
+            _logger.LogError(
+                "No saga handler found for {SagaType}. Manual compensation required for saga {SagaId}",
+                saga.SagaType, saga.Id);
+            return;
+        }
+
+        // Compensation must hold the same distributed lock the forward / resume paths use, so the
+        // watchdog can never compensate concurrently with an in-flight resume or a second
+        // watchdog / retry-worker replica (post-mortem action #4: double compensation -> double refund).
+        var distributedLock = scope.ServiceProvider.GetRequiredService<ISagaDistributedLock>();
+        var lockKey = $"saga-lock:{saga.SagaType}:{saga.CorrelationId}";
+        var lockExpiry = sagaInstance.LockBudget + TimeSpan.FromMinutes(1);
+
+        await using var lockHandle = await distributedLock.TryAcquireAsync(lockKey, lockExpiry, cancellationToken);
+        if (lockHandle is null)
+        {
+            _logger.LogInformation(
+                "Saga {SagaId} ({SagaType}) is locked by another worker (resume / watchdog / retry). " +
+                "Skipping compensation; it will be re-evaluated on the next watchdog cycle.",
+                saga.Id, saga.SagaType);
+            return;
+        }
+
+        // Re-read under the lock: a concurrent holder may have advanced the saga between the
+        // stuck-scan and lock acquisition (e.g. a resume completed it). Only act if it is still
+        // in a state the watchdog owns.
+        var current = await sagaRepository.GetByIdAsync(saga.Id, cancellationToken);
+        if (current is null)
+        {
+            _logger.LogWarning("Saga {SagaId} no longer exists after acquiring the lock. Skipping.", saga.Id);
+            return;
+        }
+
+        if (current.Status is not (SagaStatus.Running or SagaStatus.TimedOut))
+        {
+            _logger.LogInformation(
+                "Saga {SagaId} is now {Status} after acquiring the lock. No watchdog action needed.",
+                saga.Id, current.Status);
+            return;
+        }
+
+        current.Status = SagaStatus.Failed;
+        current.UpdatedAt = DateTime.UtcNow;
+        await sagaRepository.SaveAsync(current, cancellationToken);
+
+        _logger.LogInformation("Attempting to compensate {SagaType} saga {SagaId}", current.SagaType, current.Id);
 
         try
         {
-            var compensationResult = await TryCompensateSagaAsync(saga, scope, cancellationToken);
-
-            if (compensationResult)
-            {
-                _logger.LogInformation("Successfully compensated saga {SagaId}", saga.Id);
-            }
-            else
-            {
-                _logger.LogError(
-                    "No saga handler found for {SagaType}. " +
-                    "Manual compensation required for saga {SagaId}",
-                    saga.SagaType, saga.Id);
-            }
+            await sagaInstance.CompensateAsync(current.Id, cancellationToken);
+            _logger.LogInformation("Successfully compensated saga {SagaId}", current.Id);
         }
         catch (Exception ex)
         {
             _logger.LogCritical(
                 ex,
                 "CRITICAL: Failed to compensate saga {SagaId}. Manual intervention required!",
-                saga.Id);
+                current.Id);
 
-            saga.Status = SagaStatus.FailedToCompensate;
-            await sagaRepository.SaveAsync(saga, cancellationToken);
+            current.Status = SagaStatus.FailedToCompensate;
+            await sagaRepository.SaveAsync(current, cancellationToken);
         }
     }
 
-    private async Task<bool> TryCompensateSagaAsync(
-        SagaState saga,
-        IServiceScope scope,
-        CancellationToken cancellationToken)
+    private static ISaga? ResolveSaga(string sagaType, IServiceScope scope) => sagaType switch
     {
-        _logger.LogInformation("Attempting to compensate {SagaType} saga {SagaId}",
-            saga.SagaType, saga.Id);
-
-        try
-        {
-            switch (saga.SagaType)
-            {
-                case "OrderSaga":
-                {
-                    var orderSaga = scope.ServiceProvider
-                        .GetService<IOrderSaga>();
-
-                    if (orderSaga != null)
-                    {
-                        await orderSaga.CompensateAsync(saga.Id, cancellationToken);
-                        return true;
-                    }
-
-                    break;
-                }
-
-                case "ReturnSaga":
-                {
-                    var returnSaga = scope.ServiceProvider
-                        .GetService<IReturnSaga>();
-
-                    if (returnSaga != null)
-                    {
-                        await returnSaga.CompensateAsync(saga.Id, cancellationToken);
-                        return true;
-                    }
-
-                    break;
-                }
-            }
-
-            _logger.LogWarning("No handler registered for saga type {SagaType}", saga.SagaType);
-
-            return false;
-
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error compensating saga {SagaId}", saga.Id);
-            throw;
-        }
-    }
+        SagaTypes.OrderSaga => scope.ServiceProvider.GetService<IOrderSaga>(),
+        SagaTypes.ReturnSaga => scope.ServiceProvider.GetService<IReturnSaga>(),
+        _ => null,
+    };
 
 }
