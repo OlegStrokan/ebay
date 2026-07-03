@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : Microsoft.En
 {
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<CompensationRefundRetry> CompensationRefundRetries => Set<CompensationRefundRetry>();
+    public DbSet<FailedCompensationRetry> FailedCompensationRetries => Set<FailedCompensationRetry>();
     public DbSet<SagaState> SagaStates => Set<SagaState>();
     public DbSet<SagaStepLog> SagaStepLogs => Set<SagaStepLog>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
@@ -22,11 +23,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : Microsoft.En
     public DbSet<AggregateSnapshot> AggregateSnapshots => Set<AggregateSnapshot>();
     public DbSet<RequestReturnLookup> ReturnRequestLookups => Set<RequestReturnLookup>();
     public DbSet<KafkaRetryRecord> KafkaRetryRecords => Set<KafkaRetryRecord>();
+    public DbSet<PplPendingBooking> PplPendingBookings => Set<PplPendingBooking>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.ApplyConfiguration(new OutboxMessageConfiguration());
         builder.ApplyConfiguration(new CompensationRefundRetryConfiguration());
+        builder.ApplyConfiguration(new FailedCompensationRetryConfiguration());
         builder.ApplyConfiguration(new SagaStateConfiguration());
         builder.ApplyConfiguration(new SagaStepLogConfiguration());
         builder.ApplyConfiguration(new IdempotencyRecordConfiguration());
@@ -36,6 +39,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : Microsoft.En
         builder.ApplyConfiguration(new AggregateSnapshotConfiguration());
         builder.ApplyConfiguration(new ReturnRequestLookupConfiguration());
         builder.ApplyConfiguration(new KafkaRetryRecordConfiguration());
+        builder.ApplyConfiguration(new PplPendingBookingConfiguration());
     }
     
 }
