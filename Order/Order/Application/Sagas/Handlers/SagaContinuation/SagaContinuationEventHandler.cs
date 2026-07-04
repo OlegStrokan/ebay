@@ -147,6 +147,18 @@ public abstract class SagaContinuationEventHandler<TEvent, TData, TContext>
                     "Saga already failed. Cannot resume");
                 return;
             }
+
+            if (sagaState.Status is SagaStatus.Compensating or SagaStatus.Compensated)
+            {
+                _logger.LogCritical(
+                    "{EventType} arrived for {SagaType} {CorrelationId} that is already {Status}. " +
+                    "Payment may have been captured after saga compensation began. " +
+                    "Invoking late-payment safety path.",
+                    EventType, SagaType, correlationId, sagaState.Status);
+
+                await HandleCompensatedLateEventAsync(sagaState, eventDto, cancellationToken);
+                return;
+            }
         }
 
         try
@@ -197,6 +209,13 @@ public abstract class SagaContinuationEventHandler<TEvent, TData, TContext>
         }
         
     }
+
+    // Override in derived handlers that can receive a late event after the saga has already compensated
+    protected virtual Task HandleCompensatedLateEventAsync(
+        SagaState sagaState,
+        TEvent eventDto,
+        CancellationToken cancellationToken)
+        => Task.CompletedTask;
 
     protected abstract Guid ExtractCorrelationId(TEvent eventDto);
     protected abstract void UpdateContextFromEvent(TEvent eventDto, TContext context);
