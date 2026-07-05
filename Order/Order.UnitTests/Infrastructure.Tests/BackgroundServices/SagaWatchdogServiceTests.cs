@@ -19,6 +19,8 @@ public class SagaWatchdogServiceTests
     private readonly IServiceProvider _serviceProvider = Substitute.For<IServiceProvider>();
     private readonly IServiceScope _serviceScope = Substitute.For<IServiceScope>();
     private readonly IServiceScopeFactory _scopeFactory = Substitute.For<IServiceScopeFactory>();
+    private readonly ISagaDistributedLock _distributedLock = Substitute.For<ISagaDistributedLock>();
+    private readonly ISagaLockHandle _lockHandle = Substitute.For<ISagaLockHandle>();
 
     public SagaWatchdogServiceTests()
     {
@@ -27,6 +29,12 @@ public class SagaWatchdogServiceTests
         _serviceScope.ServiceProvider.GetService(typeof(ISagaRepository)).Returns(_sagaRepository);
         _serviceScope.ServiceProvider.GetService(typeof(IOrderSaga)).Returns(_orderSaga);
         _serviceScope.ServiceProvider.GetService(typeof(IReturnSaga)).Returns(_returnSaga);
+        _serviceScope.ServiceProvider.GetService(typeof(ISagaDistributedLock)).Returns(_distributedLock);
+
+        // Compensation now runs under the saga distributed lock; grant it by default.
+        _distributedLock
+            .TryAcquireAsync(Arg.Any<string>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(_lockHandle);
     }
 
     private SagaWatchdogService Build() => new(_serviceProvider, _logger);
@@ -107,6 +115,11 @@ public class SagaWatchdogServiceTests
                 new() { Status = StepStatus.Failed }
             });
 
+        // Compensation re-reads the saga under the lock
+        _sagaRepository
+            .GetByIdAsync(sagaId, Arg.Any<CancellationToken>())
+            .Returns(saga);
+
         using var cts = new CancellationTokenSource();
         var signal = new TaskCompletionSource<bool>();
 
@@ -146,6 +159,10 @@ public class SagaWatchdogServiceTests
         _sagaRepository
             .GetStepLogsAsync(sagaId, Arg.Any<CancellationToken>())
             .Returns(new List<SagaStepLog>());
+
+        _sagaRepository
+            .GetByIdAsync(sagaId, Arg.Any<CancellationToken>())
+            .Returns(saga);
 
         using var cts = new CancellationTokenSource();
         var signal = new TaskCompletionSource<bool>();
@@ -189,6 +206,10 @@ public class SagaWatchdogServiceTests
         _sagaRepository
             .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new List<SagaState> { saga });
+
+        _sagaRepository
+            .GetByIdAsync(sagaId, Arg.Any<CancellationToken>())
+            .Returns(saga);
 
         using var cts = new CancellationTokenSource();
         var signal = new TaskCompletionSource<bool>();
