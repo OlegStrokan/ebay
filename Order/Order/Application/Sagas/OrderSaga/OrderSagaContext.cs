@@ -14,6 +14,7 @@ public sealed class OrderSagaContext : SagaContext
     public string? TrackingNumber { get; set; }
     
     // internal flags - for idempotency
+    public bool ReservationConfirmed { get; set; }
     public bool OrderStatusUpdated { get; set; }
     public bool OrderCompleted { get; set; }
 }
