@@ -79,6 +79,8 @@ public static class InfrastructureModule
         services.AddScoped<ISnapshotRepository, SnapshotRepository>();
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<ICompensationRefundRetryRepository, CompensationRefundRetryRepository>();
+        services.AddScoped<IFailedCompensationRetryRepository, FailedCompensationRetryRepository>();
+        services.AddScoped<IPplPendingBookingRepository, PplPendingBookingRepository>();
         services.AddScoped<IIdempotencyRepository, IdempotencyRepository>();
         services.AddScoped<IDeadLetterRepository, DeadLetterRepository>();
         services.AddScoped<ISagaRepository, SagaRepository>();
@@ -120,6 +122,7 @@ public static class InfrastructureModule
         services.AddHttpClient<DpdShippingAdapter>();
         services.AddHttpClient<PplShippingAdapter>();
         services.AddScoped<IShippingGateway, ShippingGatewayRouter>();
+        services.AddScoped<IPplBookingPoller>(sp => sp.GetRequiredService<PplShippingAdapter>());
         services.AddScoped<IAccountingGateway, AccountingGateway>();
         services.AddScoped<IEmailGateway, EmailGateway>();
         services.AddHttpClient<TelegramIncidentReporter>();
@@ -134,6 +137,8 @@ public static class InfrastructureModule
         services.AddHostedService<SagaWatchdogService>();
         services.AddHostedService<ProcessedEventsCleanupService>();
         services.AddHostedService<CompensationRefundRetryWorker>();
+        services.AddHostedService<CompensationRetryWorker>();
+        services.AddHostedService<PplBookingReconciliationWorker>();
 
         return services;
         
