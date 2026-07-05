@@ -33,6 +33,12 @@ public sealed class DpdShippingAdapter : ICarrierAdapter
             _http.DefaultRequestHeaders.Add("Authorization", $"Bearer {opt.ApiKey}");
         }
 
+        if (!string.IsNullOrWhiteSpace(opt.TestScenario))
+        {
+            _http.DefaultRequestHeaders.Remove("X-Carrier-Test-Scenario");
+            _http.DefaultRequestHeaders.Add("X-Carrier-Test-Scenario", opt.TestScenario);
+        }
+
         if (opt.TimeoutSeconds > 0)
             _http.Timeout = TimeSpan.FromSeconds(opt.TimeoutSeconds);
     }
