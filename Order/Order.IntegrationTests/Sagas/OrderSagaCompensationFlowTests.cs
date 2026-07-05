@@ -57,7 +57,8 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             sagaRepository,
             steps,
             new NonTransientErrorClassifier(),
-            NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance);
+            NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance,
+            new NoopFailedCompensationRetryRepository());
 
         var result = await saga.ExecuteAsync(data, CancellationToken.None);
 
@@ -111,7 +112,8 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             sagaRepository,
             steps,
             new NonTransientErrorClassifier(),
-            NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance);
+            NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance,
+            new NoopFailedCompensationRetryRepository());
 
         var result = await saga.ExecuteAsync(data, CancellationToken.None);
 
@@ -158,7 +160,8 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             sagaRepository,
             steps,
             new NonTransientErrorClassifier(),
-            NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance);
+            NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance,
+            new NoopFailedCompensationRetryRepository());
 
         var result = await saga.ExecuteAsync(data, CancellationToken.None);
 
@@ -389,6 +392,26 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             string reason,
             CancellationToken cancellationToken)
             => Task.FromResult(new RefundProcessingResult("REF-NOT-USED", RefundProcessingStatus.Succeeded));
+    }
+
+    private sealed class NoopFailedCompensationRetryRepository : IFailedCompensationRetryRepository
+    {
+        public Task EnqueueIfNotExistsAsync(
+            Guid sagaId,
+            string sagaType,
+            string lastFailedStep,
+            string lastError,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<FailedCompensationRetry>> ClaimDuePendingAsync(
+            DateTime nowUtc,
+            int batchSize,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<FailedCompensationRetry>>(new List<FailedCompensationRetry>());
+
+        public Task SaveAsync(FailedCompensationRetry retry, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class NoopCompensationRefundRetryRepository : ICompensationRefundRetryRepository
