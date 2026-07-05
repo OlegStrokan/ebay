@@ -118,6 +118,17 @@ public sealed class KafkaReadModelSynchronizer : BackgroundService
                     activity?.SetTag("messaging.system", "kafka");
                     activity?.SetTag("messaging.kafka.consumer.group", "read-model-updater");
 
+                    if (!TryParseEventId(consumeResult.Message.Value, out _))
+                    {
+                        _logger.LogError(
+                            "Message at Partition {P} Offset {O} (type={EventType}) has no parseable EventId — dead-lettering immediately without retry.",
+                            consumeResult.Partition.Value, consumeResult.Offset.Value, eventType);
+                        await DeadLetterMalformedEventAsync(consumeResult, eventType, stoppingToken);
+                        _consumer.StoreOffset(consumeResult);
+                        _consumer.Commit(consumeResult);
+                        continue;
+                    }
+
                     var (success, lastEx) = await TryProcessWithRetriesAsync(consumeResult, stoppingToken);
 
                     if (success)
@@ -344,18 +355,50 @@ public sealed class KafkaReadModelSynchronizer : BackgroundService
 
     private Guid? TryExtractEventId(string? eventData)
     {
-        if (eventData is null) return null;
+        if (TryParseEventId(eventData, out var id)) return id;
+        return null;
+    }
+
+   private static bool TryParseEventId(string? payload, out Guid eventId)
+    {
+        eventId = default;
+        if (string.IsNullOrWhiteSpace(payload)) return false;
         try
         {
-            using var doc = JsonDocument.Parse(eventData);
+            using var doc = JsonDocument.Parse(payload);
             if (doc.RootElement.TryGetProperty("EventId", out var el))
-                return Guid.TryParse(el.GetString(), out var id) ? id : null;
+                return Guid.TryParse(el.GetString(), out eventId);
+        }
+        catch (JsonException) { }
+        return false;
+    }
+
+    private async Task DeadLetterMalformedEventAsync(
+        ConsumeResult<string, string> consumeResult,
+        string eventType,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var dlq = scope.ServiceProvider.GetRequiredService<IDeadLetterRepository>();
+            await dlq.AddAsync(
+                messageId: Guid.NewGuid(),
+                type: "MalformedEventId",
+                content: consumeResult.Message.Value ?? string.Empty,
+                occuredOn: DateTime.UtcNow,
+                failureReason: $"Message type '{eventType}' at Partition {consumeResult.Partition.Value} Offset {consumeResult.Offset.Value} is missing a parseable EventId — cannot guarantee idempotency.",
+                retryCount: 0,
+                aggregateId: consumeResult.Message.Key ?? string.Empty,
+                ct: ct);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Could not extract EventId from payload — retry record will be saved without it");
+            _logger.LogError(
+                ex,
+                "Failed to write malformed-EventId dead-letter record for Partition {P} Offset {O}",
+                consumeResult.Partition.Value, consumeResult.Offset.Value);
         }
-        return null;
     }
 
     private static string? SerializeHeaders(Headers? headers)
