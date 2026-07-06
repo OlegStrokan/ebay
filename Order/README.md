@@ -237,3 +237,67 @@ flowchart LR
 	F --> G[ReturnShipmentDeliveredEventHandler]
 	G --> H[Resume ReturnSaga at ConfirmReturnReceived]
 ```
+
+## shipping carriers (new)
+
+ok so now we got 2 real-ish carriers instead of one fake shipping gateway. DPD and PPL.
+both are fake services living in `partners/my-dpd` and `partners/my-ppl` (go + sqlite, same
+energy as `my-stripe` - no money moves, no parcel moves, every outcome is deterministic
+from the request). spec is in `partners/CARRIER_SERVICES_SPEC.md`.
+
+`ShippingGatewayRouter` picks the adapter by `ShippingCarrier` enum and wraps the external id
+as `Carrier:rawId` (like `Ppl:ppl-ret-...`) so the saga doesn't give a shit which carrier it is.
+
+DPD is the easy one. reliable af. you create a shipment, you get an answer immediately, cancel
+is always idempotent, webhook is HMAC signed (same `Stripe-Signature` scheme as stripe). nothing
+to think about. junior-friendly carrier.
+
+PPL is the annoying one and that's the point:
+- booking is TWO-PHASE. you POST, you get a `202` + referenceId, then you have to POLL
+  `GET api/v1/parcels/{ref}` until it flips to `accepted` (gives you parcelId+trackingNumber)
+  or `rejected`. so `PplShippingAdapter.CreateShipmentAsync` sits in a poll loop:
+  accepted => return, rejected => `InvalidAddressException` (compensation), ran out of polls
+  => `PplBookingPendingException`. `MaxPolls`/`PollIntervalMs` come from `PplApiOptions`.
+
+### PPL booking timeout — what happens
+
+when the poll window exhausts, `CreateShipmentStep` no longer fails the saga. instead:
+1. it catches `PplBookingPendingException`, saves `{orderId, referenceId}` to `PplPendingBookings`
+   table and returns `Completed` — saga continues to capture payment and complete the order.
+2. **order is Completed but has no tracking number yet.**
+3. `PplBookingReconciliationWorker` (BackgroundService, 30 min poll) claims due rows, calls
+   `PplShippingAdapter.PollAsync(referenceId)` directly, and:
+   - `accepted` → `AssignTracking` on the order, mark row `Accepted`
+   - `pending` → reschedule, increment attempt count
+   - `rejected` OR `AttemptCount >= MaxAttempts (48 ≈ 24h)` → mark `Exhausted`, fire
+     `IIncidentReporter.CreateInterventionTicketAsync` to Telegram: operator contacts PPL,
+     re-books manually or initiates refund
+
+```
+PPL poll window exhausts during saga
+  → PplBookingPendingException
+    → CreateShipmentStep: enqueue PplPendingBookings row, return Completed
+      → saga finishes (payment captured, order Completed, no tracking)
+        ↓ (every 30 min)
+PplBookingReconciliationWorker
+  → accepted  → AssignTracking + mark Accepted
+  → pending   → reschedule
+  → exhausted → Telegram intervention ticket (manual)
+```
+- cancel BLOCKS once the parcel is in transit => `409`. `CreateShipmentStep` compensation
+  catches it, logs non-retryable, raises an intervention ticket, but the OTHER steps still
+  compensate (inventory release, refund). so one carrier being a dick doesn't brick the whole rollback.
+- webhook auth is NOT hmac. PPL sends a plain `X-PPL-Webhook-Secret` header. body not signed.
+- PPL fires PROGRESSIVE events (`*.in_transit` -> `*.out_for_delivery` -> `*.delivered`).
+
+gateway webhook handler branches on the `carrier` tag in the payload: `dpd` => verify HMAC,
+`ppl` => check the plain secret. it only resumes the saga on `*.delivered`, the in-between events
+get validated, logged and thrown in the trash. one public endpoint, two auth schemes, zero drama.
+
+config: point `Shipping:Dpd` and `Shipping:Ppl` at the fakes (`localhost:8091` / `localhost:8092`
+for local run, `host.docker.internal` in docker). gateway needs `WebhookSecurity:ShippingSharedSecret`
+(dpd hmac secret) + `WebhookSecurity:PplSharedSecret` (ppl plain secret).
+
+one gotcha: `orderId` is a Guid by the time it hits the adapter, so the `orderId` magic tokens
+(`fail`, `pollreject`, `cancelblock`...) only work if you poke the fake directly. for full
+end-to-end saga control through the adapter use the postal code suffix (`...01`/`...05`/`...09`).
