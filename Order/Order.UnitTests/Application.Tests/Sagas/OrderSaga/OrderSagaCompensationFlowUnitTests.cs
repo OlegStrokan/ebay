@@ -65,7 +65,8 @@ public class OrderSagaCompensationFlowUnitTests
             sagaRepository,
             [cancelOrderStep, reserveInventoryStep, createShipmentStep, processPaymentStep],
             errorClassifier,
-            logger);
+            logger,
+            Substitute.For<IFailedCompensationRetryRepository>());
 
         var result = await saga.CompensateAsync(sagaId, CancellationToken.None);
 

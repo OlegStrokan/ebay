@@ -56,13 +56,13 @@ public class UpdateOrderStatusStepTests
 
         Received.InOrder(() =>
         {
+            _inventoryGateway.ConfirmReservationAsync(
+                "RES-123",
+                Arg.Any<CancellationToken>());
+
             _orderPersistenceService.UpdateOrderAsync(
                 data.CorrelationId,
                 Arg.Any<Func<Order, Task>>(),
-                Arg.Any<CancellationToken>());
-
-            _inventoryGateway.ConfirmReservationAsync(
-                "RES-123",
                 Arg.Any<CancellationToken>());
         });
     }
@@ -173,8 +173,9 @@ public class UpdateOrderStatusStepTests
         Assert.IsType<Fail>(result);
         Assert.Contains("Critical Error", ((Fail)result).Reason);
 
-        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
-            Arg.Any<string>(),
+        // Confirm is called before Pay; if Pay throws, confirm was already called
+        await _inventoryGateway.Received(1).ConfirmReservationAsync(
+            "RES-123",
             Arg.Any<CancellationToken>());
     }
 
@@ -198,8 +199,9 @@ public class UpdateOrderStatusStepTests
         Assert.IsType<Fail>(result);
         Assert.Contains("Database timeout", ((Fail)result).Reason);
 
-        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
-            Arg.Any<string>(),
+        // Confirm is called before Pay; if Pay throws, confirm was already called
+        await _inventoryGateway.Received(1).ConfirmReservationAsync(
+            "RES-123",
             Arg.Any<CancellationToken>());
     }
 
@@ -221,9 +223,41 @@ public class UpdateOrderStatusStepTests
 
         Assert.IsType<Fail>(result);
         Assert.Contains("expired", ((Fail)result).Reason);
+        Assert.False(context.ReservationConfirmed);
+
+        // Order must NOT be marked Paid when inventory confirmation fails
+        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
+            Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldSkipConfirmation_WhenReservationAlreadyConfirmed()
+    {
+        // Simulates a saga resume where confirm succeeded but the process crashed
+        // before the order was persisted as Paid.
+        var context = new OrderSagaContext
+        {
+            ReservationId = "RES-123",
+            PaymentId = "PAY-123",
+            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            ReservationConfirmed = true,
+        };
+        var data = CreateSampleData();
+
+        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
+
+        Assert.IsType<Completed>(result);
+        Assert.True(context.OrderStatusUpdated);
+
+        // Confirm must not be called again — reservation is already confirmed
+        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
 
         await _orderPersistenceService.Received(1).UpdateOrderAsync(
-            Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
+            data.CorrelationId,
+            Arg.Any<Func<Order, Task>>(),
+            Arg.Any<CancellationToken>());
     }
     
     [Fact]

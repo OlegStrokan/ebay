@@ -19,11 +19,12 @@ public class CreateShipmentStepTests
 {
     private readonly IShippingGateway _shippingGateway = Substitute.For<IShippingGateway>();
     private readonly IOrderPersistenceService _orderPersistenceService = Substitute.For<IOrderPersistenceService>();
+    private readonly IPplPendingBookingRepository _pplPendingBookingRepository = Substitute.For<IPplPendingBookingRepository>();
     private readonly IIncidentReporter _incidentReporter = Substitute.For<IIncidentReporter>();
     private readonly ILogger<CreateShipmentStep> _logger = Substitute.For<ILogger<CreateShipmentStep>>();
 
     private CreateShipmentStep BuildStep() =>
-        new(_shippingGateway, _orderPersistenceService, _incidentReporter, _logger);
+        new(_shippingGateway, _orderPersistenceService, _pplPendingBookingRepository, _incidentReporter, _logger);
 
     [Fact]
     public async Task ExecuteAsync_ShouldReturnSuccess_AndUpdateOrder_WhenGatewaySucceeds()

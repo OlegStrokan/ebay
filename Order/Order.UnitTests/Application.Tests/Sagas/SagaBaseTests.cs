@@ -14,6 +14,8 @@ public class SagaBaseTests
     private readonly ISagaRepository _repository = Substitute.For<ISagaRepository>();
     private readonly ILogger _logger = Substitute.For<ILogger>();
     private readonly ISagaErrorClassifier _errorClassifier = Substitute.For<ISagaErrorClassifier>();
+    private readonly IFailedCompensationRetryRepository _failedCompensationRetryRepository =
+        Substitute.For<IFailedCompensationRetryRepository>();
 
     private readonly ISagaStep<TestSagaData, TestSagaContext> _step1 =
         Substitute.For<ISagaStep<TestSagaData, TestSagaContext>>();
@@ -28,8 +30,9 @@ public class SagaBaseTests
             ISagaRepository repo,
             IEnumerable<ISagaStep<TestSagaData, TestSagaContext>> steps,
             ISagaErrorClassifier errorClassifier,
-            ILogger logger)
-            : base(repo, steps, errorClassifier, logger) {}
+            ILogger logger,
+            IFailedCompensationRetryRepository failedCompensationRetryRepository)
+            : base(repo, steps, errorClassifier, logger, failedCompensationRetryRepository) {}
 
         protected override string SagaType => "TestSaga";
     }
@@ -41,8 +44,9 @@ public class SagaBaseTests
             ISagaRepository repo,
             IEnumerable<ISagaStep<TestSagaData, TestSagaContext>> steps,
             ISagaErrorClassifier errorClassifier,
-            ILogger logger)
-            : base(repo, steps, errorClassifier, logger) {}
+            ILogger logger,
+            IFailedCompensationRetryRepository failedCompensationRetryRepository)
+            : base(repo, steps, errorClassifier, logger, failedCompensationRetryRepository) {}
 
         protected override string SagaType => "TestSagaWithShortTimeout";
         protected override TimeSpan SagaTimeout => TimeSpan.FromMilliseconds(100);
@@ -52,7 +56,7 @@ public class SagaBaseTests
     public class TestSagaContext : SagaContext {}
 
     private TestSaga Build(params ISagaStep<TestSagaData, TestSagaContext>[] steps)
-        => new(_repository, steps, _errorClassifier, _logger);
+        => new(_repository, steps, _errorClassifier, _logger, _failedCompensationRetryRepository);
 
     [Fact]
     public async Task ExecuteAsync_ShouldRunAllSteps_AndComplete_WhenAllStepsSucceed()
@@ -419,7 +423,7 @@ public class SagaBaseTests
     }
 
     [Fact]
-    public async Task CompensateAsync_ShouldSetFailedToCompensate_WhenCompensationThrowsPermanently()
+    public async Task CompensateAsync_ShouldSetFailedToCompensate_AndEnqueueRetry_WhenCompensationFailsPermanently()
     {
         var sagaId = Guid.NewGuid();
 
@@ -434,6 +438,7 @@ public class SagaBaseTests
             .Returns(new SagaState
             {
                 Id = sagaId,
+                SagaType = "TestSaga",
                 Status = SagaStatus.Failed,
                 Payload = JsonSerializer.Serialize(new TestSagaData()),
                 Context = JsonSerializer.Serialize(new TestSagaContext()),
@@ -443,10 +448,21 @@ public class SagaBaseTests
                 }
             });
 
-        await Assert.ThrowsAsync<Exception>(() => Build(_step1).CompensateAsync(sagaId, CancellationToken.None));
+        var result = await Build(_step1).CompensateAsync(sagaId, CancellationToken.None);
+
+        // FailedToCompensate is now retryable — the method returns instead of throwing
+        Assert.Equal(SagaStatus.FailedToCompensate, result.Status);
 
         await _repository.Received().SaveAsync(
             Arg.Is<SagaState>(s => s.Status == SagaStatus.FailedToCompensate),
+            Arg.Any<CancellationToken>());
+
+        // A retry row must be enqueued so CompensationRetryWorker can recover automatically
+        await _failedCompensationRetryRepository.Received(1).EnqueueIfNotExistsAsync(
+            sagaId,
+            Arg.Any<string>(),
+            "Step1",
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -475,7 +491,7 @@ public class SagaBaseTests
                 Steps = new List<SagaStepLog>()
             });
 
-        var saga = new TestSagaWithShortTimeout(_repository, new[] { _step1 }, _errorClassifier, _logger);
+        var saga = new TestSagaWithShortTimeout(_repository, new[] { _step1 }, _errorClassifier, _logger, _failedCompensationRetryRepository);
         var result = await saga.ExecuteAsync(new TestSagaData { CorrelationId = Guid.NewGuid() }, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
