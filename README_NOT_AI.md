@@ -17,7 +17,7 @@ i prefer consistency to logic. user-service will be grpc microservice, yes it's 
 some auth stuff. complexity same as user.  simple af. depends on user
 
 ### order service:
-saga based transaction with sprinkle of outbox transactions with stop/resume saga transaction, fully compensatable steps with escalation to jira or help desk, kafka workers, dlq, partition stopping/resuming, ddd aggregates, distributed locking, watchdogs, event sourcing, snapshots, projection models, cqrs, and ALMOST exactly-once processing. also support b2b orders and subscription (recurring order). supraphysiological amount of lean unit tests, also some integration and e2e tests type shit. e2e very cool, sir. 
+saga based transaction with sprinkle of outbox transactions with stop/resume saga transaction, fully compensatable steps with escalation to jira or help desk, kafka workers, dlq, partition stopping/resuming, ddd aggregates, distributed locking, watchdogs, event sourcing, snapshots, projection models, cqrs, and ALMOST exactly-once processing. also support b2b orders and subscription (recurring order). supraphysiological amount of lean unit tests, also some integration and e2e tests type shit.
 
 ### payment service:
 kinda complex. use stripe api, handle dual path finalization: sync (stripe return response), async (webhook push + reconciliation pull for pending/require-shit payments). something like 'effectively-once' semantic: at-least-once delivery + idempotency + db constraints + outbox + reconciliation
@@ -57,4 +57,21 @@ AI:
 
 ### embedding-service
 - bridge between LLM and eshop microservices (what vector represents of what user means)
+
+## partners (fake external providers):
+
+i don't wanna hit real stripe/dpd/ppl in tests like a clown, so i wrote fakes. no real money, no real parcel, every result is deterministic from the request. you control the saga branch with magic tokens in orderId/idempotency-key or the postal code suffix. fully reproducible, zero flake.
+
+### my-stripe
+fake stripe. in-memory. webhook json signed with same hmac scheme as real stripe. idempotency key has "fail" => declined, amount ends "02" => pending, that kind of shit. payment guy eats this.
+
+### my-dpd
+fake DPD carrier. the EASY carrier - sync, reliable, answer comes back instantly, cancel always works (idempotent), webhook is hmac signed. boring on purpose
+
+### my-ppl
+fake PPL carrier. the ANNOYING one and that's the whole point:
+- booking is two-phase => POST, get 202 + referenceId, then POLL until it says accepted (or rejected). adapter sits in a poll loop.
+- cancel BLOCKS once parcel is in transit => 409 => compensation raises an intervention ticket but other steps still roll back. one dick carrier doesn't brick the whole rollback.
+- webhook auth is NOT hmac, it's a plain X-PPL-Webhook-Secret header. body not signed.
+- fires progressive events (in_transit -> out_for_delivery -> delivered). gateway only cares about *.delivered, throws the in-between ones in the trash.
 
