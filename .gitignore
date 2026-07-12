@@ -36,3 +36,7 @@ Order/.idea
 Order.UnitTests/.idea
 Order.IntegrationTests/.idea
 Order.E2ETests/.idea
+
+# Local secrets for Telegram integration tests
+Order/Order.IntegrationTests/appsettings.telegram.integration.local.json
+Order/Order.IntegrationTests/appsettings.telegram.integration.json
