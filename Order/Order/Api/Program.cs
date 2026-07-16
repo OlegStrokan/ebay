@@ -46,6 +46,7 @@ using (var scope = app.Services.CreateScope())
 app.MapGrpcService<OrderGrpcService>();
 app.MapGrpcService<B2BOrderGrpcService>();
 app.MapGrpcService<RecurringOrderGrpcService>();
+app.MapGrpcService<AdminOpsGrpcService>();
 app.MapGrpcHealthChecksService();
 
 

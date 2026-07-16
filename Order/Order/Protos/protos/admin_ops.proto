@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+option csharp_namespace = "Protos.AdminOps";
+
+package admin_ops;
+
+// Internal-only admin API for the Ops Console. Not exposed to the Gateway or
+// public clients. Every rpc requires the shared internal API key header
+// (x-internal-api-key) — see InternalServices:OpsConsoleApiKey config.
+service AdminOpsService {
+  rpc GetSagas(GetSagasRequest) returns (GetSagasResponse);
+  rpc GetSaga(GetSagaRequest) returns (GetSagaResponse);
+  rpc GetSagaEvents(GetSagaEventsRequest) returns (GetSagaEventsResponse);
+  rpc GetDeadLetters(GetDeadLettersRequest) returns (GetDeadLettersResponse);
+}
+
+message GetSagasRequest {
+  string status = 1;    // optional filter; empty = any status
+  string saga_type = 2; // optional filter; empty = any type
+  string search = 3;    // optional; matches saga id or correlation id (exact GUID match)
+  int32 skip = 4;
+  int32 take = 5;
+}
+
+message SagaSummary {
+  string id = 1;
+  string correlation_id = 2;
+  string saga_type = 3;
+  string status = 4;
+  string current_step = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message GetSagasResponse {
+  repeated SagaSummary sagas = 1;
+  int32 total_count = 2;
+}
+
+message GetSagaRequest {
+  string saga_id = 1;
+}
+
+message GetSagaResponse {
+  bool found = 1;
+  string id = 2;
+  string correlation_id = 3;
+  string saga_type = 4;
+  string status = 5;
+  string current_step = 6;
+  string created_at = 7;
+  string updated_at = 8;
+}
+
+message GetSagaEventsRequest {
+  string saga_id = 1;
+}
+
+message SagaStepEvent {
+  string step_name = 1;
+  string status = 2;
+  string error_message = 3;
+  string started_at = 4;
+  string completed_at = 5;
+  int32 duration_ms = 6;
+}
+
+message GetSagaEventsResponse {
+  repeated SagaStepEvent steps = 1;
+}
+
+message GetDeadLettersRequest {
+  int32 skip = 1;
+  int32 take = 2;
+}
+
+message DeadLetterSummary {
+  string id = 1;
+  string type = 2;
+  string aggregate_id = 3;
+  string failure_reason = 4;
+  int32 retry_count = 5;
+  string moved_to_dead_letter_at = 6;
+}
+
+message GetDeadLettersResponse {
+  repeated DeadLetterSummary messages = 1;
+}
