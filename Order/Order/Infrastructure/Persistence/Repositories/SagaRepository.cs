@@ -75,6 +75,42 @@ public class SagaRepository(AppDbContext dbContext) : ISagaRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(List<SagaState> Items, int TotalCount)> GetSagasAsync(
+        string? status,
+        string? sagaType,
+        string? search,
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var query = dbContext.SagaStates.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<SagaStatus>(status, true, out var parsedStatus))
+        {
+            query = query.Where(x => x.Status == parsedStatus);
+        }
+
+        if (!string.IsNullOrWhiteSpace(sagaType))
+        {
+            query = query.Where(x => x.SagaType == sagaType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search) && Guid.TryParse(search, out var searchId))
+        {
+            query = query.Where(x => x.Id == searchId || x.CorrelationId == searchId);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(x => x.UpdatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
     public async Task SaveCompensationStateAsync(
         SagaState sagaState, 
         SagaStepLog stepLog,

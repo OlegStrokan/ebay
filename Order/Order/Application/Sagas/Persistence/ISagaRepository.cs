@@ -32,6 +32,16 @@ public interface ISagaRepository
         CancellationToken cancellationToken
     );
 
+    // Admin/ops console listing: optional filters, all optional/empty = no filter applied.
+    Task<(List<SagaState> Items, int TotalCount)> GetSagasAsync(
+        string? status,
+        string? sagaType,
+        string? search,
+        int skip,
+        int take,
+        CancellationToken cancellationToken
+    );
+
     Task SaveCompensationStateAsync(
         SagaState sagaState,
         SagaStepLog stepLog,
