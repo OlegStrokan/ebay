@@ -116,7 +116,7 @@ static Conn *handle_accept(int fd) {
 static bool try_one_request(Conn *conn) {
     // try to parse the protocol: message header
     if (conn->incoming.size() < 4) {
-        return false // want read
+        return false; // want read
     }
 
     uint32_t len = 0;
