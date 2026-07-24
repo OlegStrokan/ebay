@@ -44,6 +44,7 @@ app.UseExceptionHandler(exceptionHandlerApp =>
 app.UseMiddleware<ApiKeyMiddleware>();
 
 app.MapSagaEndpoints();
+app.MapDeadLetterEndpoints();
 
 app.Run();
 

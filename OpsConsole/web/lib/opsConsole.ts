@@ -94,3 +94,30 @@ export async function getSagaEvents(id: string): Promise<SagaStepEvent[]> {
   );
   return data.steps ?? [];
 }
+
+export type DeadLetterSummary = {
+  id: string;
+  type: string;
+  aggregateId: string;
+  failureReason: string;
+  retryCount: number;
+  movedToDeadLetterAt: string;
+};
+
+export type DeadLetterFilters = {
+  skip?: number;
+  take?: number;
+};
+
+export async function getDeadLetters(
+  filters: DeadLetterFilters
+): Promise<DeadLetterSummary[]> {
+  const params = new URLSearchParams();
+  params.set("skip", String(filters.skip ?? 0));
+  params.set("take", String(filters.take ?? 50));
+
+  const data = await opsConsoleFetch<{ messages?: DeadLetterSummary[] }>(
+    `/api/deadletters?${params.toString()}`
+  );
+  return data.messages ?? [];
+}

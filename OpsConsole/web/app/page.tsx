@@ -44,6 +44,9 @@ export default async function SagasPage({
 
   return (
     <main>
+      <p>
+        <Link href="/deadletters">Dead letters &rarr;</Link>
+      </p>
       <h1>Sagas</h1>
 
       <form className="filters" method="get">
