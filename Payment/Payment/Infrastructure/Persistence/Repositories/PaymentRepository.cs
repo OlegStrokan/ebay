@@ -34,6 +34,17 @@ internal sealed class PaymentRepository(PaymentDbContext dbContext) : IPaymentRe
                 cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Payment>> GetAllByOrderIdAsync(
+        string orderId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Payments
+            .AsNoTracking()
+            .Where(x => x.OrderId == orderId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Payment>> GetPendingProviderConfirmationsOlderThanAsync(
         DateTime threshold,
         int maxCount,

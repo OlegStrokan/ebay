@@ -27,6 +27,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapGrpcService<PaymentGrpcService>();
+app.MapGrpcService<AdminPaymentGrpcService>();
 app.MapGrpcHealthChecksService();
 
 app.MapStripeWebhookEndpoint();

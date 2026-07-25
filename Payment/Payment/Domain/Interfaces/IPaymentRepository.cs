@@ -16,6 +16,10 @@ public interface IPaymentRepository
         IdempotencyKey idempotencyKey,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Payment>> GetAllByOrderIdAsync(
+        string orderId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Payment>> GetPendingProviderConfirmationsOlderThanAsync(
         DateTime threshold,
         int maxCount,
