@@ -35,6 +35,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapGrpcService<InventoryGrpcService>();
+app.MapGrpcService<AdminInventoryGrpcService>();
 app.MapGrpcHealthChecksService();
 
 app.MapGet("/healthz/live", () => Results.Ok("live"));

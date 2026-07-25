@@ -92,6 +92,30 @@ public sealed class InventoryReservationStore(
         return expiredCount;
     }
 
+    public async Task<ReservationSummary?> GetByOrderIdAsync(
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var reservation = await dbContext.InventoryReservations
+            .AsNoTracking()
+            .Include(x => x.Items)
+            .Where(x => x.OrderId == orderId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (reservation is null) return null;
+
+        return new ReservationSummary(
+            reservation.ReservationId,
+            reservation.OrderId,
+            reservation.Status,
+            reservation.CreatedAtUtc,
+            reservation.UpdatedAtUtc,
+            reservation.Items.Select(i => new ReservationItemSummary(i.ProductId, i.Quantity)).ToList());
+    }
+
     private Task<ReleaseInventoryResult> ExpireReservationAsync(
         Guid reservationId,
         CancellationToken cancellationToken)
