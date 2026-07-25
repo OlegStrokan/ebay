@@ -85,6 +85,16 @@ public sealed class FailedCompensationRetryRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<FailedCompensationRetry?> GetBySagaIdAsync(
+        Guid sagaId,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.FailedCompensationRetries
+            .Where(x => x.SagaId == sagaId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task SaveAsync(FailedCompensationRetry retry, CancellationToken cancellationToken)
     {
         var entry = dbContext.Entry(retry);

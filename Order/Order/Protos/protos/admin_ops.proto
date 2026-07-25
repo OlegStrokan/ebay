@@ -12,6 +12,10 @@ service AdminOpsService {
   rpc GetSaga(GetSagaRequest) returns (GetSagaResponse);
   rpc GetSagaEvents(GetSagaEventsRequest) returns (GetSagaEventsResponse);
   rpc GetDeadLetters(GetDeadLettersRequest) returns (GetDeadLettersResponse);
+
+  rpc CompensateSaga(CompensateSagaRequest) returns (MutationResult);
+  rpc RetryCompensation(RetryCompensationRequest) returns (MutationResult);
+  rpc RequeueDeadLetter(RequeueDeadLetterRequest) returns (MutationResult);
 }
 
 message GetSagasRequest {
@@ -85,4 +89,21 @@ message DeadLetterSummary {
 
 message GetDeadLettersResponse {
   repeated DeadLetterSummary messages = 1;
+}
+
+message CompensateSagaRequest {
+  string saga_id = 1;
+}
+
+message RetryCompensationRequest {
+  string saga_id = 1;
+}
+
+message RequeueDeadLetterRequest {
+  string message_id = 1;
+}
+
+message MutationResult {
+  bool success = 1;
+  string message = 2;
 }

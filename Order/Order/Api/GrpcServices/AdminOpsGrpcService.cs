@@ -1,5 +1,8 @@
 using Application.Interfaces;
+using Application.Sagas;
+using Application.Sagas.OrderSaga;
 using Application.Sagas.Persistence;
+using Application.Sagas.ReturnSaga;
 using Grpc.Core;
 using Protos.AdminOps;
 
@@ -17,12 +20,26 @@ namespace Api.GrpcServices;
 public class AdminOpsGrpcService(
     ISagaRepository sagaRepository,
     IDeadLetterRepository deadLetterRepository,
+    IFailedCompensationRetryRepository failedCompensationRetryRepository,
+    ISagaDistributedLock distributedLock,
+    IOrderSaga orderSaga,
+    IReturnSaga returnSaga,
     IConfiguration configuration,
     ILogger<AdminOpsGrpcService> logger)
     : AdminOpsService.AdminOpsServiceBase
 {
     private const string ApiKeyHeader = "x-internal-api-key";
     private const int MaxTake = 200;
+
+    // Statuses a stuck saga can safely be force-compensated from. Terminal statuses
+    // (Completed/Failed/Compensating/Compensated/FailedToCompensate) are excluded —
+    // compensating an already-terminal saga risks a double compensation / double refund.
+    private static readonly HashSet<SagaStatus> CompensableStatuses =
+    [
+        SagaStatus.Running,
+        SagaStatus.WaitingForEvent,
+        SagaStatus.TimedOut
+    ];
 
     public override async Task<GetSagasResponse> GetSagas(
         GetSagasRequest request,
@@ -126,6 +143,194 @@ public class AdminOpsGrpcService(
         }));
         return response;
     }
+
+    public override async Task<MutationResult> CompensateSaga(
+        CompensateSagaRequest request,
+        ServerCallContext context)
+    {
+        EnsureAuthorized(context);
+
+        if (!Guid.TryParse(request.SagaId, out var sagaId))
+        {
+            return new MutationResult { Success = false, Message = "saga_id must be a valid GUID." };
+        }
+
+        var saga = await sagaRepository.GetByIdAsync(sagaId, context.CancellationToken);
+        if (saga is null)
+        {
+            return new MutationResult { Success = false, Message = "Saga not found." };
+        }
+
+        if (!CompensableStatuses.Contains(saga.Status))
+        {
+            return new MutationResult
+            {
+                Success = false,
+                Message = $"Saga is in status {saga.Status} and cannot be force-compensated from there."
+            };
+        }
+
+        var sagaInstance = ResolveSaga(saga.SagaType);
+        if (sagaInstance is null)
+        {
+            return new MutationResult { Success = false, Message = $"No saga handler registered for type {saga.SagaType}." };
+        }
+
+        // Same lock key / budget the forward, resume, watchdog and compensation-retry paths use,
+        // so this admin action can never run concurrently with any of them (post-mortem action #4).
+        var lockKey = $"saga-lock:{saga.SagaType}:{saga.CorrelationId}";
+        var lockExpiry = sagaInstance.LockBudget + TimeSpan.FromMinutes(1);
+
+        await using var lockHandle = await distributedLock.TryAcquireAsync(lockKey, lockExpiry, context.CancellationToken);
+        if (lockHandle is null)
+        {
+            return new MutationResult
+            {
+                Success = false,
+                Message = "Saga is currently locked by another process (resume/watchdog/retry). Try again shortly."
+            };
+        }
+
+        // Re-read under the lock: another holder may have already advanced/completed it.
+        var current = await sagaRepository.GetByIdAsync(sagaId, context.CancellationToken);
+        if (current is null || !CompensableStatuses.Contains(current.Status))
+        {
+            return new MutationResult
+            {
+                Success = false,
+                Message = $"Saga is now in status {current?.Status.ToString() ?? "unknown"}; no longer eligible."
+            };
+        }
+
+        current.Status = SagaStatus.Failed;
+        current.UpdatedAt = DateTime.UtcNow;
+        await sagaRepository.SaveAsync(current, context.CancellationToken);
+
+        logger.LogWarning(
+            "Ops Console triggered force-compensation for saga {SagaId} ({SagaType}).",
+            sagaId, saga.SagaType);
+
+        try
+        {
+            var result = await sagaInstance.CompensateAsync(sagaId, context.CancellationToken);
+            return new MutationResult
+            {
+                Success = result.IsSuccess || result.Status == SagaStatus.Compensated,
+                Message = result.IsSuccess
+                    ? "Compensation completed."
+                    : $"Compensation finished with status {result.Status}: {result.ErrorMessage}"
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "CRITICAL: Ops Console-triggered compensation failed for saga {SagaId}.", sagaId);
+
+            current.Status = SagaStatus.FailedToCompensate;
+            await sagaRepository.SaveAsync(current, context.CancellationToken);
+
+            return new MutationResult
+            {
+                Success = false,
+                Message = "Compensation threw an exception; saga marked FailedToCompensate. Check logs."
+            };
+        }
+    }
+
+    public override async Task<MutationResult> RetryCompensation(
+        RetryCompensationRequest request,
+        ServerCallContext context)
+    {
+        EnsureAuthorized(context);
+
+        if (!Guid.TryParse(request.SagaId, out var sagaId))
+        {
+            return new MutationResult { Success = false, Message = "saga_id must be a valid GUID." };
+        }
+
+        var saga = await sagaRepository.GetByIdAsync(sagaId, context.CancellationToken);
+        if (saga is null)
+        {
+            return new MutationResult { Success = false, Message = "Saga not found." };
+        }
+
+        if (saga.Status != SagaStatus.FailedToCompensate)
+        {
+            return new MutationResult
+            {
+                Success = false,
+                Message = $"Saga is in status {saga.Status}, expected FailedToCompensate."
+            };
+        }
+
+        var now = DateTime.UtcNow;
+        var existing = await failedCompensationRetryRepository.GetBySagaIdAsync(sagaId, context.CancellationToken);
+
+        if (existing is not null)
+        {
+            existing.Reschedule(now, now);
+            await failedCompensationRetryRepository.SaveAsync(existing, context.CancellationToken);
+        }
+        else
+        {
+            await failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
+                sagaId,
+                saga.SagaType,
+                saga.CurrentStep,
+                "Manually retried via Ops Console (no prior retry record found).",
+                context.CancellationToken);
+        }
+
+        logger.LogWarning(
+            "Ops Console scheduled an immediate compensation retry for saga {SagaId} ({SagaType}).",
+            sagaId, saga.SagaType);
+
+        return new MutationResult
+        {
+            Success = true,
+            Message = "Compensation retry scheduled; CompensationRetryWorker will pick it up on its next poll."
+        };
+    }
+
+    public override async Task<MutationResult> RequeueDeadLetter(
+        RequeueDeadLetterRequest request,
+        ServerCallContext context)
+    {
+        EnsureAuthorized(context);
+
+        if (!Guid.TryParse(request.MessageId, out var messageId))
+        {
+            return new MutationResult { Success = false, Message = "message_id must be a valid GUID." };
+        }
+
+        // DeadLetterRepository.RetryAsync re-inserts the message into the Outbox (same
+        // Type/Content/AggregateId), so the already-running OutboxProcessor republishes it
+        // to Kafka on its next poll — no new publish logic invoked inline here.
+        try
+        {
+            await deadLetterRepository.RetryAsync(messageId, context.CancellationToken);
+
+            logger.LogWarning(
+                "Ops Console requeued dead-letter message {MessageId}.",
+                messageId);
+
+            return new MutationResult
+            {
+                Success = true,
+                Message = "Message moved back to the outbox; OutboxProcessor will republish it on its next poll."
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new MutationResult { Success = false, Message = ex.Message };
+        }
+    }
+
+    private ISaga ResolveSaga(string sagaType) => sagaType switch
+    {
+        SagaTypes.OrderSaga => orderSaga,
+        SagaTypes.ReturnSaga => returnSaga,
+        _ => null!
+    };
 
     private void EnsureAuthorized(ServerCallContext context)
     {

@@ -410,6 +410,11 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<FailedCompensationRetry>>(new List<FailedCompensationRetry>());
 
+        public Task<FailedCompensationRetry?> GetBySagaIdAsync(
+            Guid sagaId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<FailedCompensationRetry?>(null);
+
         public Task SaveAsync(FailedCompensationRetry retry, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
