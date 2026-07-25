@@ -24,6 +24,7 @@ public class AdminOpsGrpcService(
     ISagaDistributedLock distributedLock,
     IOrderSaga orderSaga,
     IReturnSaga returnSaga,
+    IOrderPersistenceService orderPersistenceService,
     IConfiguration configuration,
     ILogger<AdminOpsGrpcService> logger)
     : AdminOpsService.AdminOpsServiceBase
@@ -81,6 +82,8 @@ public class AdminOpsGrpcService(
             return new GetSagaResponse { Found = false };
         }
 
+        var order = await orderPersistenceService.LoadOrderAsync(saga.CorrelationId, context.CancellationToken);
+
         return new GetSagaResponse
         {
             Found = true,
@@ -90,7 +93,8 @@ public class AdminOpsGrpcService(
             Status = saga.Status.ToString(),
             CurrentStep = saga.CurrentStep,
             CreatedAt = saga.CreatedAt.ToString("O"),
-            UpdatedAt = saga.UpdatedAt.ToString("O")
+            UpdatedAt = saga.UpdatedAt.ToString("O"),
+            OrderTrackingId = order?.TrackingId?.Value ?? string.Empty
         };
     }
 
