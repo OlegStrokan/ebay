@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSaga, getSagaEvents } from "@/lib/opsConsole";
+import { SagaMutationActions } from "./SagaMutationActions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default async function SagaDetailPage({
         <dt>Updated</dt>
         <dd>{new Date(saga.updatedAt).toLocaleString()}</dd>
       </dl>
+
+      <SagaMutationActions sagaId={saga.id} status={saga.status} />
 
       <h2>Timeline</h2>
       <ol className="timeline">

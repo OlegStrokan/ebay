@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDeadLetters } from "@/lib/opsConsole";
+import { DeadLetterRequeueButton } from "./DeadLetterRequeueButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function DeadLettersPage({
             <th>Failure reason</th>
             <th>Retries</th>
             <th>Moved to DLQ</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -53,11 +55,14 @@ export default async function DeadLettersPage({
               <td>{m.failureReason}</td>
               <td>{m.retryCount}</td>
               <td>{new Date(m.movedToDeadLetterAt).toLocaleString()}</td>
+              <td>
+                <DeadLetterRequeueButton messageId={m.id} />
+              </td>
             </tr>
           ))}
           {messages.length === 0 && (
             <tr>
-              <td colSpan={5}>No dead-letter messages.</td>
+              <td colSpan={6}>No dead-letter messages.</td>
             </tr>
           )}
         </tbody>
