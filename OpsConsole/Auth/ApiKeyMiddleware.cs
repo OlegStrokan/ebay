@@ -1,9 +1,9 @@
 namespace OpsConsole.Auth;
 
 // Gates every request from the console frontend/operators. Distinct from the
-// x-internal-api-key used between OpsConsole and Order (see
-// OpsConsole.Grpc.OrderInternalKeyInterceptor) — this one authenticates the
-// human/frontend caller, that one authenticates OpsConsole to Order.
+// x-internal-api-key used between OpsConsole and Order/Payment/Inventory (see
+// OpsConsole.Grpc.InternalApiKeyInterceptor) — this one authenticates the
+// human/frontend caller, that one authenticates OpsConsole to those services.
 public class ApiKeyMiddleware(RequestDelegate next, IConfiguration config, ILogger<ApiKeyMiddleware> logger)
 {
     private const string Header = "X-Admin-Api-Key";

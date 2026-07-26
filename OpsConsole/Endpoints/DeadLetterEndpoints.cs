@@ -6,7 +6,7 @@ public static class DeadLetterEndpoints
 {
     public static void MapDeadLetterEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/deadletters").WithTags("DeadLetters");
+        var group = app.MapGroup("/api/deadletters").WithTags("DeadLetters").RequireAuthorization("OpsViewer");
 
         group.MapGet("", async (
             int? skip,
