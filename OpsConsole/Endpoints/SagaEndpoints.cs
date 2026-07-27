@@ -6,7 +6,7 @@ public static class SagaEndpoints
 {
     public static void MapSagaEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/sagas").WithTags("Sagas");
+        var group = app.MapGroup("/api/sagas").WithTags("Sagas").RequireAuthorization("OpsViewer");
 
         group.MapGet("", async (
             string? status,

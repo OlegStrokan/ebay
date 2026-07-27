@@ -3,7 +3,8 @@ using Grpc.Core.Interceptors;
 
 namespace OpsConsole.Grpc;
 
-public class OrderInternalKeyInterceptor(IConfiguration config) : Interceptor
+
+public class InternalApiKeyInterceptor(IConfiguration config) : Interceptor
 {
     private const string Header = "x-internal-api-key";
 
