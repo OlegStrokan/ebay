@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSaga, getSagaEvents } from "@/lib/opsConsole";
+import { getSaga, getSagaCorrelation, getSagaEvents } from "@/lib/opsConsole";
 import { SagaMutationActions } from "./SagaMutationActions";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,7 @@ export default async function SagaDetailPage({
   }
 
   const steps = await getSagaEvents(id);
+  const correlation = await getSagaCorrelation(id);
 
   return (
     <main>
@@ -41,6 +42,73 @@ export default async function SagaDetailPage({
       </dl>
 
       <SagaMutationActions sagaId={saga.id} status={saga.status} />
+
+      <h2>Related data</h2>
+      <dl className="detail-grid">
+        <dt>Tracking Id</dt>
+        <dd>{correlation?.orderTrackingId || "—"}</dd>
+      </dl>
+
+      <h3>Payments</h3>
+      {correlation && correlation.payments.length > 0 ? (
+        <table>
+          <thead>
+            <tr>
+              <th>Payment Id</th>
+              <th>Status</th>
+              <th>Amount</th>
+              <th>Refunded</th>
+              <th>Provider intent</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {correlation.payments.map((p) => (
+              <tr key={p.paymentId}>
+                <td>{p.paymentId}</td>
+                <td>
+                  <span className={`status status-${p.status}`}>{p.status}</span>
+                </td>
+                <td>
+                  {p.amount} {p.currency}
+                </td>
+                <td>{p.totalRefundedAmount}</td>
+                <td>{p.providerPaymentIntentId || "—"}</td>
+                <td>{new Date(p.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="count">No payments found for this order (or Payment service unreachable).</p>
+      )}
+
+      <h3>Inventory reservation</h3>
+      {correlation?.reservation ? (
+        <>
+          <dl className="detail-grid">
+            <dt>Reservation Id</dt>
+            <dd>{correlation.reservation.reservationId}</dd>
+            <dt>Status</dt>
+            <dd>
+              <span className={`status status-${correlation.reservation.status}`}>
+                {correlation.reservation.status}
+              </span>
+            </dd>
+            <dt>Updated</dt>
+            <dd>{new Date(correlation.reservation.updatedAt).toLocaleString()}</dd>
+          </dl>
+          <ul>
+            {correlation.reservation.items.map((i) => (
+              <li key={i.productId}>
+                {i.productId} × {i.quantity}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="count">No reservation found for this order (or Inventory service unreachable).</p>
+      )}
 
       <h2>Timeline</h2>
       <ol className="timeline">

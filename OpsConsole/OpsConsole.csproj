@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <Protobuf Include="Protos/admin_ops.proto" GrpcServices="Client" ProtoRoot="Protos" />
+    <Protobuf Include="Protos/payment_admin_ops.proto" GrpcServices="Client" ProtoRoot="Protos" />
+    <Protobuf Include="Protos/inventory_admin_ops.proto" GrpcServices="Client" ProtoRoot="Protos" />
   </ItemGroup>
 
 </Project>

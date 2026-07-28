@@ -1,10 +1,24 @@
 import "server-only";
+import { getSessionToken } from "./session";
 
 // Server-only client for the OpsConsole backend (Minimal API in ../../Program.cs).
 // Only ever called from Server Components, so OPS_CONSOLE_ADMIN_API_KEY never
 // reaches the browser bundle. Do NOT prefix these env vars with NEXT_PUBLIC_.
 const BASE_URL = process.env.OPS_CONSOLE_API_URL ?? "http://localhost:5300";
 const API_KEY = process.env.OPS_CONSOLE_ADMIN_API_KEY ?? "";
+
+// Phase 7: read endpoints now also require a real operator JWT ("OpsViewer" policy
+// on the backend), not just the shared admin key — so every call attaches the
+// session cookie's token as a Bearer header too, same as the mutation route handlers
+// already did. If there's no session, the backend will 401 and callers surface that
+// via the existing error.tsx boundary.
+async function buildHeaders(): Promise<HeadersInit> {
+  const token = await getSessionToken();
+  return {
+    "X-Admin-Api-Key": API_KEY,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 export type SagaSummary = {
   id: string;
@@ -30,6 +44,7 @@ export type SagaDetail = {
   currentStep: string;
   createdAt: string;
   updatedAt: string;
+  orderTrackingId: string;
 };
 
 export type SagaStepEvent = {
@@ -51,7 +66,7 @@ export type SagaFilters = {
 
 async function opsConsoleFetch<T>(path: string): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { "X-Admin-Api-Key": API_KEY },
+    headers: await buildHeaders(),
     cache: "no-store",
   });
 
@@ -76,7 +91,7 @@ export async function getSagas(filters: SagaFilters): Promise<GetSagasResult> {
 
 export async function getSaga(id: string): Promise<SagaDetail | null> {
   const response = await fetch(`${BASE_URL}/api/sagas/${encodeURIComponent(id)}`, {
-    headers: { "X-Admin-Api-Key": API_KEY },
+    headers: await buildHeaders(),
     cache: "no-store",
   });
 
@@ -93,6 +108,50 @@ export async function getSagaEvents(id: string): Promise<SagaStepEvent[]> {
     `/api/sagas/${encodeURIComponent(id)}/events`
   );
   return data.steps ?? [];
+}
+
+export type PaymentSummary = {
+  paymentId: string;
+  status: string;
+  amount: string;
+  currency: string;
+  totalRefundedAmount: string;
+  providerPaymentIntentId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ReservationSummary = {
+  reservationId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  items: { productId: string; quantity: number }[];
+};
+
+export type SagaCorrelation = {
+  orderTrackingId: string;
+  payments: PaymentSummary[];
+  reservation: ReservationSummary | null;
+};
+
+export async function getSagaCorrelation(id: string): Promise<SagaCorrelation | null> {
+  const response = await fetch(`${BASE_URL}/api/sagas/${encodeURIComponent(id)}/correlation`, {
+    headers: await buildHeaders(),
+    cache: "no-store",
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`OpsConsole API request failed (${response.status}): /api/sagas/${id}/correlation`);
+  }
+
+  const data = await response.json();
+  return {
+    orderTrackingId: data.orderTrackingId ?? "",
+    payments: data.payments ?? [],
+    reservation: data.reservation ?? null,
+  };
 }
 
 export type DeadLetterSummary = {
