@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option csharp_namespace = "Protos.AdminOps";
+
+package payment_admin_ops;
+
+// Internal-only admin API consumed by the Ops Console's OpsConsole service
+// (Phase 6 cross-service correlation). Not exposed to the Gateway or public
+// clients. Every rpc requires the shared internal API key header
+// (x-internal-api-key) — see InternalServices:OpsConsoleApiKey config,
+// same shared-secret convention as Order's AdminOpsService.
+service AdminPaymentService {
+  rpc GetPaymentsByOrderId(GetPaymentsByOrderIdRequest) returns (GetPaymentsByOrderIdResponse);
+}
+
+message GetPaymentsByOrderIdRequest {
+  string order_id = 1;
+}
+
+message PaymentSummary {
+  string payment_id = 1;
+  string status = 2;
+  string amount = 3;
+  string currency = 4;
+  string total_refunded_amount = 5;
+  string provider_payment_intent_id = 6;
+  string created_at = 7;
+  string updated_at = 8;
+}
+
+message GetPaymentsByOrderIdResponse {
+  repeated PaymentSummary payments = 1;
+}

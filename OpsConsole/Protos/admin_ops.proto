@@ -51,6 +51,7 @@ message GetSagaResponse {
   string current_step = 6;
   string created_at = 7;
   string updated_at = 8;
+  string order_tracking_id = 9;
 }
 
 message GetSagaEventsRequest {

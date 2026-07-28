@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option csharp_namespace = "Protos.AdminOps";
+
+package inventory_admin_ops;
+
+// Internal-only admin API consumed by the Ops Console's OpsConsole service
+// (Phase 6 cross-service correlation). Not exposed to the Gateway or public
+// clients. Every rpc requires the shared internal API key header
+// (x-internal-api-key) — see InternalServices:OpsConsoleApiKey config,
+// same shared-secret convention as Order's AdminOpsService.
+service AdminInventoryService {
+  rpc GetReservationByOrderId(GetReservationByOrderIdRequest) returns (GetReservationByOrderIdResponse);
+}
+
+message GetReservationByOrderIdRequest {
+  string order_id = 1;
+}
+
+message ReservationItemSummary {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message GetReservationByOrderIdResponse {
+  bool found = 1;
+  string reservation_id = 2;
+  string status = 3;
+  string created_at = 4;
+  string updated_at = 5;
+  repeated ReservationItemSummary items = 6;
+}
