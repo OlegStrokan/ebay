@@ -233,6 +233,9 @@ public class AdminOpsGrpcService(
             current.Status = SagaStatus.FailedToCompensate;
             await sagaRepository.SaveAsync(current, context.CancellationToken);
 
+            await failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
+                sagaId, current.SagaType, current.CurrentStep, ex.Message, context.CancellationToken);
+
             return new MutationResult
             {
                 Success = false,
