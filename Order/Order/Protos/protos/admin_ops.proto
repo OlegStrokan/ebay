@@ -68,6 +68,8 @@ message SagaStepEvent {
   string started_at = 4;
   string completed_at = 5;
   int32 duration_ms = 6;
+  string request = 7;
+  string response = 8;
 }
 
 message GetSagaEventsResponse {
@@ -86,6 +88,7 @@ message DeadLetterSummary {
   string failure_reason = 4;
   int32 retry_count = 5;
   string moved_to_dead_letter_at = 6;
+  string payload = 7;
 }
 
 message GetDeadLettersResponse {

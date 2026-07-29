@@ -120,7 +120,9 @@ public class AdminOpsGrpcService(
             ErrorMessage = s.ErrorMessage ?? string.Empty,
             StartedAt = s.StartedAt.ToString("O"),
             CompletedAt = s.CompletedAt?.ToString("O") ?? string.Empty,
-            DurationMs = s.DurationMs ?? 0
+            DurationMs = s.DurationMs ?? 0,
+            Request = s.Request ?? string.Empty,
+            Response = s.Response ?? string.Empty
         }));
         return response;
     }
@@ -144,7 +146,8 @@ public class AdminOpsGrpcService(
             AggregateId = m.AggregateId,
             FailureReason = m.FailureReason,
             RetryCount = m.RetryCount,
-            MovedToDeadLetterAt = m.MovedToDeadLetterAt.ToString("O")
+            MovedToDeadLetterAt = m.MovedToDeadLetterAt.ToString("O"),
+            Payload = m.Content
         }));
         return response;
     }

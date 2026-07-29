@@ -308,7 +308,10 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 SagaId = sagaId,
                 StepName = step.StepName,
                 Status = StepStatus.Running,
-                StartedAt = DateTime.UtcNow
+                StartedAt = DateTime.UtcNow,
+                // Snapshot of the saga data fed into this step, for operator triage (see
+                // AdminOpsGrpcService.GetSagaEvents / SagaStepEvent.request).
+                Request = JsonSerializer.Serialize(data)
             };
 
             try
@@ -321,6 +324,9 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 stepLog.DurationMs = (int)(endTime - startTime).TotalMilliseconds;
                 stepLog.Status = result is Fail ? StepStatus.Failed : StepStatus.Completed;
                 stepLog.ErrorMessage = result is Fail failResult ? failResult.Reason : null;
+                stepLog.Response = result is Completed { Data: not null } completed
+                    ? JsonSerializer.Serialize(completed.Data)
+                    : null;
 
                 await _sagaRepository.SaveStepAsync(stepLog, cancellationToken);
 
