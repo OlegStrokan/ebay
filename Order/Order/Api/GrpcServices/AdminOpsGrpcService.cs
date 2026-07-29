@@ -1,4 +1,5 @@
 using Application.Interfaces;
+using Application.Models;
 using Application.Sagas;
 using Application.Sagas.OrderSaga;
 using Application.Sagas.Persistence;
@@ -268,19 +269,28 @@ public class AdminOpsGrpcService(
 
         var now = DateTime.UtcNow;
         var existing = await failedCompensationRetryRepository.GetBySagaIdAsync(sagaId, context.CancellationToken);
+ 
+         if (existing?.Status == FailedCompensationRetryStatus.InProgress)
+        {
+            return new MutationResult
+            {
+                Success = false,
+                Message = "A compensation retry is already in progress for this saga. Try again once it finishes."
+            };
+        }
 
-        if (existing is not null)
+        if (existing?.Status == FailedCompensationRetryStatus.Pending)
         {
             existing.Reschedule(now, now);
             await failedCompensationRetryRepository.SaveAsync(existing, context.CancellationToken);
         }
         else
         {
-            await failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
+           await failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
                 sagaId,
                 saga.SagaType,
                 saga.CurrentStep,
-                "Manually retried via Ops Console (no prior retry record found).",
+                "Manually retried via Ops Console.",
                 context.CancellationToken);
         }
 
