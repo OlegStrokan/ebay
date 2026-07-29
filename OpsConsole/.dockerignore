@@ -1,0 +1,14 @@
+# The Next.js app is built by its own Dockerfile (web/Dockerfile) with its own
+# build context — excluding it here keeps the .NET image build from copying
+# node_modules/.next into the backend build context.
+web/
+
+bin/
+obj/
+**/bin/
+**/obj/
+
+.git/
+.vs/
+.idea/
+*.user

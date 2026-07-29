@@ -1,0 +1,40 @@
+# Run shared infra first:  docker compose -f ../docker-compose.infra.yml up -d
+# OpsConsole has no database of its own — it's a stateless proxy in front of
+# Order/Payment/Inventory's admin gRPC services, so unlike Order/Auth/etc.
+# there's nothing to run here besides the app services themselves.
+name: ops-console-deps
+
+networks:
+  free-ebay-local:
+    external: true
+
+services:
+  # ops-console:
+  #   build: .
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ASPNETCORE_URLS: "http://+:8080"
+  #     AdminApiKey: "dev-ops-console-key"
+  #     OrderServiceUrl: "http://order-service:8080"
+  #     PaymentServiceUrl: "http://payment-service:8080"
+  #     InventoryServiceUrl: "http://inventory-service:8080"
+  #     InternalServices__OpsConsoleApiKey: "ops_console_dev_key"
+  #     Jwt__SecretKey: "super_secret_auth_key_that_is_at_least_32_chars"
+  #     Jwt__Audience: "ApiGateway"
+  #   ports:
+  #     - "5300:8080"   # backend API available at http://localhost:5300
+  #   networks:
+  #     - free-ebay-local
+  #
+  # ops-console-web:
+  #   build: ./web
+  #   environment:
+  #     OPS_CONSOLE_API_URL: "http://ops-console:8080"
+  #     OPS_CONSOLE_ADMIN_API_KEY: "dev-ops-console-key"
+  #     GATEWAY_API_URL: "http://gateway-api:8080"
+  #   ports:
+  #     - "3000:3000"   # operator UI available at http://localhost:3000
+  #   depends_on:
+  #     - ops-console
+  #   networks:
+  #     - free-ebay-local

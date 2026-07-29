@@ -160,6 +160,7 @@ app.MapDeadLetterEndpoints();
 app.MapSagaMutationEndpoints();
 app.MapDeadLetterMutationEndpoints();
 app.MapSagaCorrelationEndpoints();
+app.MapHealthEndpoints();
 
 app.Run();
 

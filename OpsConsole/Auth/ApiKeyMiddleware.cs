@@ -10,6 +10,14 @@ public class ApiKeyMiddleware(RequestDelegate next, IConfiguration config, ILogg
 
     public async Task InvokeAsync(HttpContext ctx)
     {
+        // Kubernetes liveness/readiness probes hit these paths with no headers at all —
+        // they can't carry the admin key, so they must stay reachable unauthenticated.
+        if (ctx.Request.Path.StartsWithSegments("/health"))
+        {
+            await next(ctx);
+            return;
+        }
+
         var expectedKey = config["AdminApiKey"];
 
         if (string.IsNullOrEmpty(expectedKey) ||
