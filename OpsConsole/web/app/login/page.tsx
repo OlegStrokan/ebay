@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const expired = searchParams.get("reason") === "expired";
+  const from = searchParams.get("from");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,13 +33,18 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    router.push(from && from.startsWith("/") ? from : "/");
     router.refresh();
   }
 
   return (
     <main>
       <h1>Operator sign in</h1>
+      {expired && (
+        <p className="step-error">
+          Your session has expired. Sign in again to continue.
+        </p>
+      )}
       <p className="count">
         Sign in with your normal account. Mutating saga actions additionally
         require the Admin or SuperAdmin role — signing in alone does not grant

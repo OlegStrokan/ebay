@@ -1,4 +1,4 @@
-import { setSessionToken } from "@/lib/session";
+import { setSessionTokens } from "@/lib/session";
 
 // Proxies to the Gateway's existing /api/v1/auth/login so operators log in
 // with their normal account (must hold the Admin/SuperAdmin role to actually
@@ -29,11 +29,13 @@ export async function POST(request: Request) {
 
   const payload = await response.json();
   const accessToken: string | undefined = payload?.data?.accessToken;
+  const refreshToken: string | undefined = payload?.data?.refreshToken;
+  const expiresIn: number | undefined = payload?.data?.expiresIn;
 
   if (!accessToken) {
     return Response.json({ error: "Login succeeded but no access token was returned." }, { status: 502 });
   }
 
-  await setSessionToken(accessToken);
+  await setSessionTokens(accessToken, expiresIn, refreshToken);
   return Response.json({ ok: true });
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { getSessionToken } from "./session";
 
 // Server-only client for the OpsConsole backend (Minimal API in ../../Program.cs).
@@ -10,14 +11,22 @@ const API_KEY = process.env.OPS_CONSOLE_ADMIN_API_KEY ?? "";
 // Phase 7: read endpoints now also require a real operator JWT ("OpsViewer" policy
 // on the backend), not just the shared admin key — so every call attaches the
 // session cookie's token as a Bearer header too, same as the mutation route handlers
-// already did. If there's no session, the backend will 401 and callers surface that
-// via the existing error.tsx boundary.
+// already did.
 async function buildHeaders(): Promise<HeadersInit> {
   const token = await getSessionToken();
   return {
     "X-Admin-Api-Key": API_KEY,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+// middleware.ts is the primary auth gate (it redirects before any of these
+// functions run), but if the backend still 401s — access token revoked
+// mid-session, clock skew, etc. — send the operator back to /login instead of
+// letting it fall through to app/error.tsx, which would misattribute an auth
+// failure to a misconfigured API key.
+function redirectToLogin(): never {
+  redirect("/login?reason=expired");
 }
 
 export type SagaSummary = {
@@ -72,6 +81,10 @@ async function opsConsoleFetch<T>(path: string): Promise<T> {
     cache: "no-store",
   });
 
+  if (response.status === 401) {
+    redirectToLogin();
+  }
+
   if (!response.ok) {
     throw new Error(`OpsConsole API request failed (${response.status}): ${path}`);
   }
@@ -98,6 +111,9 @@ export async function getSaga(id: string): Promise<SagaDetail | null> {
   });
 
   if (response.status === 404) return null;
+  if (response.status === 401) {
+    redirectToLogin();
+  }
   if (!response.ok) {
     throw new Error(`OpsConsole API request failed (${response.status}): /api/sagas/${id}`);
   }
@@ -144,6 +160,9 @@ export async function getSagaCorrelation(id: string): Promise<SagaCorrelation | 
   });
 
   if (response.status === 404) return null;
+  if (response.status === 401) {
+    redirectToLogin();
+  }
   if (!response.ok) {
     throw new Error(`OpsConsole API request failed (${response.status}): /api/sagas/${id}/correlation`);
   }
