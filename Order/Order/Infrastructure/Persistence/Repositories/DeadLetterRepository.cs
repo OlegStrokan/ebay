@@ -88,17 +88,21 @@ public class DeadLetterRepository(AppDbContext dbContext, ILogger<DeadLetterRepo
             Guid.NewGuid(),
             deadLetterMessage.Type,
             deadLetterMessage.Content,
-            deadLetterMessage.OccurredOn,
+            DateTime.UtcNow,
             deadLetterMessage.AggregateId);
 
         dbContext.OutboxMessages.Add(outboxMessage);
+
+        deadLetterMessage.MarkAsResolved($"Requeued to outbox as message {outboxMessage.Id} for retry.");
+
         await dbContext.SaveChangesAsync(ct);
 
         logger.LogInformation(
-            "Dead letter message {MessageId} ({Type}) moved back to outbox for retry (attempt {Attempt})",
+            "Dead letter message {MessageId} ({Type}) moved back to outbox as {OutboxMessageId} for retry (attempt {Attempt})",
             messageId,
             deadLetterMessage.Type,
-            deadLetterMessage.MovedToDeadLetterAt);
+            outboxMessage.Id,
+            deadLetterMessage.DeadLetterRetryCount);
     }
 
     public async Task DeleteAsync(Guid messageId, CancellationToken ct)
