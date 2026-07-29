@@ -124,6 +124,18 @@ export default async function SagaDetailPage({
               {step.durationMs > 0 && ` · ${step.durationMs}ms`}
             </div>
             {step.errorMessage && <div className="step-error">{step.errorMessage}</div>}
+            {step.request && (
+              <details className="step-meta">
+                <summary>Request</summary>
+                <pre className="payload">{step.request}</pre>
+              </details>
+            )}
+            {step.response && (
+              <details className="step-meta">
+                <summary>Response</summary>
+                <pre className="payload">{step.response}</pre>
+              </details>
+            )}
           </li>
         ))}
         {steps.length === 0 && <li>No step history recorded.</li>}

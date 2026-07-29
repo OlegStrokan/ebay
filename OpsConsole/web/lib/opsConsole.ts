@@ -54,6 +54,8 @@ export type SagaStepEvent = {
   startedAt: string;
   completedAt: string;
   durationMs: number;
+  request: string;
+  response: string;
 };
 
 export type SagaFilters = {
@@ -161,6 +163,7 @@ export type DeadLetterSummary = {
   failureReason: string;
   retryCount: number;
   movedToDeadLetterAt: string;
+  payload: string;
 };
 
 export type DeadLetterFilters = {

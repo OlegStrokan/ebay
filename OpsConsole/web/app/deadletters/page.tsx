@@ -42,6 +42,7 @@ export default async function DeadLettersPage({
             <th>Type</th>
             <th>Aggregate Id</th>
             <th>Failure reason</th>
+            <th>Payload</th>
             <th>Retries</th>
             <th>Moved to DLQ</th>
             <th>Action</th>
@@ -53,6 +54,16 @@ export default async function DeadLettersPage({
               <td>{m.type}</td>
               <td>{m.aggregateId}</td>
               <td>{m.failureReason}</td>
+              <td>
+                {m.payload ? (
+                  <details>
+                    <summary>View</summary>
+                    <pre className="payload">{m.payload}</pre>
+                  </details>
+                ) : (
+                  "—"
+                )}
+              </td>
               <td>{m.retryCount}</td>
               <td>{new Date(m.movedToDeadLetterAt).toLocaleString()}</td>
               <td>
@@ -62,7 +73,7 @@ export default async function DeadLettersPage({
           ))}
           {messages.length === 0 && (
             <tr>
-              <td colSpan={6}>No dead-letter messages.</td>
+              <td colSpan={7}>No dead-letter messages.</td>
             </tr>
           )}
         </tbody>

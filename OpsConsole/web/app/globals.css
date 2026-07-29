@@ -183,3 +183,16 @@ th {
   color: #991b1b;
   white-space: pre-wrap;
 }
+
+.payload {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
