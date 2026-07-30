@@ -76,6 +76,8 @@ variable "ecr_repositories" {
         "free-ebay/email-service",
         "free-ebay/ai-search-service",
         "free-ebay/embedding-service",
-        "free-ebay/vector-indexer-worker"
+        "free-ebay/vector-indexer-worker",
+        "free-ebay/ops-console",
+        "free-ebay/ops-console-web"
     ]
 }
