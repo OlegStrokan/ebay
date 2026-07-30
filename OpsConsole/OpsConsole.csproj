@@ -20,4 +20,11 @@
     <Protobuf Include="Protos/inventory_admin_ops.proto" GrpcServices="Client" ProtoRoot="Protos" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="OpsConsole.UnitTests\**" />
+    <Content Remove="OpsConsole.UnitTests\**" />
+    <EmbeddedResource Remove="OpsConsole.UnitTests\**" />
+    <None Remove="OpsConsole.UnitTests\**" />
+  </ItemGroup>
+
 </Project>

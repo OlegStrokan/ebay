@@ -3,6 +3,9 @@
 # node_modules/.next into the backend build context.
 web/
 
+# Not part of the published image; only needed by `dotnet test`.
+OpsConsole.UnitTests/
+
 bin/
 obj/
 **/bin/
