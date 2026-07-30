@@ -1,15 +1,11 @@
 using Application.Gateways;
-using Application.Interfaces;
 using Application.Sagas.Steps;
-using Domain.Exceptions;
-using Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Sagas.OrderSaga.Steps;
 
 public class UpdateOrderStatusStep(
     IInventoryGateway inventoryGateway,
-    IOrderPersistenceService orderPersistenceService,
     ILogger<UpdateOrderStatusStep> logger
     )
     : ISagaStep<OrderSagaData, OrderSagaContext>
@@ -19,7 +15,7 @@ public class UpdateOrderStatusStep(
 
     public async Task<StepOutcome> ExecuteAsync(
         OrderSagaData data,
-        OrderSagaContext context, 
+        OrderSagaContext context,
         CancellationToken cancellationToken)
     {
         try
@@ -33,14 +29,14 @@ public class UpdateOrderStatusStep(
                 return new Completed();
             }
 
-            if (context.PaymentStatus != OrderSagaPaymentStatus.Succeeded)
+            // At step 4 the payment is authorized (hold placed) but not yet captured —
+            // money moves at step 6. Requiring Succeeded here would always fail the
+            // frontend/capture-late path, and order.Pay() belongs after actual capture.
+            if (context.PaymentStatus is not (OrderSagaPaymentStatus.Authorized or OrderSagaPaymentStatus.Succeeded))
             {
                 return new Fail(
-                    $"Payment is not confirmed as succeeded. Current status: {context.PaymentStatus}");
+                    $"Payment must be authorized before order status can be updated. Current status: {context.PaymentStatus}");
             }
-
-            if (string.IsNullOrEmpty(context.PaymentId))
-                return new Fail("Payment ID not found in saga context");
 
             if (string.IsNullOrEmpty(context.ReservationId))
                 return new Fail("Inventory reservation ID not found in saga context");
@@ -59,37 +55,17 @@ public class UpdateOrderStatusStep(
                 context.ReservationConfirmed = true;
             }
 
-            logger.LogInformation(
-                "Updating order {OrderId} status to Paid",
-                data.CorrelationId);
-
-            await orderPersistenceService.UpdateOrderAsync(
-                data.CorrelationId,
-                order =>
-                {
-                    var paymentId = PaymentId.From(context.PaymentId);
-                    order.Pay(paymentId);
-                    return Task.CompletedTask;
-                },
-                cancellationToken);
-
             context.OrderStatusUpdated = true;
 
             logger.LogInformation(
-                "Successfully updated order {OrderId} to Paid status",
+                "Order {OrderId} inventory confirmed; payment will be recorded after capture",
                 data.CorrelationId);
 
             return new Completed(new Dictionary<string, object>
             {
                 ["OrderId"] = data.CorrelationId,
-                ["Status"] = "Paid"
+                ["InventoryConfirmed"] = true
             });
-        }
-        catch (OrderNotFoundException ex)
-        { 
-            //return StepResult.Failure($"Order {data.CorrelationId} not found");
-            // We return a failure that tells the Saga to stop and compensate.
-            return new Fail($"Critical Error: {ex.Message}");
         }
         catch (Exception ex)
         {

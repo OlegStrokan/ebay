@@ -19,52 +19,47 @@ public class UpdateOrderStatusStepTests
     private readonly IInventoryGateway _inventoryGateway =
         Substitute.For<IInventoryGateway>();
 
-    private readonly IOrderPersistenceService _orderPersistenceService =
-        Substitute.For<IOrderPersistenceService>();
-
     private readonly ILogger<UpdateOrderStatusStep> _logger =
         Substitute.For<ILogger<UpdateOrderStatusStep>>();
 
     private UpdateOrderStatusStep BuildStep() =>
-        new(_inventoryGateway, _orderPersistenceService, _logger);
-    
+        new(_inventoryGateway, _logger);
+
     [Fact]
-    public async Task ExecuteAsync_ShouldReturnSuccess_WhenOrderIsUpdated()
+    public async Task ExecuteAsync_ShouldReturnSuccess_WhenPaymentAuthorizedAndInventoryConfirmed()
     {
         var context = new OrderSagaContext
         {
             ReservationId = "RES-123",
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            PaymentStatus = OrderSagaPaymentStatus.Authorized,
         };
         var data = CreateSampleData();
 
         var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
 
         Assert.IsType<Completed>(result);
-        Assert.Equal("Paid", ((Completed)result).Data?["Status"]);
+        Assert.Equal(true, ((Completed)result).Data?["InventoryConfirmed"]);
         Assert.True(context.OrderStatusUpdated);
 
         await _inventoryGateway.Received(1).ConfirmReservationAsync(
             "RES-123",
             Arg.Any<CancellationToken>());
+    }
 
-        await _orderPersistenceService.Received(1).UpdateOrderAsync(
-            data.CorrelationId,
-            Arg.Any<Func<Order, Task>>(),
-            Arg.Any<CancellationToken>());
-
-        Received.InOrder(() =>
+    [Fact]
+    public async Task ExecuteAsync_ShouldReturnSuccess_WhenPaymentAlreadySucceeded()
+    {
+        // B2B / recurring path: capture happened synchronously, status is Succeeded at step 4.
+        var context = new OrderSagaContext
         {
-            _inventoryGateway.ConfirmReservationAsync(
-                "RES-123",
-                Arg.Any<CancellationToken>());
+            ReservationId = "RES-123",
+            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+        };
 
-            _orderPersistenceService.UpdateOrderAsync(
-                data.CorrelationId,
-                Arg.Any<Func<Order, Task>>(),
-                Arg.Any<CancellationToken>());
-        });
+        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
+
+        Assert.IsType<Completed>(result);
+        Assert.True(context.OrderStatusUpdated);
     }
 
     [Fact]
@@ -73,63 +68,36 @@ public class UpdateOrderStatusStepTests
         var context = new OrderSagaContext
         {
             ReservationId = "RES-123",
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            PaymentStatus = OrderSagaPaymentStatus.Authorized,
             OrderStatusUpdated = true,
         };
-        var data = CreateSampleData();
 
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
+        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
 
         Assert.IsType<Completed>(result);
 
         await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
-
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
-            Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenPaymentNotSucceeded()
+    public async Task ExecuteAsync_ShouldReturnFailure_WhenPaymentNotYetAuthorized()
     {
         var context = new OrderSagaContext
         {
             ReservationId = "RES-123",
-            PaymentId = "PAY-123",
             PaymentStatus = OrderSagaPaymentStatus.Pending,
         };
-        var data = CreateSampleData();
 
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<Fail>(result);
-        Assert.Contains("Payment is not confirmed as succeeded", ((Fail)result).Reason);
-
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
-            Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenPaymentIdMissingInContext()
-    {
-        var context = new OrderSagaContext
-        {
-            ReservationId = "RES-123",
-            PaymentId = null,
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
-        };
-        var data = CreateSampleData();
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
+        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
 
         Assert.IsType<Fail>(result);
-        Assert.Contains("Payment ID not found", ((Fail)result).Reason);
+        Assert.Contains("Payment must be authorized", ((Fail)result).Reason);
 
-        // persistence must not be touched when context is incomplete
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
-            Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
+        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -138,12 +106,10 @@ public class UpdateOrderStatusStepTests
         var context = new OrderSagaContext
         {
             ReservationId = null,
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            PaymentStatus = OrderSagaPaymentStatus.Authorized,
         };
-        var data = CreateSampleData();
 
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
+        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
 
         Assert.IsType<Fail>(result);
         Assert.Contains("Inventory reservation ID not found", ((Fail)result).Reason);
@@ -154,55 +120,22 @@ public class UpdateOrderStatusStepTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_ShouldReturnFailure_WhenOrderNotFound()
-    {
-        var context = new OrderSagaContext
-        {
-            ReservationId = "RES-123",
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
-        };
-        var data = CreateSampleData();
-
-        _orderPersistenceService
-            .UpdateOrderAsync(Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>())
-            .Throws(new OrderNotFoundException(data.CorrelationId));
-
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
-
-        Assert.IsType<Fail>(result);
-        Assert.Contains("Critical Error", ((Fail)result).Reason);
-
-        // Confirm is called before Pay; if Pay throws, confirm was already called
-        await _inventoryGateway.Received(1).ConfirmReservationAsync(
-            "RES-123",
-            Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task ExecuteAsync_ShouldReturnFailure_WhenUnexpectedExceptionOccurs()
     {
         var context = new OrderSagaContext
         {
             ReservationId = "RES-123",
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            PaymentStatus = OrderSagaPaymentStatus.Authorized,
         };
-        var data = CreateSampleData();
 
-        _orderPersistenceService
-            .UpdateOrderAsync(Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>())
+        _inventoryGateway
+            .ConfirmReservationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Throws(new Exception("Database timeout"));
 
-        var result = await BuildStep().ExecuteAsync(data, context, CancellationToken.None);
+        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
 
         Assert.IsType<Fail>(result);
         Assert.Contains("Database timeout", ((Fail)result).Reason);
-
-        // Confirm is called before Pay; if Pay throws, confirm was already called
-        await _inventoryGateway.Received(1).ConfirmReservationAsync(
-            "RES-123",
-            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -211,8 +144,7 @@ public class UpdateOrderStatusStepTests
         var context = new OrderSagaContext
         {
             ReservationId = "RES-123",
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            PaymentStatus = OrderSagaPaymentStatus.Authorized,
         };
 
         _inventoryGateway
@@ -224,22 +156,17 @@ public class UpdateOrderStatusStepTests
         Assert.IsType<Fail>(result);
         Assert.Contains("expired", ((Fail)result).Reason);
         Assert.False(context.ReservationConfirmed);
-
-        // Order must NOT be marked Paid when inventory confirmation fails
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
-            Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ExecuteAsync_ShouldSkipConfirmation_WhenReservationAlreadyConfirmed()
     {
         // Simulates a saga resume where confirm succeeded but the process crashed
-        // before the order was persisted as Paid.
+        // before OrderStatusUpdated was persisted.
         var context = new OrderSagaContext
         {
             ReservationId = "RES-123",
-            PaymentId = "PAY-123",
-            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+            PaymentStatus = OrderSagaPaymentStatus.Authorized,
             ReservationConfirmed = true,
         };
         var data = CreateSampleData();
@@ -249,59 +176,33 @@ public class UpdateOrderStatusStepTests
         Assert.IsType<Completed>(result);
         Assert.True(context.OrderStatusUpdated);
 
-        // Confirm must not be called again — reservation is already confirmed
         await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
-
-        await _orderPersistenceService.Received(1).UpdateOrderAsync(
-            data.CorrelationId,
-            Arg.Any<Func<Order, Task>>(),
-            Arg.Any<CancellationToken>());
     }
-    
+
     [Fact]
     public async Task CompensateAsync_ShouldBeNoOp_BecauseCancelOrderOnFailureStepHandlesCancellation()
     {
-        var data = CreateSampleData();
-
-        await BuildStep().CompensateAsync(data, new OrderSagaContext(), CancellationToken.None);
+        await BuildStep().CompensateAsync(CreateSampleData(), new OrderSagaContext(), CancellationToken.None);
 
         // UpdateOrderStatusStep.CompensateAsync is intentionally a no-op:
         // order cancellation is centralised in CancelOrderOnFailureStep (Order: 0),
         // which runs for every compensation regardless of which step failed.
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
-            Arg.Any<Guid>(),
-            Arg.Any<Func<Order, Task>>(),
+        await _inventoryGateway.DidNotReceive().ConfirmReservationAsync(
+            Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task CompensateAsync_ShouldNotThrow_WhenOrderNotFound()
+    public async Task CompensateAsync_ShouldNotThrow()
     {
-        _orderPersistenceService
-            .UpdateOrderAsync(Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>())
-            .Throws(new OrderNotFoundException(Guid.NewGuid()));
-
         var exception = await Record.ExceptionAsync(() =>
             BuildStep().CompensateAsync(CreateSampleData(), new OrderSagaContext(), CancellationToken.None));
 
         Assert.Null(exception);
     }
 
-    [Fact]
-    public async Task CompensateAsync_ShouldNotThrow_WhenUnexpectedExceptionOccurs()
-    {
-        _orderPersistenceService
-            .UpdateOrderAsync(Arg.Any<Guid>(), Arg.Any<Func<Order, Task>>(), Arg.Any<CancellationToken>())
-            .Throws(new Exception("DB crashed"));
-
-        var exception = await Record.ExceptionAsync(() =>
-            BuildStep().CompensateAsync(CreateSampleData(), new OrderSagaContext(), CancellationToken.None));
-
-        Assert.Null(exception);
-    }
-    
     private static OrderSagaData CreateSampleData() => new()
     {
         CorrelationId = Guid.NewGuid(),

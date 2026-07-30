@@ -6,6 +6,7 @@ using Application.Interfaces;
 using Application.Models;
 using Application.Sagas.OrderSaga;
 using Application.Sagas.OrderSaga.Steps;
+using Domain.Entities.Order;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -15,6 +16,7 @@ namespace Application.Tests.Sagas.OrderSagaSteps;
 public class CapturePaymentStepTests
 {
     private readonly IPaymentGateway _paymentGateway = Substitute.For<IPaymentGateway>();
+    private readonly IOrderPersistenceService _orderPersistenceService = Substitute.For<IOrderPersistenceService>();
     private readonly ICompensationRefundRetryRepository _compensationRefundRetryRepository = Substitute.For<ICompensationRefundRetryRepository>();
     private readonly IIncidentReporter _incidentReporter = Substitute.For<IIncidentReporter>();
     private readonly ILogger<CapturePaymentStep> _logger = Substitute.For<ILogger<CapturePaymentStep>>();
@@ -54,6 +56,7 @@ public class CapturePaymentStepTests
 
     private CapturePaymentStep BuildStep() => new(
         _paymentGateway,
+        _orderPersistenceService,
         _compensationRefundRetryRepository,
         _incidentReporter,
         _logger);
@@ -70,6 +73,11 @@ public class CapturePaymentStepTests
         var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
 
         Assert.IsType<Completed>(result);
+
+        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<Func<Order, Task>>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -375,6 +383,11 @@ public class CapturePaymentStepTests
             data.CorrelationId, data.CustomerId, "pi_abc",
             data.TotalAmount, data.Currency, Arg.Any<CancellationToken>());
 
+        await _orderPersistenceService.Received(1).UpdateOrderAsync(
+            data.CorrelationId,
+            Arg.Any<Func<Order, Task>>(),
+            Arg.Any<CancellationToken>());
+
         await _paymentGateway.DidNotReceive().ProcessPaymentAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<decimal>(),
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -397,6 +410,11 @@ public class CapturePaymentStepTests
         Assert.Equal("PAY-99", completed.Data?["PaymentId"]);
         Assert.Equal(data.TotalAmount, completed.Data?["Amount"]);
         Assert.Equal(data.Currency, completed.Data?["Currency"]);
+
+        await _orderPersistenceService.Received(1).UpdateOrderAsync(
+            data.CorrelationId,
+            Arg.Any<Func<Order, Task>>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

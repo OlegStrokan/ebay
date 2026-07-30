@@ -103,6 +103,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         {
             new CapturePaymentStep(
                 new TimeoutPaymentGateway(),
+                new NoopOrderPersistenceService(),
                 new NoopCompensationRefundRetryRepository(),
                 new NoopIncidentReporter(),
                 NullLogger<CapturePaymentStep>.Instance)
@@ -151,6 +152,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             new RecordingSuccessfulStep("ReserveInventory", 1, compensationSequence),
             new CapturePaymentStep(
                 new UnavailablePaymentGateway(),
+                new NoopOrderPersistenceService(),
                 new NoopCompensationRefundRetryRepository(),
                 new NoopIncidentReporter(),
                 NullLogger<CapturePaymentStep>.Instance)
@@ -260,6 +262,18 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             OrderSagaContext context,
             CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class NoopOrderPersistenceService : IOrderPersistenceService
+    {
+        public Task CreateOrderAsync(OrderAggregate order, string idempotencyKey, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task UpdateOrderAsync(Guid orderId, Func<OrderAggregate, Task> action, CancellationToken ct)
+            => Task.CompletedTask;
+
+        public Task<OrderAggregate?> LoadOrderAsync(Guid orderId, CancellationToken ct)
+            => Task.FromResult<OrderAggregate?>(null);
     }
 
     private sealed class RecordingOrderPersistenceService(

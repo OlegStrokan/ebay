@@ -3,12 +3,14 @@ using Application.Gateways;
 using Application.Gateways.Exceptions;
 using Application.Interfaces;
 using Application.Sagas.Steps;
+using Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Sagas.OrderSaga.Steps;
 
 public sealed class CapturePaymentStep(
     IPaymentGateway paymentGateway,
+    IOrderPersistenceService orderPersistenceService,
     ICompensationRefundRetryRepository compensationRefundRetryRepository,
     IIncidentReporter incidentReporter,
     ILogger<CapturePaymentStep> logger)
@@ -164,6 +166,15 @@ public sealed class CapturePaymentStep(
                 "Successfully captured payment {PaymentId} for order {OrderId}",
                 context.PaymentId,
                 data.CorrelationId);
+
+            await orderPersistenceService.UpdateOrderAsync(
+                data.CorrelationId,
+                order =>
+                {
+                    order.Pay(PaymentId.From(context.PaymentId!));
+                    return Task.CompletedTask;
+                },
+                cancellationToken);
 
             return new Completed(new Dictionary<string, object>
             {
