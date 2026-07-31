@@ -207,8 +207,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         sagaState.Status = SagaStatus.Running;
         sagaState.UpdatedAt = DateTime.UtcNow;
         sagaState.Context = JsonSerializer.Serialize(typedContext);
-        // the park is over: drop its deadline so the watchdog stops treating this saga as an
-        // expired wait and falls back to the normal UpdatedAt-based stuck scan
+        // leaving WaitingForEvent, so the park's clock goes with it
         sagaState.ClearWait();
 
         await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);

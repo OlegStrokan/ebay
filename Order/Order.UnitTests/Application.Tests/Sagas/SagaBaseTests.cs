@@ -92,8 +92,8 @@ public class SagaBaseTests
         _step1.Order.Returns(1);
         _step1.StepName.Returns("Step1");
         _step1.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
-            .Returns(new WaitForEvent());
-        
+            .Returns(new WaitForEvent("test wait", TimeSpan.FromMinutes(10), WaitRecovery.AwaitPush));
+
 
         _step2.Order.Returns(2);
         _step2.StepName.Returns("Step2");
@@ -119,9 +119,16 @@ public class SagaBaseTests
         Assert.True(result.IsSuccess);
         Assert.Equal(SagaStatus.Completed, result.Status);
 
-        // saga state persisted as WaitingForEvent after Step1 completes
+        // saga state persisted as WaitingForEvent after Step1 completes, carrying the park's own
+        // deadline - without it the saga is invisible to GetStuckSagasAsync forever (P0-2)
         await _repository.Received().SaveAsync(
-            Arg.Is<SagaState>(s => s.Status == SagaStatus.WaitingForEvent && s.CurrentStep == "Step1"),
+            Arg.Is<SagaState>(s =>
+                s.Status == SagaStatus.WaitingForEvent
+                && s.CurrentStep == "Step1"
+                && s.WaitingSinceUtc != null
+                && s.WaitDeadlineUtc != null
+                && s.WaitReason == "test wait"
+                && s.WaitRecoveryMode == WaitRecovery.AwaitPush),
             Arg.Any<CancellationToken>());
 
         // step2 must never run

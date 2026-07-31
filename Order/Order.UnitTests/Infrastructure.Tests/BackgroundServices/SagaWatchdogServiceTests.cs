@@ -1,7 +1,10 @@
+using Application.Common.Enums;
+using Application.Gateways;
 using Application.Sagas;
 using Application.Sagas.OrderSaga;
 using Application.Sagas.Persistence;
 using Application.Sagas.ReturnSaga;
+using Application.Sagas.Steps;
 using Infrastructure.BackgroundServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -21,6 +24,7 @@ public class SagaWatchdogServiceTests
     private readonly IServiceScopeFactory _scopeFactory = Substitute.For<IServiceScopeFactory>();
     private readonly ISagaDistributedLock _distributedLock = Substitute.For<ISagaDistributedLock>();
     private readonly ISagaLockHandle _lockHandle = Substitute.For<ISagaLockHandle>();
+    private readonly IIncidentReporter _incidentReporter = Substitute.For<IIncidentReporter>();
 
     public SagaWatchdogServiceTests()
     {
@@ -30,6 +34,7 @@ public class SagaWatchdogServiceTests
         _serviceScope.ServiceProvider.GetService(typeof(IOrderSaga)).Returns(_orderSaga);
         _serviceScope.ServiceProvider.GetService(typeof(IReturnSaga)).Returns(_returnSaga);
         _serviceScope.ServiceProvider.GetService(typeof(ISagaDistributedLock)).Returns(_distributedLock);
+        _serviceScope.ServiceProvider.GetService(typeof(IIncidentReporter)).Returns(_incidentReporter);
 
         // Compensation now runs under the saga distributed lock; grant it by default.
         _distributedLock
@@ -55,7 +60,7 @@ public class SagaWatchdogServiceTests
         };
 
         _sagaRepository
-            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new List<SagaState> { saga });
 
         _sagaRepository
@@ -104,7 +109,7 @@ public class SagaWatchdogServiceTests
         };
 
         _sagaRepository
-            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new List<SagaState> { saga });
 
         // Not all steps completed → IsSagaActuallyCompletedAsync returns false
@@ -153,7 +158,7 @@ public class SagaWatchdogServiceTests
         };
 
         _sagaRepository
-            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new List<SagaState> { saga });
 
         _sagaRepository
@@ -204,7 +209,7 @@ public class SagaWatchdogServiceTests
         };
 
         _sagaRepository
-            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new List<SagaState> { saga });
 
         _sagaRepository
@@ -234,7 +239,7 @@ public class SagaWatchdogServiceTests
     public async Task ExecuteAsync_ShouldNotCompensate_WhenNoStuckSagasFound()
     {
         _sagaRepository
-            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
             .Returns(new List<SagaState>());
 
         using var cts = new CancellationTokenSource();
@@ -242,7 +247,7 @@ public class SagaWatchdogServiceTests
 
         // signal after GetStuckSagasAsync so we know the check ran, then cancel
         _sagaRepository
-            .When(r => r.GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>()))
+            .When(r => r.GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>()))
             .Do(_ =>
             {
                 signal.TrySetResult(true);
@@ -256,5 +261,121 @@ public class SagaWatchdogServiceTests
 
         await _orderSaga.DidNotReceive().CompensateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _returnSaga.DidNotReceive().CompensateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldCompensateAndAlert_WhenParkedSagaExceedsItsWaitDeadline()
+    {
+        // The P0-2 case: capture succeeded at the provider but the response was lost, so the step
+        // parked Uncertain. Nothing pushes, nothing reconciles - the only thing that can rescue
+        // this order is the park's own deadline. Note UpdatedAt is recent: a parked saga's
+        // UpdatedAt never moves, so the tolerance window must not gate this.
+        var sagaId = Guid.NewGuid();
+        var saga = new SagaState
+        {
+            Id               = sagaId,
+            SagaType         = "OrderSaga",
+            Status           = SagaStatus.WaitingForEvent,
+            CurrentStep      = "CapturePayment",
+            UpdatedAt        = DateTime.UtcNow.AddMinutes(-6),
+            WaitingSinceUtc  = DateTime.UtcNow.AddMinutes(-6),
+            WaitDeadlineUtc  = DateTime.UtcNow.AddMinutes(-1),
+            WaitReason       = "capture result uncertain after gateway timeout",
+            WaitRecoveryMode = WaitRecovery.ActiveVerify,
+            Steps            = new List<SagaStepLog>()
+        };
+
+        _sagaRepository
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(new List<SagaState> { saga });
+
+        _sagaRepository
+            .GetByIdAsync(sagaId, Arg.Any<CancellationToken>())
+            .Returns(saga);
+
+        using var cts = new CancellationTokenSource();
+        var signal = new TaskCompletionSource<bool>();
+
+        _orderSaga
+            .When(s => s.CompensateAsync(sagaId, Arg.Any<CancellationToken>()))
+            .Do(_ =>
+            {
+                signal.TrySetResult(true);
+                cts.Cancel();
+            });
+
+        await Build().StartAsync(cts.Token);
+
+        var completed = await Task.WhenAny(signal.Task, Task.Delay(3000));
+        Assert.True(completed == signal.Task, "OrderSaga.CompensateAsync was never called within 3 seconds.");
+
+        await _orderSaga.Received().CompensateAsync(sagaId, Arg.Any<CancellationToken>());
+
+        // An expired ActiveVerify wait means money may already have moved, so it must page someone
+        await _incidentReporter.Received().SendAlertAsync(
+            Arg.Is<IncidentAlert>(a =>
+                a.AlertType == "SagaWaitDeadlineExceededUncertain"
+                && a.Severity == AlertSeverity.Critical),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldNotCompensateParkedSaga_WhenItReParkedWithAFreshDeadline()
+    {
+        // A resume between the stuck-scan and the lock un-parks and re-parks the saga with a new
+        // deadline. Acting on the stale deadline we scanned with would kill a saga that is
+        // legitimately waiting again, so the deadline is re-checked under the lock.
+        var sagaId = Guid.NewGuid();
+        var scanned = new SagaState
+        {
+            Id               = sagaId,
+            SagaType         = "OrderSaga",
+            Status           = SagaStatus.WaitingForEvent,
+            CurrentStep      = "AwaitPaymentConfirmation",
+            UpdatedAt        = DateTime.UtcNow.AddMinutes(-20),
+            WaitingSinceUtc  = DateTime.UtcNow.AddMinutes(-20),
+            WaitDeadlineUtc  = DateTime.UtcNow.AddMinutes(-10),
+            WaitRecoveryMode = WaitRecovery.AwaitPush,
+            Steps            = new List<SagaStepLog>()
+        };
+
+        var rePakedUnderLock = new SagaState
+        {
+            Id               = sagaId,
+            SagaType         = "OrderSaga",
+            Status           = SagaStatus.WaitingForEvent,
+            CurrentStep      = "CapturePayment",
+            UpdatedAt        = DateTime.UtcNow,
+            WaitingSinceUtc  = DateTime.UtcNow,
+            WaitDeadlineUtc  = DateTime.UtcNow.AddMinutes(10),
+            WaitRecoveryMode = WaitRecovery.AwaitPush,
+            Steps            = new List<SagaStepLog>()
+        };
+
+        _sagaRepository
+            .GetStuckSagasAsync(Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(new List<SagaState> { scanned });
+
+        _sagaRepository
+            .GetByIdAsync(sagaId, Arg.Any<CancellationToken>())
+            .Returns(rePakedUnderLock);
+
+        using var cts = new CancellationTokenSource();
+        var signal = new TaskCompletionSource<bool>();
+
+        _sagaRepository
+            .When(r => r.GetByIdAsync(sagaId, Arg.Any<CancellationToken>()))
+            .Do(_ =>
+            {
+                signal.TrySetResult(true);
+                cts.Cancel();
+            });
+
+        await Build().StartAsync(cts.Token);
+
+        var completed = await Task.WhenAny(signal.Task, Task.Delay(3000));
+        Assert.True(completed == signal.Task, "The saga was never re-read under the lock.");
+
+        await _orderSaga.DidNotReceive().CompensateAsync(sagaId, Arg.Any<CancellationToken>());
     }
 }
