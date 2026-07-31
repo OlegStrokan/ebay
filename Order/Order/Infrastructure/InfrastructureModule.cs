@@ -132,6 +132,7 @@ public static class InfrastructureModule
         services.AddHostedService<OutboxProcessor>();
         services.AddHostedService<RecurringOrderSchedulerService>();
         services.AddHostedService<SagaOrchestrationService>();
+        services.AddHostedService<InventoryEventsConsumerService>();
         services.AddHostedService<KafkaReadModelSynchronizer>();
         services.AddHostedService<KafkaReadModelRetryWorker>();
         services.AddHostedService<SagaWatchdogService>();

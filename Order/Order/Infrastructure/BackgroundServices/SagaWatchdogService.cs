@@ -1,7 +1,10 @@
+using Application.Common.Enums;
+using Application.Gateways;
 using Application.Sagas;
 using Application.Sagas.OrderSaga;
 using Application.Sagas.Persistence;
 using Application.Sagas.ReturnSaga;
+using Application.Sagas.Steps;
 
 namespace Infrastructure.BackgroundServices;
 
@@ -59,8 +62,9 @@ public class SagaWatchdogService : BackgroundService
 
         _logger.LogDebug("Checking for stuck sagas...");
 
-        var cutoffTime = DateTime.UtcNow - _stuckThreshold;
-        var stuckSagas = await sagaRepository.GetStuckSagasAsync(cutoffTime, cancellationToken);
+        var now = DateTime.UtcNow;
+        var cutoffTime = now - _stuckThreshold;
+        var stuckSagas = await sagaRepository.GetStuckSagasAsync(cutoffTime, now, cancellationToken);
 
         if (stuckSagas.Count == 0)
         {
@@ -69,7 +73,8 @@ public class SagaWatchdogService : BackgroundService
         }
 
         _logger.LogWarning(
-            "Found {Count} stuck sagas haven't updated since {Cutoff}", stuckSagas.Count, cutoffTime);
+            "Found {Count} sagas needing recovery: idle since {Cutoff}, or parked past their wait deadline",
+            stuckSagas.Count, cutoffTime);
 
         foreach (var saga in stuckSagas)
         {
@@ -89,6 +94,13 @@ public class SagaWatchdogService : BackgroundService
 
         try
         {
+            // The wait deadline has already passed, so there is no tolerance left to grant
+            if (saga.Status == SagaStatus.WaitingForEvent)
+            {
+                await HandleExpiredWaitAsync(saga, scope, cancellationToken);
+                return;
+            }
+
             // TimedOut sagas skip the tolerance window - SagaBase already set the timeout
             if (saga.Status == SagaStatus.TimedOut)
             {
@@ -133,6 +145,49 @@ public class SagaWatchdogService : BackgroundService
         {
             _logger.LogError(ex, "Failed to handle stuck saga {SagaId}", saga.Id);
         }
+    }
+
+    // A parked saga whose deadline has passed. The push never came (AwaitPush) or the provider
+    // call we could not confirm was never resolved by reconciliation (ActiveVerify). Either way
+    // waiting longer cannot help, and continuing to wait is the expensive option: the hold
+    // expires, the reservation is released, and nobody is told.
+    private async Task HandleExpiredWaitAsync(
+        SagaState saga,
+        IServiceScope scope,
+        CancellationToken cancellationToken)
+    {
+        var waitedFor = saga.WaitingSinceUtc is null
+            ? (TimeSpan?)null
+            : DateTime.UtcNow - saga.WaitingSinceUtc.Value;
+
+        _logger.LogError(
+            "Saga {SagaId} ({SagaType}) exceeded its wait deadline at step {CurrentStep}. " +
+            "Waited {WaitedFor}, deadline was {Deadline:o}, recovery {Recovery}, reason: {Reason}. " +
+            "Failing and compensating.",
+            saga.Id, saga.SagaType, saga.CurrentStep, waitedFor, saga.WaitDeadlineUtc,
+            saga.WaitRecoveryMode, saga.WaitReason);
+
+        var incidentReporter = scope.ServiceProvider.GetRequiredService<IIncidentReporter>();
+
+        var isUncertain = saga.WaitRecoveryMode == WaitRecovery.ActiveVerify;
+
+        await incidentReporter.SendAlertAsync(
+            new IncidentAlert(
+                AlertType: isUncertain
+                    ? "SagaWaitDeadlineExceededUncertain"
+                    : "SagaWaitDeadlineExceededNoPush",
+                OrderId: saga.CorrelationId,
+                RefundId: null,
+                Message: isUncertain
+                    ? $"{saga.SagaType} {saga.Id} parked at {saga.CurrentStep} with an unconfirmed provider " +
+                      $"result ({saga.WaitReason}) and was never resolved within {saga.WaitDeadlineUtc - saga.WaitingSinceUtc}. " +
+                      "Money may have moved without the saga knowing. Compensating and verifying with the provider."
+                    : $"{saga.SagaType} {saga.Id} parked at {saga.CurrentStep} waiting for {saga.WaitReason} " +
+                      $"and no event arrived within {saga.WaitDeadlineUtc - saga.WaitingSinceUtc}. Compensating.",
+                Severity: AlertSeverity.Critical),
+            cancellationToken);
+
+        await FailAndCompensateSagaAsync(saga, scope, cancellationToken);
     }
 
     private async Task<bool> IsSagaActuallyCompletedAsync(
@@ -181,6 +236,7 @@ public class SagaWatchdogService : BackgroundService
         {
             saga.Status = SagaStatus.Failed;
             saga.UpdatedAt = DateTime.UtcNow;
+            saga.ClearWait();
             await sagaRepository.SaveAsync(saga, cancellationToken);
 
             _logger.LogError(
@@ -216,7 +272,7 @@ public class SagaWatchdogService : BackgroundService
             return;
         }
 
-        if (current.Status is not (SagaStatus.Running or SagaStatus.TimedOut))
+        if (current.Status is not (SagaStatus.Running or SagaStatus.TimedOut or SagaStatus.WaitingForEvent))
         {
             _logger.LogInformation(
                 "Saga {SagaId} is now {Status} after acquiring the lock. No watchdog action needed.",
@@ -224,8 +280,22 @@ public class SagaWatchdogService : BackgroundService
             return;
         }
 
+        // Still parked, but re-check its clock under the lock: a concurrent resume may have
+        // un-parked and re-parked it with a fresh deadline between the stuck-scan and here.
+        // Reaping on the stale deadline would kill a saga that is legitimately waiting again.
+        if (current.Status == SagaStatus.WaitingForEvent
+            && (current.WaitDeadlineUtc is null || current.WaitDeadlineUtc > DateTime.UtcNow))
+        {
+            _logger.LogInformation(
+                "Saga {SagaId} re-parked with a deadline of {Deadline:o} after acquiring the lock. " +
+                "No watchdog action needed.",
+                saga.Id, current.WaitDeadlineUtc);
+            return;
+        }
+
         current.Status = SagaStatus.Failed;
         current.UpdatedAt = DateTime.UtcNow;
+        current.ClearWait();
         await sagaRepository.SaveAsync(current, cancellationToken);
 
         _logger.LogInformation("Attempting to compensate {SagaType} saga {SagaId}", current.SagaType, current.Id);

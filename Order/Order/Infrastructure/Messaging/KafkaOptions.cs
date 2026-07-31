@@ -15,5 +15,6 @@ public class KafkaOptions
     public string OrderEventsTopic { get; set; } = "order.events";
     public string EmailEventsTopic { get; set; } = "email.events";
     public string ReturnEventsTopic { get; set; } = "return.events";
+    public string InventoryEventsTopic { get; set; } = "inventory.events";
     public bool EnableAutoCommit { get; set; } = false;
 }

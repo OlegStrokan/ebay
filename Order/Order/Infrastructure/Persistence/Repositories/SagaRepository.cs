@@ -66,11 +66,20 @@ public class SagaRepository(AppDbContext dbContext) : ISagaRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<SagaState>> GetStuckSagasAsync(DateTime updatedBeforeCutoff, CancellationToken cancellationToken)
+    public async Task<List<SagaState>> GetStuckSagasAsync(
+        DateTime updatedBeforeCutoff,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
     {
         return await dbContext.SagaStates
-            .Where(x => (x.Status == SagaStatus.Running || x.Status == SagaStatus.TimedOut)
-                        && x.UpdatedAt < updatedBeforeCutoff)
+            .Where(x =>
+                ((x.Status == SagaStatus.Running || x.Status == SagaStatus.TimedOut)
+                    && x.UpdatedAt < updatedBeforeCutoff)
+                // WaitingForEvent got its own per-step deadline instead. Without this branch
+                // a lost capture response parks the saga forever
+                || (x.Status == SagaStatus.WaitingForEvent
+                    && x.WaitDeadlineUtc != null
+                    && x.WaitDeadlineUtc < nowUtc))
             .Include(x => x.Steps)
             .ToListAsync(cancellationToken);
     }

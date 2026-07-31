@@ -20,9 +20,14 @@ public class SagaStateConfiguration : IEntityTypeConfiguration<SagaState>
         builder.Property(x => x.Context).HasColumnType("text");
         builder.Property(x => x.Payload).HasColumnType("text");
 
+        builder.Property(x => x.WaitReason).HasMaxLength(512);
+
         builder.HasIndex(x => x.UpdatedAt);
 
         builder.HasIndex(x => new { x.Status, x.UpdatedAt });
+
+        builder.HasIndex(x => x.WaitDeadlineUtc)
+            .HasFilter("\"WaitDeadlineUtc\" IS NOT NULL");
 
         builder.HasMany(x => x.Steps)
             .WithOne()
