@@ -66,6 +66,7 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - `CompensateAsync()`: Reverses steps in order (last completed → first)
 - Saga timeout: 5 min total (per-saga, not per-step)
 - States: Running → Completed | WaitingForEvent | Failed | TimedOut | FailedToCompensate
+- Wait deadlines are per-step, not per-saga: parking writes `WaitingSinceUtc` / `WaitDeadlineUtc` / `WaitReason` / `WaitRecoveryMode` to `SagaStates`, and un-parking (resume or compensate) clears them. `SagaWatchdogService` reaps an expired wait immediately — no tolerance window, since the deadline *is* the tolerance
 
 ### OrderSaga Steps (authorize-early / capture-late)
 0. **CancelOrderOnFailureStep** — no-op on execute; compensation cancels order
@@ -193,7 +194,9 @@ Return shipment delivery callbacks are ingressed via Gateway webhook endpoint an
 - **DeadlineExceeded ≠ failure** — it means Uncertain; wait for webhook/reconciliation to resolve
 - **Authorize early, capture late** — `AuthorizePaymentStep` (step 2) holds funds; `CapturePaymentStep` (step 6) moves them just before completion. Pre-capture failures VOID the hold (free); only post-capture failures REFUND. `AuthorizeAsync` calls Payment `ProcessPayment` with `capture_method=manual`
 - **Uncertain compensation must never silently no-op** — execute explicit safety path (deferred verification and/or authorization cancel + incident on missing identifiers)
-- **WaitingForEvent sagas must not be killed by watchdog** — verify GetStuckSagasAsync excludes them
+- **WaitingForEvent sagas must not be killed by the watchdog's UpdatedAt scan — and must therefore carry their own deadline and reaper.** A parked saga's `UpdatedAt` never moves, so `GetStuckSagasAsync` excludes `WaitingForEvent` from the `updatedBeforeCutoff` half of the query *and* includes it via `WaitDeadlineUtc < now`. Both halves are load-bearing: the exclusion alone is what made a lost capture response an unrecoverable, silent loss. Every `WaitForEvent` must state a `Reason`, a `Deadline` (`SagaWaitDeadlines`) and a `WaitRecovery` — the compiler enforces this
+- **`Uncertain` and `Pending` park for opposite reasons** — `Pending` means the provider owes us a webhook (`WaitRecovery.AwaitPush`); `Uncertain` means nobody owes us anything and money may already have moved (`WaitRecovery.ActiveVerify`, shorter deadline, compensates through the Uncertain safety path on expiry)
+- **Payment wait deadlines must stay below Inventory's reservation TTL** (`SagaWaitDeadlines.InventoryReservationTtl`, 30 min). A saga parked at step 2/3 still holds an `Active` reservation; if Inventory expires it first, step 4 confirms an `Expired` reservation and cancels an order the customer already paid for. The coupling is documented, not enforced — `InventoryExpiredEventHandler` (consuming `inventory.events`) is the backstop that fails the saga loudly if it is ever violated
 - **Outbox guarantees causal ordering within an aggregate** — but parallel across aggregates may reorder within a batch
 - **Region affinity is advisory** — duplicates are rare but possible; saga idempotency is the real guard
 - **B2B Quote snapshots at 20 events** (not 50) because draft editing creates many events
