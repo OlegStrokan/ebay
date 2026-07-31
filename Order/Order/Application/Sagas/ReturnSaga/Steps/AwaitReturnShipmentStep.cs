@@ -67,7 +67,12 @@ public sealed class AwaitReturnShipmentStep(
                 events: ["return.delivered"],
                 cancellationToken);
 
-            return new WaitForEvent();
+            // The genuine long park: the customer has to physically hand the parcel over and the
+            // carrier has to deliver it. Weeks, not minutes
+            return new WaitForEvent(
+                $"return shipment {returnShipmentId} to be delivered",
+                SagaWaitDeadlines.ReturnShipment,
+                WaitRecovery.AwaitPush);
         }
         catch (Exception ex)
         {

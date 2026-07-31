@@ -29,10 +29,10 @@ public interface ISagaRepository
 
     Task<List<SagaState>> GetStuckSagasAsync(
         DateTime updateBeforeCutoff,
+        DateTime nowUtc,
         CancellationToken cancellationToken
     );
 
-    // Admin/ops console listing: optional filters, all optional/empty = no filter applied.
     Task<(List<SagaState> Items, int TotalCount)> GetSagasAsync(
         string? status,
         string? sagaType,

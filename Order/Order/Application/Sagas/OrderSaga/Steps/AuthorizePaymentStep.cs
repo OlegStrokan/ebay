@@ -7,13 +7,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Sagas.OrderSaga.Steps;
 
-/// <summary>
-/// Two paths:
-///  - Frontend pre-auth: the browser already created a manual-capture hold and
-///    passed its <c>PaymentIntentId we just record it.
-///  - Backend-initiated: we call the payment service to authorize (manual
-///    capture) and obtain a provider payment intent id.
-/// </summary>
+// Two paths:
+//  - Frontend pre-auth: the browser already created a manual-capture hold and
+//    passed its <c>PaymentIntentId we just record it.
+//  - Backend-initiated: we call the payment service to authorize (manual
+//    capture) and obtain a provider payment intent id.
 public sealed class AuthorizePaymentStep(
     IPaymentGateway paymentGateway,
     IIncidentReporter incidentReporter,
@@ -96,7 +94,12 @@ public sealed class AuthorizePaymentStep(
             context.PaymentFailureCode = "AUTH_RESULT_UNCERTAIN";
             context.PaymentFailureMessage = ex.Message;
             logger.LogWarning(ex, "Authorization call timed out for order {OrderId}. Marking Uncertain.", data.CorrelationId);
-            return new WaitForEvent();
+
+            // Only payment's reconciliation poll can resolve it
+            return new WaitForEvent(
+                "authorization result uncertain after gateway timeout",
+                SagaWaitDeadlines.PaymentUncertain,
+                WaitRecovery.ActiveVerify);
         }
         catch (GatewayUnavailableException ex)
         {
@@ -165,7 +168,10 @@ public sealed class AuthorizePaymentStep(
                 logger.LogInformation(
                     "Authorization for order {OrderId} is awaiting provider confirmation",
                     data.CorrelationId);
-                return new WaitForEvent();
+                return new WaitForEvent(
+                    "provider authorization confirmation",
+                    SagaWaitDeadlines.PaymentPush,
+                    WaitRecovery.AwaitPush);
 
             case PaymentProcessingStatus.Failed:
             default:

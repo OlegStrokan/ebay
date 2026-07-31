@@ -107,14 +107,14 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 sagaState.CurrentStep = step.StepName;
                 sagaState.UpdatedAt = DateTime.UtcNow;
 
-                if (stepResult is WaitForEvent)
+                if (stepResult is WaitForEvent wait)
                 {
-                    _logger.LogInformation(
-                        "Step {StepName} marked saga as waiting for external event.",
-                        step.StepName);
-
-                    sagaState.Status = SagaStatus.WaitingForEvent;
+                    sagaState.MarkWaiting(step.StepName, wait, DateTime.UtcNow);
                     await _sagaRepository.SaveAsync(sagaState, sagaCancellationToken);
+
+                    _logger.LogInformation(
+                        "Step {StepName} parked saga {SagaId} until {Deadline:o} ({Recovery}): {Reason}",
+                        step.StepName, sagaId, sagaState.WaitDeadlineUtc, wait.Recovery, wait.Reason);
 
                     return SagaResult.Success(sagaId);
                 }
@@ -206,8 +206,11 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
         sagaState.Status = SagaStatus.Running;
         sagaState.UpdatedAt = DateTime.UtcNow;
-        sagaState.Context = JsonSerializer.Serialize(typedContext);   
-        
+        sagaState.Context = JsonSerializer.Serialize(typedContext);
+        // the park is over: drop its deadline so the watchdog stops treating this saga as an
+        // expired wait and falls back to the normal UpdatedAt-based stuck scan
+        sagaState.ClearWait();
+
         await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);
 
         var resumeStep = Steps.FirstOrDefault(s => s.StepName == fromStepName);
@@ -249,10 +252,19 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 sagaState.CurrentStep = step.StepName;
                 sagaState.UpdatedAt = DateTime.UtcNow;
 
-                if (stepResult is WaitForEvent)
+                if (stepResult is WaitForEvent resumeWait)
                 {
-                    sagaState.Status = SagaStatus.WaitingForEvent;
+                    // A re-park gets a *fresh* deadline: the saga made progress, so the previous
+                    // park's clock must not carry over - otherwise a resumed saga is reaped
+                    // immediately on the next watchdog cycle
+                    sagaState.MarkWaiting(step.StepName, resumeWait, DateTime.UtcNow);
                     await _sagaRepository.SaveAsync(sagaState, resumeCancellationToken);
+
+                    _logger.LogInformation(
+                        "Step {StepName} re-parked saga {SagaId} until {Deadline:o} ({Recovery}): {Reason}",
+                        step.StepName, sagaState.Id, sagaState.WaitDeadlineUtc,
+                        resumeWait.Recovery, resumeWait.Reason);
+
                     return SagaResult.Success(sagaState.Id);
                 }
 
@@ -380,6 +392,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         }
 
         sagaState.Status = SagaStatus.Compensating;
+        sagaState.ClearWait();
         await _sagaRepository.SaveAsync(sagaState, ct);
 
         var data = JsonSerializer.Deserialize<TData>(sagaState.Payload)!;

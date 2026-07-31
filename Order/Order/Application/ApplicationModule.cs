@@ -70,6 +70,9 @@ public static class ApplicationModule
         services.AddScoped<RefundFailedEventHandler>();
         services.AddScoped<ISagaEventHandler>(sp => sp.GetRequiredService<RefundFailedEventHandler>());
 
+        services.AddScoped<InventoryExpiredEventHandler>();
+        services.AddScoped<ISagaEventHandler>(sp => sp.GetRequiredService<InventoryExpiredEventHandler>());
+
         // lightweight type-only descriptors used by SagaHandlerFactory (singleton).
         // these carry just EventType string + handler .NET Type - no DI chains involved.
         services.AddSingleton(new SagaHandlerDescriptor("OrderCreatedEvent",typeof(OrderCreatedEventHandler)));
@@ -79,6 +82,7 @@ public static class ApplicationModule
         services.AddSingleton(new SagaHandlerDescriptor("PaymentFailedEvent",typeof(PaymentFailedEventHandler)));
         services.AddSingleton(new SagaHandlerDescriptor("RefundSucceededEvent",typeof(RefundSucceededEventHandler)));
         services.AddSingleton(new SagaHandlerDescriptor("RefundFailedEvent",typeof(RefundFailedEventHandler)));
+        services.AddSingleton(new SagaHandlerDescriptor("InventoryExpired",typeof(InventoryExpiredEventHandler)));
 
         return services;
     }

@@ -66,7 +66,15 @@ public sealed class CapturePaymentStep(
                     data.CorrelationId,
                     context.PaymentStatus);
 
-                return new WaitForEvent();
+                return context.PaymentStatus == OrderSagaPaymentStatus.Uncertain
+                    ? new WaitForEvent(
+                        "payment result uncertain after gateway timeout",
+                        SagaWaitDeadlines.PaymentUncertain,
+                        WaitRecovery.ActiveVerify)
+                    : new WaitForEvent(
+                        $"authorization confirmation from provider (status {context.PaymentStatus})",
+                        SagaWaitDeadlines.PaymentPush,
+                        WaitRecovery.AwaitPush);
             }
 
             // Capture the authorization hold placed earlier by AuthorizePaymentStep
@@ -102,7 +110,14 @@ public sealed class CapturePaymentStep(
                 "Payment call timed out for order {OrderId}. Marking as Uncertain and waiting for webhook/reconciliation",
                 data.CorrelationId);
 
-            return new WaitForEvent();
+            // The capture may well have succeeded at the provider - this is the failure mode that
+            // used to park the saga forever: order Paid, parcel shipped, money never captured,
+            // hold silently expiring. Bound it and let the watchdog drive the Uncertain
+            // compensation path (which enqueues a provider verification / refund).
+            return new WaitForEvent(
+                "capture result uncertain after gateway timeout",
+                SagaWaitDeadlines.PaymentUncertain,
+                WaitRecovery.ActiveVerify);
         }
         catch (GatewayUnavailableException ex)
         {

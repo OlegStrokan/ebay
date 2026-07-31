@@ -1,3 +1,4 @@
+using Application.Common.Enums;
 using Application.Sagas.Steps;
 using Microsoft.Extensions.Logging;
 
@@ -86,7 +87,12 @@ public sealed class AwaitPaymentConfirmationStep(
 
     private StepOutcome HandleWaiting(OrderSagaData data, OrderSagaContext context)
     {
-        var statusDetail = context.PaymentStatus == OrderSagaPaymentStatus.Uncertain
+        // Uncertain and Pending both park, but they are not the same wait. Pending means the
+        // provider owes us a webhook; Uncertain means nobody owes us anything and money may
+        // already have moved, so it gets the tighter deadline and the verify-on-expiry path.
+        var isUncertain = context.PaymentStatus == OrderSagaPaymentStatus.Uncertain;
+
+        var statusDetail = isUncertain
             ? "Payment result uncertain due to timeout - waiting for webhook/reconciliation to resolve"
             : $"Waiting for payment finalization from provider";
 
@@ -96,7 +102,15 @@ public sealed class AwaitPaymentConfirmationStep(
             context.PaymentStatus,
             statusDetail);
 
-        return new WaitForEvent();
+        return isUncertain
+            ? new WaitForEvent(
+                "payment result uncertain after gateway timeout",
+                SagaWaitDeadlines.PaymentUncertain,
+                WaitRecovery.ActiveVerify)
+            : new WaitForEvent(
+                $"payment finalization from provider (status {context.PaymentStatus})",
+                SagaWaitDeadlines.PaymentPush,
+                WaitRecovery.AwaitPush);
     }
 
     public Task CompensateAsync(
