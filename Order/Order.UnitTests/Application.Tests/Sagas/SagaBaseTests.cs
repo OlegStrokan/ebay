@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Application.Common.Enums;
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas;
 using Application.Sagas.Persistence;
@@ -16,6 +18,7 @@ public class SagaBaseTests
     private readonly ISagaErrorClassifier _errorClassifier = Substitute.For<ISagaErrorClassifier>();
     private readonly IFailedCompensationRetryRepository _failedCompensationRetryRepository =
         Substitute.For<IFailedCompensationRetryRepository>();
+    private readonly IIncidentReporter _incidentReporter = Substitute.For<IIncidentReporter>();
 
     private readonly ISagaStep<TestSagaData, TestSagaContext> _step1 =
         Substitute.For<ISagaStep<TestSagaData, TestSagaContext>>();
@@ -31,8 +34,9 @@ public class SagaBaseTests
             IEnumerable<ISagaStep<TestSagaData, TestSagaContext>> steps,
             ISagaErrorClassifier errorClassifier,
             ILogger logger,
-            IFailedCompensationRetryRepository failedCompensationRetryRepository)
-            : base(repo, steps, errorClassifier, logger, failedCompensationRetryRepository) {}
+            IFailedCompensationRetryRepository failedCompensationRetryRepository,
+            IIncidentReporter incidentReporter)
+            : base(repo, steps, errorClassifier, logger, failedCompensationRetryRepository, incidentReporter) {}
 
         protected override string SagaType => "TestSaga";
     }
@@ -45,8 +49,9 @@ public class SagaBaseTests
             IEnumerable<ISagaStep<TestSagaData, TestSagaContext>> steps,
             ISagaErrorClassifier errorClassifier,
             ILogger logger,
-            IFailedCompensationRetryRepository failedCompensationRetryRepository)
-            : base(repo, steps, errorClassifier, logger, failedCompensationRetryRepository) {}
+            IFailedCompensationRetryRepository failedCompensationRetryRepository,
+            IIncidentReporter incidentReporter)
+            : base(repo, steps, errorClassifier, logger, failedCompensationRetryRepository, incidentReporter) {}
 
         protected override string SagaType => "TestSagaWithShortTimeout";
         protected override TimeSpan SagaTimeout => TimeSpan.FromMilliseconds(100);
@@ -56,7 +61,7 @@ public class SagaBaseTests
     public class TestSagaContext : SagaContext {}
 
     private TestSaga Build(params ISagaStep<TestSagaData, TestSagaContext>[] steps)
-        => new(_repository, steps, _errorClassifier, _logger, _failedCompensationRetryRepository);
+        => new(_repository, steps, _errorClassifier, _logger, _failedCompensationRetryRepository, _incidentReporter);
 
     [Fact]
     public async Task ExecuteAsync_ShouldRunAllSteps_AndComplete_WhenAllStepsSucceed()
@@ -282,6 +287,110 @@ public class SagaBaseTests
     }
 
     [Fact]
+    public async Task ResumeFromStepAsync_ShouldStillPark_ButAlert_WhenParkBudgetExceeded()
+    {
+        var correlationId = Guid.NewGuid();
+        var sagaId = Guid.NewGuid();
+
+        _step1.Order.Returns(1); _step1.StepName.Returns("Step1");
+        _step1.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new WaitForEvent("still uncertain", TimeSpan.FromMinutes(5), WaitRecovery.ActiveVerify));
+
+        // a saga that has already spent its whole park budget
+        var parked = new SagaState
+        {
+            Id = sagaId,
+            CorrelationId = correlationId,
+            Status = SagaStatus.WaitingForEvent,
+            SagaType = "TestSaga",
+            ParkCount = SagaState.ParkBudget,
+            WaitDeadlineUtc = DateTime.UtcNow.AddMinutes(4),
+            WaitingSinceUtc = DateTime.UtcNow.AddMinutes(-1),
+            WaitReason = "still uncertain",
+            WaitRecoveryMode = WaitRecovery.ActiveVerify,
+            Payload = JsonSerializer.Serialize(new TestSagaData { CorrelationId = correlationId }),
+            Context = JsonSerializer.Serialize(new TestSagaContext())
+        };
+
+        _repository.GetByCorrelationIdAsync(correlationId, "TestSaga", Arg.Any<CancellationToken>())
+            .Returns(parked);
+
+        var result = await Build(_step1)
+            .ResumeFromStepAsync(
+                new TestSagaData { CorrelationId = correlationId },
+                new TestSagaContext(),
+                "Step1",
+                CancellationToken.None);
+
+        // reported, not enforced - the saga parks exactly as it would have without the budget
+        Assert.True(result.IsSuccess);
+
+        await _repository.Received().SaveAsync(
+            Arg.Is<SagaState>(s =>
+                s.Status == SagaStatus.WaitingForEvent
+                && s.ParkCount == SagaState.ParkBudget + 1
+                && s.WaitDeadlineUtc != null),
+            Arg.Any<CancellationToken>());
+
+        await _incidentReporter.Received(1).SendAlertAsync(
+            Arg.Is<IncidentAlert>(a =>
+                a.AlertType == "SagaParkBudgetExceeded"
+                && a.OrderId == correlationId
+                && a.Severity == AlertSeverity.Critical),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ResumeFromStepAsync_ShouldAlertOnlyOnce_WhenAlreadyPastParkBudget()
+    {
+        var correlationId = Guid.NewGuid();
+        var sagaId = Guid.NewGuid();
+
+        _step1.Order.Returns(1); _step1.StepName.Returns("Step1");
+        _step1.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new WaitForEvent("still uncertain", TimeSpan.FromMinutes(5), WaitRecovery.ActiveVerify));
+
+        // already past the crossing - a saga looping here must not page every few minutes forever
+        _repository.GetByCorrelationIdAsync(correlationId, "TestSaga", Arg.Any<CancellationToken>())
+            .Returns(new SagaState
+            {
+                Id = sagaId,
+                CorrelationId = correlationId,
+                Status = SagaStatus.WaitingForEvent,
+                SagaType = "TestSaga",
+                ParkCount = SagaState.ParkBudget + 5,
+                Payload = JsonSerializer.Serialize(new TestSagaData { CorrelationId = correlationId }),
+                Context = JsonSerializer.Serialize(new TestSagaContext())
+            });
+
+        await Build(_step1)
+            .ResumeFromStepAsync(
+                new TestSagaData { CorrelationId = correlationId },
+                new TestSagaContext(),
+                "Step1",
+                CancellationToken.None);
+
+        await _incidentReporter.DidNotReceive().SendAlertAsync(
+            Arg.Any<IncidentAlert>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldCountEachPark_SoRepeatedWaitsAreBounded()
+    {
+        _step1.Order.Returns(1); _step1.StepName.Returns("Step1");
+        _step1.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new WaitForEvent("test wait", TimeSpan.FromMinutes(10), WaitRecovery.AwaitPush));
+
+        await Build(_step1)
+            .ExecuteAsync(new TestSagaData { CorrelationId = Guid.NewGuid() }, CancellationToken.None);
+
+        // a first park must record itself, otherwise ParkCount never reaches the limit
+        await _repository.Received().SaveAsync(
+            Arg.Is<SagaState>(s => s.Status == SagaStatus.WaitingForEvent && s.ParkCount == 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ResumeFromStepAsync_ShouldFail_WhenSagaNotFound()
     {
         var correlationId = Guid.NewGuid();
@@ -498,7 +607,7 @@ public class SagaBaseTests
                 Steps = new List<SagaStepLog>()
             });
 
-        var saga = new TestSagaWithShortTimeout(_repository, new[] { _step1 }, _errorClassifier, _logger, _failedCompensationRetryRepository);
+        var saga = new TestSagaWithShortTimeout(_repository, new[] { _step1 }, _errorClassifier, _logger, _failedCompensationRetryRepository, _incidentReporter);
         var result = await saga.ExecuteAsync(new TestSagaData { CorrelationId = Guid.NewGuid() }, CancellationToken.None);
 
         Assert.False(result.IsSuccess);

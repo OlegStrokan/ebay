@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Application.DTOs;
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas;
 using Application.Sagas.OrderSaga;
@@ -66,7 +67,8 @@ public class OrderSagaCompensationFlowUnitTests
             [cancelOrderStep, reserveInventoryStep, createShipmentStep, processPaymentStep],
             errorClassifier,
             logger,
-            Substitute.For<IFailedCompensationRetryRepository>());
+            Substitute.For<IFailedCompensationRetryRepository>(),
+            Substitute.For<IIncidentReporter>());
 
         var result = await saga.CompensateAsync(sagaId, CancellationToken.None);
 

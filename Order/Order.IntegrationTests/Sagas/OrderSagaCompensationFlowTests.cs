@@ -58,7 +58,8 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             steps,
             new NonTransientErrorClassifier(),
             NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance,
-            new NoopFailedCompensationRetryRepository());
+            new NoopFailedCompensationRetryRepository(),
+            new NoopIncidentReporter());
 
         var result = await saga.ExecuteAsync(data, CancellationToken.None);
 
@@ -114,7 +115,8 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             steps,
             new NonTransientErrorClassifier(),
             NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance,
-            new NoopFailedCompensationRetryRepository());
+            new NoopFailedCompensationRetryRepository(),
+            new NoopIncidentReporter());
 
         var result = await saga.ExecuteAsync(data, CancellationToken.None);
 
@@ -163,7 +165,8 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
             steps,
             new NonTransientErrorClassifier(),
             NullLogger<Application.Sagas.OrderSaga.OrderSaga>.Instance,
-            new NoopFailedCompensationRetryRepository());
+            new NoopFailedCompensationRetryRepository(),
+            new NoopIncidentReporter());
 
         var result = await saga.ExecuteAsync(data, CancellationToken.None);
 
