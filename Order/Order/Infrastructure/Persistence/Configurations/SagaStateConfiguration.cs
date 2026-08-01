@@ -22,6 +22,9 @@ public class SagaStateConfiguration : IEntityTypeConfiguration<SagaState>
 
         builder.Property(x => x.WaitReason).HasMaxLength(512);
 
+        // computed from ParkCount - no column, and EF cannot map a getter with no backing field
+        builder.Ignore(x => x.IsWithinParkBudget);
+
         builder.HasIndex(x => x.UpdatedAt);
 
         builder.HasIndex(x => new { x.Status, x.UpdatedAt });
