@@ -162,6 +162,12 @@ Async email delivery via Kafka consumer (no REST/gRPC endpoints). Implements ide
 - **DB**: Postgres (idempotency store)
 - **SMTP**: MailHog in dev (:1025)
 
+### Ops Console (`/OpsConsole`)
+Internal-only admin dashboard for operators: saga monitoring, dead-letter triage, and recovery actions (force-compensate, retry compensation, requeue) across Order, Payment, and Inventory. Never routed through the Gateway. Two parts: a .NET Minimal API backend (gRPC client to the three admin services) and a Next.js frontend operators actually open.
+
+- **DB**: none — stateless proxy
+- **Dependencies**: Order (`AdminOpsService`), Payment (`AdminPaymentService`), Inventory (`AdminInventoryService`), Auth/Gateway (operator JWT + login)
+
 ---
 
 ## AI Services (`/AI`)
@@ -390,6 +396,7 @@ free-ebay/
 ├── Inventory/                # Stock reservation service (gRPC)
 ├── k8s/                      # Kubernetes manifests (Kustomize)
 ├── Order/                    # Order saga orchestration (gRPC, Event Sourcing, CQRS)
+├── OpsConsole/               # Internal admin dashboard (.NET API + Next.js UI)
 ├── partners/                 # Deterministic fakes of external providers (dev/test)
 │   ├── my-stripe/            #   Fake Stripe payment API (HMAC webhooks)
 │   ├── my-dpd/               #   Fake DPD carrier (sync, HMAC webhooks)
