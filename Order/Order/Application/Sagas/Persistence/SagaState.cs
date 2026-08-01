@@ -21,8 +21,11 @@ public sealed class SagaState
     public DateTime? WaitDeadlineUtc { get; set; }
     public string? WaitReason { get; set; }
     public WaitRecovery? WaitRecoveryMode { get; set; }
+    public int ParkCount { get; set; }
 
     public List<SagaStepLog> Steps { get; set; } = new();
+    public const int ParkBudget = 3;
+    public bool IsWithinParkBudget => ParkCount < ParkBudget;
 
     public void MarkWaiting(string stepName, WaitForEvent wait, DateTime nowUtc)
     {
@@ -33,6 +36,7 @@ public sealed class SagaState
         WaitDeadlineUtc = nowUtc + wait.Deadline;
         WaitReason = wait.Reason;
         WaitRecoveryMode = wait.Recovery;
+        ParkCount++;
     }
 
     public void ClearWait()

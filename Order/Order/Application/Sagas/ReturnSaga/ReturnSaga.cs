@@ -1,3 +1,4 @@
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas.Persistence;
 using Application.Sagas.Steps;
@@ -10,8 +11,10 @@ public sealed class ReturnSaga(
     IEnumerable<ISagaStep<ReturnSagaData, ReturnSagaContext>> steps,
     ISagaErrorClassifier errorClassifier,
     ILogger<ReturnSaga> logger,
-    IFailedCompensationRetryRepository failedCompensationRetryRepository)
-    : SagaBase<ReturnSagaData, ReturnSagaContext>(sagaRepository, steps, errorClassifier, logger, failedCompensationRetryRepository), IReturnSaga
+    IFailedCompensationRetryRepository failedCompensationRetryRepository,
+    IIncidentReporter incidentReporter)
+    : SagaBase<ReturnSagaData, ReturnSagaContext>(
+        sagaRepository, steps, errorClassifier, logger, failedCompensationRetryRepository, incidentReporter), IReturnSaga
 {
     protected override string SagaType => "ReturnSaga";
 }

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Application.Common.Enums;
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas.Persistence;
 using Application.Sagas.Steps;
@@ -15,6 +17,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
     private readonly ILogger _logger;
     private readonly ISagaErrorClassifier _errorClassifier;
     private readonly IFailedCompensationRetryRepository _failedCompensationRetryRepository;
+    private readonly IIncidentReporter _incidentReporter;
     protected readonly IEnumerable<ISagaStep<TData, TContext>> Steps;
     protected abstract string SagaType { get; }
     protected virtual TimeSpan SagaTimeout => TimeSpan.FromMinutes(5);
@@ -32,12 +35,14 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
         IEnumerable<ISagaStep<TData, TContext>> steps,
         ISagaErrorClassifier errorClassifier,
         ILogger logger,
-        IFailedCompensationRetryRepository failedCompensationRetryRepository)
+        IFailedCompensationRetryRepository failedCompensationRetryRepository,
+        IIncidentReporter incidentReporter)
     {
         _sagaRepository = sagaRepository;
         _logger = logger;
         _errorClassifier = errorClassifier;
         _failedCompensationRetryRepository = failedCompensationRetryRepository;
+        _incidentReporter = incidentReporter;
         Steps = steps.OrderBy(s => s.Order).ToList();
     }
 
@@ -109,6 +114,9 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
                 if (stepResult is WaitForEvent wait)
                 {
+                    await ReportIfOverParkBudgetAsync(
+                        sagaState, step.StepName, wait, serviceCancellationToken);
+
                     sagaState.MarkWaiting(step.StepName, wait, DateTime.UtcNow);
                     await _sagaRepository.SaveAsync(sagaState, sagaCancellationToken);
 
@@ -253,6 +261,11 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
                 if (stepResult is WaitForEvent resumeWait)
                 {
+                    // This is the re-park ParkCount watches: the fresh deadline below is what a
+                    // duplicate event stream would otherwise renew indefinitely.
+                    await ReportIfOverParkBudgetAsync(
+                        sagaState, step.StepName, resumeWait, serviceCancellationToken);
+
                     // A re-park gets a *fresh* deadline: the saga made progress, so the previous
                     // park's clock must not carry over - otherwise a resumed saga is reaped
                     // immediately on the next watchdog cycle
@@ -368,6 +381,53 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
                 return new Fail(ex.Message);
             }
+        }
+    }
+
+    private async Task ReportIfOverParkBudgetAsync(
+        SagaState sagaState,
+        string stepName,
+        WaitForEvent wait,
+        CancellationToken cancellationToken)
+    {
+        if (sagaState.IsWithinParkBudget)
+        {
+            return;
+        }
+
+        var parkNumber = sagaState.ParkCount + 1;
+
+        _logger.LogCritical(
+            "Saga {SagaId} ({SagaType}) is parking at {StepName} for the {ParkNumber}th time " +
+            "(budget {ParkBudget}), reason: {Reason}. Its wait deadline keeps being renewed - " +
+            "something is resuming this saga without resolving it.",
+            sagaState.Id, SagaType, stepName, parkNumber, SagaState.ParkBudget, wait.Reason);
+
+        // essentially: send alert only once when park count is budget + 1
+        if (parkNumber != SagaState.ParkBudget + 1)
+        {
+            return;
+        }
+
+        try
+        {
+            await _incidentReporter.SendAlertAsync(
+                new IncidentAlert(
+                    AlertType: "SagaParkBudgetExceeded",
+                    OrderId: sagaState.CorrelationId,
+                    RefundId: null,
+                    Message: $"{SagaType} {sagaState.Id} has parked {parkNumber} times " +
+                             $"(budget {SagaState.ParkBudget}), now at {stepName} waiting for " +
+                             $"{wait.Reason}. Today's handlers cannot produce this, so treat it as a " +
+                             "defect: an event is resuming the saga without moving it to a terminal state.",
+                    Severity: AlertSeverity.Critical),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Diagnostics must never take down the saga: it is still going to park either way
+            _logger.LogError(
+                ex, "Failed to alert on park budget for saga {SagaId}", sagaState.Id);
         }
     }
 

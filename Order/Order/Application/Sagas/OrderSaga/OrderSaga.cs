@@ -1,4 +1,5 @@
 
+using Application.Gateways;
 using Application.Interfaces;
 using Application.Sagas.Persistence;
 using Application.Sagas.Steps;
@@ -11,8 +12,10 @@ public sealed class OrderSaga(
     IEnumerable<ISagaStep<OrderSagaData, OrderSagaContext>> steps,
     ISagaErrorClassifier errorClassifier,
     ILogger<OrderSaga> logger,
-    IFailedCompensationRetryRepository failedCompensationRetryRepository)
-    : SagaBase<OrderSagaData, OrderSagaContext>(sagaRepository, steps, errorClassifier, logger, failedCompensationRetryRepository), IOrderSaga
+    IFailedCompensationRetryRepository failedCompensationRetryRepository,
+    IIncidentReporter incidentReporter)
+    : SagaBase<OrderSagaData, OrderSagaContext>(
+        sagaRepository, steps, errorClassifier, logger, failedCompensationRetryRepository, incidentReporter), IOrderSaga
 {
     protected override string SagaType => "OrderSaga";
 }
