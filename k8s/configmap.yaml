@@ -24,6 +24,12 @@ data:
   GrpcServices__SearchUrl: "http://search-service:8080"
   GrpcServices__AccountingUrl: "http://accounting-service:8080"
 
+  # OpsConsole's admin gRPC clients use flat (non GrpcServices__*) config keys,
+  # matching OpsConsole/appsettings.json exactly.
+  OrderServiceUrl: "http://order-service:8080"
+  PaymentServiceUrl: "http://payment-service:8080"
+  InventoryServiceUrl: "http://inventory-service:8080"
+
   Jwt__Authority: "http://auth-service:8080"
 
   Elasticsearch__Uri: "http://elasticsearch:9200"

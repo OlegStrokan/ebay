@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-console
+  namespace: free-ebay
+  labels:
+    app: ops-console
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ops-console
+  template:
+    metadata:
+      labels:
+        app: ops-console
+    spec:
+      containers:
+        - name: ops-console
+          image: free-ebay/ops-console:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: ASPNETCORE_URLS
+              value: http://+:8080
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+          envFrom:
+            - configMapRef:
+                name: common-config
+            - secretRef:
+                name: ops-console-service-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ops-console
+  namespace: free-ebay
+spec:
+  selector:
+    app: ops-console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-console-web
+  namespace: free-ebay
+  labels:
+    app: ops-console-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ops-console-web
+  template:
+    metadata:
+      labels:
+        app: ops-console-web
+    spec:
+      containers:
+        - name: ops-console-web
+          image: free-ebay/ops-console-web:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: NODE_ENV
+              value: production
+            # Server-only base URLs — never NEXT_PUBLIC_-prefixed, so they can't
+            # end up in the browser bundle (see OpsConsole/web/lib/opsConsole.ts).
+            - name: OPS_CONSOLE_API_URL
+              value: "http://ops-console:8080"
+            - name: GATEWAY_API_URL
+              value: "http://gateway-api"
+          envFrom:
+            - secretRef:
+                name: ops-console-web-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            # /login is excluded from middleware.ts's auth gate, so it always
+            # renders without needing a session or a call to the backend —
+            # exactly what a probe should depend on.
+            httpGet:
+              path: /login
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ops-console-web
+  namespace: free-ebay
+spec:
+  selector:
+    app: ops-console-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer
