@@ -1,3 +1,4 @@
+using System.Text;
 using Confluent.Kafka;
 using Infrastructure.Persistence.Entities;
 using Microsoft.Extensions.Logging;
@@ -10,12 +11,19 @@ public sealed class KafkaOutboxPublisher(
 {
     public async Task PublishAsync(OutboxMessageEntity message, CancellationToken cancellationToken)
     {
+        var headers = new Headers
+        {
+            { "event-type", Encoding.UTF8.GetBytes(message.EventType) },
+            { "event-id", Encoding.UTF8.GetBytes(message.OutboxMessageId.ToString()) },
+        };
+
         await producer.ProduceAsync(
             message.Topic,
             new Message<string, string>
             {
                 Key = message.OutboxMessageId.ToString(),
-                Value = message.Payload
+                Value = message.Payload,
+                Headers = headers
             },
             cancellationToken);
 
