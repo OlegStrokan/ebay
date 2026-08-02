@@ -24,6 +24,11 @@ public interface IPaymentRepository
         DateTime threshold,
         int maxCount,
         CancellationToken cancellationToken = default);
+ 
+    Task<IReadOnlyList<Payment>> GetAuthorizedOlderThanAsync(
+        DateTime threshold,
+        int maxCount,
+        CancellationToken cancellationToken = default);
 
     Task<IReadOnlyDictionary<PaymentId, Payment>> GetByIdsAsync(
         IReadOnlyCollection<PaymentId> paymentIds,

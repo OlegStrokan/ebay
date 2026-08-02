@@ -84,6 +84,7 @@ internal static class StripeWebhookParser
             "payment_intent.succeeded" => StripeWebhookOutcome.PaymentSucceeded,
             "payment_intent.payment_failed" => StripeWebhookOutcome.PaymentFailed,
             "payment_intent.canceled" => StripeWebhookOutcome.PaymentFailed,
+            "payment_intent.expired" => StripeWebhookOutcome.PaymentFailed,
             "refund.succeeded" => StripeWebhookOutcome.RefundSucceeded,
             "refund.failed" => StripeWebhookOutcome.RefundFailed,
             "charge.refunded" => StripeWebhookOutcome.RefundSucceeded,

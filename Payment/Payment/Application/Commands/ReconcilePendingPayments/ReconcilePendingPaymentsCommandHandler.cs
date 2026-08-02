@@ -44,7 +44,12 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                 request.BatchSize,
                 cancellationToken);
 
-            foreach (var payment in pendingPayments)
+            var authorizedPayments = await paymentRepository.GetAuthorizedOlderThanAsync(
+                threshold,
+                request.BatchSize,
+                cancellationToken);
+
+            foreach (var payment in pendingPayments.Concat(authorizedPayments))
             {
                 paymentsChecked++;
 
@@ -62,7 +67,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                 {
                     case ProviderPaymentLifecycleStatus.Succeeded:
                     {
-                        if (payment.Status is not PaymentStatus.Created and not PaymentStatus.PendingProviderConfirmation)
+                        if (!IsReconcilable(payment.Status))
                         {
                             continue;
                         }
@@ -78,7 +83,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
 
                     case ProviderPaymentLifecycleStatus.Failed:
                     {
-                        if (payment.Status is not PaymentStatus.Created and not PaymentStatus.PendingProviderConfirmation)
+                        if (!IsReconcilable(payment.Status))
                         {
                             continue;
                         }
@@ -243,4 +248,12 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                 "Unexpected error while reconciling pending payments and refunds.");
         }
     }
+
+    // The two pools are queried separately, so a payment whose status changes between the two
+    // queries lands in both. EF's identity map returns the same instance for it, so the second
+    // pass sees what the first pass already did and must skip it.
+    private static bool IsReconcilable(PaymentStatus status) =>
+        status is PaymentStatus.Created
+            or PaymentStatus.PendingProviderConfirmation
+            or PaymentStatus.Authorized;
 }

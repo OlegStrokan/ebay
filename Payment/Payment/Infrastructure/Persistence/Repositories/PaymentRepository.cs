@@ -59,6 +59,20 @@ internal sealed class PaymentRepository(PaymentDbContext dbContext) : IPaymentRe
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Payment>> GetAuthorizedOlderThanAsync(
+        DateTime threshold,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        var take = maxCount <= 0 ? 100 : maxCount;
+
+        return await dbContext.Payments
+            .Where(x => x.Status == PaymentStatus.Authorized && x.UpdatedAt <= threshold)
+            .OrderBy(x => x.UpdatedAt)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<PaymentId, Payment>> GetByIdsAsync(
         IReadOnlyCollection<PaymentId> paymentIds,
         CancellationToken cancellationToken = default)

@@ -121,7 +121,7 @@ internal sealed class HandleStripeWebhookCommandHandler(
         {
             case StripeWebhookOutcome.PaymentSucceeded:
             {
-                if (payment.Status is not PaymentStatus.Created and not PaymentStatus.PendingProviderConfirmation)
+                if (!IsApplicable(payment.Status))
                 {
                     return;
                 }
@@ -142,7 +142,7 @@ internal sealed class HandleStripeWebhookCommandHandler(
             }
             case StripeWebhookOutcome.PaymentFailed:
             {
-                if (payment.Status is not PaymentStatus.Created and not PaymentStatus.PendingProviderConfirmation)
+                if (!IsApplicable(payment.Status))
                 {
                     return;
                 }
@@ -211,6 +211,11 @@ internal sealed class HandleStripeWebhookCommandHandler(
                 return;
         }
     }
+
+    private static bool IsApplicable(PaymentStatus status) =>
+        status is PaymentStatus.Created
+            or PaymentStatus.PendingProviderConfirmation
+            or PaymentStatus.Authorized;
 
     private async Task<Payment?> ResolvePaymentAsync(
         HandleStripeWebhookCommand request,

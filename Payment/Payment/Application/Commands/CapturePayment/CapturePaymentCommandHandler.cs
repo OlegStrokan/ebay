@@ -4,6 +4,7 @@ using Application.Gateways;
 using Application.Gateways.Models;
 using Application.Interfaces;
 using Application.Mappers;
+using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Exceptions;
@@ -17,6 +18,7 @@ namespace Application.Commands.CapturePayment;
 internal sealed class CapturePaymentCommandHandler(
     IPaymentRepository paymentRepository,
     IStripePaymentProvider stripePaymentProvider,
+    IOrderCallbackQueueService orderCallbackQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<CapturePaymentCommandHandler> logger)
@@ -94,6 +96,8 @@ internal sealed class CapturePaymentCommandHandler(
 
                 payment.MarkSucceeded(providerIntentId, now);
                 responseStatus = ProcessPaymentStatus.Succeeded;
+
+                await orderCallbackQueueService.QueuePaymentSucceededAsync(payment, cancellationToken);
             }
             else
             {
@@ -103,6 +107,8 @@ internal sealed class CapturePaymentCommandHandler(
 
                 payment.MarkFailed(reason, now);
                 responseStatus = ProcessPaymentStatus.Failed;
+
+                await orderCallbackQueueService.QueuePaymentFailedAsync(payment, reason, cancellationToken);
             }
 
             if (existingPayment is null)

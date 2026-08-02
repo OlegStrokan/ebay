@@ -85,6 +85,20 @@ internal sealed class OrderCallbackQueueService(
         string payload,
         CancellationToken cancellationToken)
     {
+        var existing = await outboundOrderCallbackRepository.GetByCallbackEventIdAsync(
+            callbackEventId,
+            cancellationToken);
+
+        if (existing is not null)
+        {
+            return new OrderCallbackQueuedDto(
+                CallbackEventId: existing.CallbackEventId,
+                PaymentId: payment.Id.Value,
+                CallbackType: existing.EventType,
+                OrderId: existing.OrderId,
+                QueuedAt: existing.CreatedAt);
+        }
+
         var now = clock.UtcNow;
         var callback = OutboundOrderCallback.Create(
             callbackEventId,
