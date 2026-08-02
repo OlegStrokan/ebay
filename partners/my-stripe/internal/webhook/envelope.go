@@ -35,10 +35,20 @@ func BuildEnvelope(f store.Finalization) (eventID string, eventType string, body
 	default: // payment type
 		object["id"] = f.PaymentIntentID
 		object["object"] = "payment_intent"
-		if f.NewStatus == "succeeded" {
+		switch f.NewStatus {
+		case "succeeded":
 			eventType = "payment_intent.succeeded"
 			object["status"] = "succeeded"
-		} else {
+		case "expired":
+			// an authorization hold that timed out before capture. distinct from a decline:
+			// the payment service has to stop believing the funds are still held
+			eventType = "payment_intent.expired"
+			object["status"] = "expired"
+			object["last_payment_error"] = map[string]any{
+				"code": nonEmpty(f.ErrorCode, "authorization_expired"),
+				"message": nonEmpty(f.ErrorMessage, "Authorization hold expired before capture."),
+			}
+		default:
 			eventType = "payment_intent.payment_failed"
 			object["status"] = "require_payment_method"
 			object["last_payment_error"] = map[string]any{

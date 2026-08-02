@@ -164,11 +164,11 @@ func (s *Store) GetRefund(id string) (Refund, bool) {
 	return *r, true
 }
 
-func (s *Store) ExpiresStaleAuthorization(now time.Time) []string {
+func (s *Store) ExpiresStaleAuthorization(now time.Time) []Finalization {
 	s.mu.Lock();
 	defer s.mu.Unlock()
 
-	var expired []string
+	var expired []Finalization
 	for _, pi := range s.intents {
 		if (pi.Status != "requires_capture" || pi.ExpiresAt.IsZero() || pi.ExpiresAt.After(now)) {
 			continue
@@ -178,7 +178,16 @@ func (s *Store) ExpiresStaleAuthorization(now time.Time) []string {
 		pi.ErrorCode = "authorization_expired"
 		pi.ErrorMessage = "Authorization hold expired before capture."
 		pi.UpdatedAt = now
-		expired = append(expired, pi.ID)
+		expired = append(expired, Finalization{
+			Kind: "payment",
+			PaymentIntentID: pi.ID,
+			PaymentID: pi.PaymentID,
+			NewStatus: "expired",
+			AmountMinor: pi.AmountMinor,
+			Currency: pi.Currency,
+			ErrorCode: pi.ErrorCode,
+			ErrorMessage: pi.ErrorMessage,
+		})
 	}
 	return expired
 }
