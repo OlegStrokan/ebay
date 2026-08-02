@@ -56,8 +56,17 @@ func (w *Worker) Run(ctx context.Context) {
 func (w *Worker) tick(ctx context.Context) {
 	now := time.Now().UTC()
 
-	for _, id := range w.store.ExpiresStaleAuthorization(now) {
-		w.logger.Printf("[worker] authorization %s expired (hold elapsed); capture will be refused", id)
+	for _, f := range w.store.ExpiresStaleAuthorization(now) {
+		eventID, eventType, body := BuildEnvelope(f)
+		w.store.EnqueueEvent(&store.WebhookEvent{
+			ID: eventID,
+			Type: eventType,
+			Body: body,
+			NextAttemptAt: now,
+		})
+
+		w.logger.Printf("[worker] authorization %s expired (hold elapsed), queued %s (%s); capture will be refused",
+			f.PaymentIntentID, eventType, eventID)
 	}
 
 	for _, f := range w.store.TakeDueFinalizations(now) {
