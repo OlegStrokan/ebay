@@ -34,7 +34,7 @@ gRPC payment processor that integrates with Stripe for payment capture, refunds,
 - Created → PendingProviderConfirmation → Succeeded | Failed
 - Created → **Authorized** → Succeeded (capture) | Failed  *(manual-capture authorize-only flow)*
 - Succeeded → RefundPending → Refunded | RefundFailed
-- `Authorized` = funds held, not moved; settled later by CapturePayment (move) or CancelAuthorization (void). Emits no webhook and is not reconciled as pending.
+- `Authorized` = funds held, not moved; settled later by CapturePayment (move) or CancelAuthorization (void). `ProcessPayment` emits no webhook when it lands here, but the state **is** reconciled: `GetAuthorizedOlderThanAsync` polls it, and it is an applicable state for `payment_intent.*` webhooks. A hold can be captured out of band, voided, or expire at the provider — and capture's own response can be lost, which is exactly the case that leaves this row `Authorized` while the money has already moved.
 - Tracks: PaymentId, OrderId, CustomerId, Amount, Currency, Status, ProviderPaymentIntentId, ClientSecret, FailureReason, ProcessIdempotencyKey
 
 ### Refund
@@ -162,8 +162,9 @@ The `IStripePaymentProvider` abstraction has three implementations chosen at sta
 
 ## Key Rules
 
-- **Dual-path finalization is by design** — webhook (push) and reconciliation (pull) BOTH resolve pending payments; they converge on the same callback mechanism
-- **Manual capture = authorize-only** — `ProcessPayment(capture_method=manual)` → RequiresCapture → `Payment.MarkAuthorized()`; emits NO webhook and is NOT reconciled as pending; settled later by CapturePayment (move) or CancelAuthorization (void)
+- **Dual-path finalization is by design, and applies to capture too** — webhook (push) and reconciliation (pull) BOTH resolve pending payments *and* Authorized holds; they converge on the same callback mechanism. `CapturePayment` queues a `PaymentSucceeded`/`PaymentFailed` callback itself, so a lost capture response is recoverable: without it, capture was the only money-moving operation with no async completion path at all
+- **Manual capture = authorize-only** — `ProcessPayment(capture_method=manual)` → RequiresCapture → `Payment.MarkAuthorized()`; the authorize call emits no webhook and settles later via CapturePayment (move) or CancelAuthorization (void). The resulting `Authorized` row is still polled by reconciliation and still accepts `payment_intent.succeeded` / `.canceled` / `.expired`
+- **Callback enqueue is idempotent on CallbackEventId** — `OrderCallbackQueueService` returns the existing row instead of inserting, because more than one path (capture, webhook, reconciliation) can legitimately resolve the same payment and `callback_event_id` is UNIQUE
 - **Never skip idempotency checks** — unique constraints are the last line of defense
 - **State machine transitions are validated** — invalid transitions throw; never set status directly
 - **Refund amount validated against available** — cannot refund more than captured amount
