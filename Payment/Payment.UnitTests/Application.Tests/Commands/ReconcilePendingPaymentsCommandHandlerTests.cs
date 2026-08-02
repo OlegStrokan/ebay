@@ -29,6 +29,14 @@ public class ReconcilePendingPaymentsCommandHandlerTests
     public ReconcilePendingPaymentsCommandHandlerTests()
     {
         _clock.UtcNow.Returns(FixedNow);
+
+        // Authorized holds are reconciled on the same pass now; default to none so the tests that
+        // only care about pending payments stay focused.
+        _paymentRepository.GetAuthorizedOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Payment>());
     }
 
     private ReconcilePendingPaymentsCommandHandler BuildHandler() =>
@@ -182,5 +190,161 @@ public class ReconcilePendingPaymentsCommandHandlerTests
         await _unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
         _unitOfWork.Received(1).DetachUncommittedChanges();
         _unitOfWork.DidNotReceive().ClearTrackedChanges();
+    }
+
+    private static Payment CreateAuthorizedPayment(
+        string paymentId = "pay-auth-1",
+        string providerPaymentIntentId = "pi_auth_1")
+    {
+        var payment = Payment.Create(
+            PaymentId.From(paymentId),
+            "order-auth-1",
+            "customer-auth-1",
+            Money.Create(100m, "USD"),
+            PaymentMethod.Card,
+            IdempotencyKey.From("idem-auth-1"),
+            FixedNow.AddMinutes(-30));
+
+        payment.MarkAuthorized(ProviderPaymentIntentId.From(providerPaymentIntentId), FixedNow.AddMinutes(-29));
+        return payment;
+    }
+
+    [Fact]
+    public async Task Handle_ShouldResolveAuthorizedPayment_WhenProviderReportsItCaptured()
+    {
+        // The lost-capture-response case from the pull side: the hold was captured at the provider
+        // but our row still says Authorized. Excluding Authorized from reconciliation is what made
+        // that state unrecoverable - the money moved and nothing downstream was ever told.
+        var authorized = CreateAuthorizedPayment();
+
+        _paymentRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Payment>());
+
+        _paymentRepository.GetAuthorizedOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns([authorized]);
+
+        _refundRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Refund>());
+
+        _paymentRepository.GetByIdsAsync(
+                Arg.Any<IReadOnlyCollection<PaymentId>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<PaymentId, Payment>());
+
+        _stripePaymentProvider.GetPaymentStatusAsync("pi_auth_1", Arg.Any<CancellationToken>())
+            .Returns(new ProviderPaymentStatusResult(ProviderPaymentLifecycleStatus.Succeeded, null, null));
+
+        var result = await BuildHandler().Handle(new ReconcilePendingPaymentsCommand(15, 100), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value!.PaymentsChecked);
+        Assert.Equal(1, result.Value.PaymentsSucceeded);
+        Assert.Equal(PaymentStatus.Succeeded, authorized.Status);
+
+        await _queueService.Received(1).QueuePaymentSucceededAsync(authorized, Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldFailAuthorizedPayment_WhenProviderReportsTheHoldGone()
+    {
+        // A voided or expired hold. The Payment row claimed the funds were still held; now it
+        // stops claiming that, and the order is told.
+        var authorized = CreateAuthorizedPayment();
+
+        _paymentRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Payment>());
+
+        _paymentRepository.GetAuthorizedOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns([authorized]);
+
+        _refundRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Refund>());
+
+        _paymentRepository.GetByIdsAsync(
+                Arg.Any<IReadOnlyCollection<PaymentId>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<PaymentId, Payment>());
+
+        _stripePaymentProvider.GetPaymentStatusAsync("pi_auth_1", Arg.Any<CancellationToken>())
+            .Returns(new ProviderPaymentStatusResult(
+                ProviderPaymentLifecycleStatus.Failed,
+                "authorization_expired",
+                "Authorization hold expired before capture."));
+
+        var result = await BuildHandler().Handle(new ReconcilePendingPaymentsCommand(15, 100), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value!.PaymentsFailed);
+        Assert.Equal(PaymentStatus.Failed, authorized.Status);
+
+        await _queueService.Received(1).QueuePaymentFailedAsync(
+            authorized,
+            Arg.Any<FailureReason>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldLeaveAuthorizedPaymentAlone_WhileTheHoldIsStillLive()
+    {
+        // requires_capture maps to "pending" at the provider: the hold is fine, capture just has
+        // not happened yet. Reconciliation must not touch it.
+        var authorized = CreateAuthorizedPayment();
+
+        _paymentRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Payment>());
+
+        _paymentRepository.GetAuthorizedOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns([authorized]);
+
+        _refundRepository.GetPendingProviderConfirmationsOlderThanAsync(
+                Arg.Any<DateTime>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Refund>());
+
+        _paymentRepository.GetByIdsAsync(
+                Arg.Any<IReadOnlyCollection<PaymentId>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<PaymentId, Payment>());
+
+        _stripePaymentProvider.GetPaymentStatusAsync("pi_auth_1", Arg.Any<CancellationToken>())
+            .Returns(new ProviderPaymentStatusResult(ProviderPaymentLifecycleStatus.Pending, null, null));
+
+        var result = await BuildHandler().Handle(new ReconcilePendingPaymentsCommand(15, 100), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value!.PaymentsChecked);
+        Assert.Equal(0, result.Value.PaymentsSucceeded);
+        Assert.Equal(0, result.Value.PaymentsFailed);
+        Assert.Equal(PaymentStatus.Authorized, authorized.Status);
+
+        await _queueService.DidNotReceive().QueuePaymentSucceededAsync(
+            Arg.Any<Payment>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

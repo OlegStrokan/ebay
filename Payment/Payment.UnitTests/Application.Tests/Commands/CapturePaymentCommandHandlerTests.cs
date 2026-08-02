@@ -3,6 +3,7 @@ using Application.DTOs;
 using Application.Gateways;
 using Application.Gateways.Models;
 using Application.Interfaces;
+using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
@@ -19,6 +20,8 @@ public class CapturePaymentCommandHandlerTests
 
     private readonly IPaymentRepository _paymentRepository = Substitute.For<IPaymentRepository>();
     private readonly IStripePaymentProvider _stripePaymentProvider = Substitute.For<IStripePaymentProvider>();
+    private readonly IOrderCallbackQueueService _orderCallbackQueueService =
+        Substitute.For<IOrderCallbackQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<CapturePaymentCommandHandler> _logger =
@@ -30,7 +33,7 @@ public class CapturePaymentCommandHandlerTests
     }
 
     private CapturePaymentCommandHandler BuildHandler() =>
-        new(_paymentRepository, _stripePaymentProvider, _unitOfWork, _clock, _logger);
+        new(_paymentRepository, _stripePaymentProvider, _orderCallbackQueueService, _unitOfWork, _clock, _logger);
 
     private static CapturePaymentCommand ValidCommand(decimal amount = 100m) =>
         new(
@@ -197,5 +200,109 @@ public class CapturePaymentCommandHandlerTests
         Assert.Equal(100m, capturedProviderRequest.Amount);
         Assert.Equal("USD", capturedProviderRequest.Currency);
         Assert.False(string.IsNullOrWhiteSpace(capturedProviderRequest.IdempotencyKey));
+    }
+
+    [Fact]
+    public async Task Handle_ShouldQueuePaymentSucceededCallback_WhenCaptureSucceeds()
+    {
+        // Capture is where money actually moves, and it used to have no async completion path at
+        // all: if this response is lost the caller's saga parks Uncertain and nothing ever tells
+        // it the capture landed. The queued callback is that push path.
+        _paymentRepository
+            .GetByOrderIdAndIdempotencyKeyAsync(
+                Arg.Any<string>(),
+                Arg.Any<IdempotencyKey>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Payment?)null);
+
+        _stripePaymentProvider
+            .CapturePaymentAsync(Arg.Any<CapturePaymentProviderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new CapturePaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.Succeeded,
+                ProviderPaymentIntentId: "pi_test_123",
+                ErrorCode: null,
+                ErrorMessage: null));
+
+        await BuildHandler().Handle(ValidCommand(), CancellationToken.None);
+
+        await _orderCallbackQueueService.Received(1).QueuePaymentSucceededAsync(
+            Arg.Is<Payment>(p => p.Status == PaymentStatus.Succeeded),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldQueuePaymentFailedCallback_WhenCaptureFails()
+    {
+        _paymentRepository
+            .GetByOrderIdAndIdempotencyKeyAsync(
+                Arg.Any<string>(),
+                Arg.Any<IdempotencyKey>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Payment?)null);
+
+        _stripePaymentProvider
+            .CapturePaymentAsync(Arg.Any<CapturePaymentProviderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new CapturePaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.Failed,
+                ProviderPaymentIntentId: null,
+                ErrorCode: "provider_capture_failed",
+                ErrorMessage: "Card declined during capture."));
+
+        await BuildHandler().Handle(ValidCommand(), CancellationToken.None);
+
+        await _orderCallbackQueueService.Received(1).QueuePaymentFailedAsync(
+            Arg.Is<Payment>(p => p.Status == PaymentStatus.Failed),
+            Arg.Any<FailureReason>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldCaptureAuthorizedPreAuthAndQueueCallback_WhenHoldExists()
+    {
+        // The pre-auth path: AuthorizePayment left the payment Authorized, capture consumes the
+        // hold. This is the exact shape of the order flow, so it must produce a callback too.
+        var authorized = Payment.Create(
+            PaymentId.From("pay-authorized-cap"),
+            "order-cap-1",
+            "customer-cap-1",
+            Money.Create(100m, "USD"),
+            PaymentMethod.Card,
+            IdempotencyKey.From("idem-auth-1"),
+            FixedNow.AddMinutes(-5));
+
+        authorized.MarkAuthorized(ProviderPaymentIntentId.From("pi_test_123"), FixedNow.AddMinutes(-4));
+
+        _paymentRepository
+            .GetByOrderIdAndIdempotencyKeyAsync(
+                Arg.Any<string>(),
+                Arg.Any<IdempotencyKey>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Payment?)null);
+
+        _paymentRepository
+            .GetByProviderPaymentIntentIdAsync(
+                Arg.Any<ProviderPaymentIntentId>(),
+                Arg.Any<CancellationToken>())
+            .Returns(authorized);
+
+        _stripePaymentProvider
+            .CapturePaymentAsync(Arg.Any<CapturePaymentProviderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new CapturePaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.Succeeded,
+                ProviderPaymentIntentId: "pi_test_123",
+                ErrorCode: null,
+                ErrorMessage: null));
+
+        var result = await BuildHandler().Handle(ValidCommand(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PaymentStatus.Succeeded, authorized.Status);
+
+        await _paymentRepository.Received(1).UpdateAsync(authorized, Arg.Any<CancellationToken>());
+        await _paymentRepository.DidNotReceive().AddAsync(Arg.Any<Payment>(), Arg.Any<CancellationToken>());
+
+        await _orderCallbackQueueService.Received(1).QueuePaymentSucceededAsync(
+            authorized,
+            Arg.Any<CancellationToken>());
     }
 }
