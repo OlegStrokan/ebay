@@ -8,6 +8,7 @@ import (
 
 	"my-stripe/internal/domain"
 	"my-stripe/internal/store"
+	"my-stripe/internal/webhook"
 )
 
 
@@ -164,6 +165,8 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 	failed := strings.Contains(strings.ToLower(intentID), "fail")
 
 	var resp captureResponse
+	var updated store.PaymentIntent
+	var known bool
 	if failed {
 		resp = captureResponse{
 			ID: intentID,
@@ -172,16 +175,45 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 			ErrorMessage: "Simulated capture failure.",
 			TestMode: true,
 		}
-		s.store.UpdateIntentStatus(intentID, "failed", resp.ErrorCode, resp.ErrorMessage)
+		updated, known = s.store.UpdateIntentStatus(intentID, "failed", resp.ErrorCode, resp.ErrorMessage)
 	} else {
 		resp = captureResponse{
 			ID: intentID,
 			Status: "succeeded",
 			TestMode: true,
 		}
-		s.store.UpdateIntentStatus(intentID, "succeeded", "", "")
+		updated, known = s.store.UpdateIntentStatus(intentID, "succeeded", "", "")
 	}
+
+	if known {
+		s.enqueueIntentEvent(updated)
+	} else {
+		s.logger.Printf("[api] capture of unknown intent %s: no webhook emitted", intentID)
+	}
+
 	s.writeAndCache(w, scopeCapture, req.IdempotencyKey, resp)
+}
+
+func (s *Server) enqueueIntentEvent(pi store.PaymentIntent) {
+	eventID, eventType, body := webhook.BuildEnvelope(store.Finalization{
+		Kind: "payment",
+		PaymentIntentID: pi.ID,
+		PaymentID: pi.PaymentID,
+		NewStatus: pi.Status,
+		AmountMinor: pi.AmountMinor,
+		Currency: pi.Currency,
+		ErrorCode: pi.ErrorCode,
+		ErrorMessage: pi.ErrorMessage,
+	})
+
+	s.store.EnqueueEvent(&store.WebhookEvent{
+		ID: eventID,
+		Type: eventType,
+		Body: body,
+		NextAttemptAt: time.Now().UTC(),
+	})
+
+	s.logger.Printf("[api] queued %s (%s) for payment_intent %s", eventType, eventID, pi.ID)
 }
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
@@ -350,7 +382,7 @@ func lifecycle(status string) string {
 	switch status {
 	case "succeeded":
 		return "succeeded"
-	case "failed", "cancelled", "expired":
+	case "failed", "canceled", "expired":
 		return "failed"
 	case "pending", "requires_action", "requires_capture":
 		return "pending"
