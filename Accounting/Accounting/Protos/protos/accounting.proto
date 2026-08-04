@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+import "common.proto";
+
+option csharp_namespace = "Protos.Accounting";
+
+package accounting;
+
+service AccountingService {
+  rpc RecordRefund (RecordRefundRequest) returns (RecordRefundResponse);
+  rpc ReverseRevenue (ReverseRevenueRequest) returns (ReverseRevenueResponse);
+  rpc CancelReversal (CancelReversalRequest) returns (CancelReversalResponse);
+}
+
+message RecordRefundRequest {
+  string order_id = 1;
+  string refund_id = 2;
+  common.DecimalValue amount = 3;
+  string currency = 4;
+  string reason = 5;
+}
+
+message RecordRefundResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string error_message = 3;
+}
+
+message AccountingItem {
+  string product_id = 1;
+  int32 quantity = 2;
+  common.DecimalValue price = 3;
+  string currency = 4;
+}
+
+message ReverseRevenueRequest {
+  string order_id = 1;
+  common.DecimalValue amount = 2;
+  string currency = 3;
+  repeated AccountingItem returned_items = 4;
+}
+
+message ReverseRevenueResponse {
+  bool success = 1;
+  string reversal_id = 2;
+  string error_message = 3;
+}
+
+message CancelReversalRequest {
+  string reversal_id = 1;
+  string reason = 2;
+}
+
+message CancelReversalResponse {
+  bool success = 1;
+  string error_message = 2;
+}
