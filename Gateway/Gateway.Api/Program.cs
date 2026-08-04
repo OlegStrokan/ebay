@@ -8,11 +8,20 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 var builder = WebApplication.CreateBuilder(args);
 var jwtAuthority = builder.Configuration["Jwt:Authority"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
 
-if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(jwtAudience))
+
+if (!builder.Environment.IsDevelopment())
 {
-    throw new InvalidOperationException("JWT audience must be configured outside development.");
+    if (string.IsNullOrWhiteSpace(jwtAudience))
+        throw new InvalidOperationException("Jwt:Audience must be configured outside development.");
+    if (string.IsNullOrWhiteSpace(jwtIssuer))
+        throw new InvalidOperationException(
+            "Jwt:Issuer must be configured outside development, and must match the issuer Auth signs tokens with.");
+    if (string.IsNullOrWhiteSpace(jwtSecretKey))
+        throw new InvalidOperationException(
+            "Jwt:SecretKey must be configured outside development, and must match Auth's signing key.");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -25,7 +34,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateAudience = !string.IsNullOrWhiteSpace(jwtAudience),
             ValidAudience = jwtAudience,
-            ValidateIssuer = !builder.Environment.IsDevelopment(),
+            ValidateIssuer = !string.IsNullOrWhiteSpace(jwtIssuer),
+            ValidIssuer = jwtIssuer,
             IssuerSigningKey = string.IsNullOrWhiteSpace(jwtSecretKey) ? null :
                 new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
                     System.Text.Encoding.UTF8.GetBytes(jwtSecretKey))
