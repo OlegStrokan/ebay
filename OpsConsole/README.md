@@ -48,7 +48,7 @@ Backend (`appsettings.json` / env):
 - `AdminApiKey` — validates `X-Admin-Api-Key` from the frontend.
 - `OrderServiceUrl`, `PaymentServiceUrl`, `InventoryServiceUrl` — gRPC channel addresses for the three admin services.
 - `InternalServices:OpsConsoleApiKey` — outbound gRPC auth; must match the same key configured on Order/Payment/Inventory.
-- `Jwt:SecretKey`, `Jwt:Audience` — must exactly match Auth's signing key. The app throws at startup if `Jwt:SecretKey` is empty outside Development.
+- `Jwt:SecretKey`, `Jwt:Audience`, `Jwt:Issuer` — must exactly match Auth's signing key, audience, and issuer. The app throws at startup if any of the three is empty outside Development.
 
 Frontend (`.env.local`, never `NEXT_PUBLIC_`-prefixed — these must stay server-only):
 

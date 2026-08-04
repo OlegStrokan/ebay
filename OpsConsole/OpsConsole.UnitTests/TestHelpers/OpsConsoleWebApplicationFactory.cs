@@ -24,16 +24,16 @@ public sealed class OpsConsoleWebApplicationFactory : WebApplicationFactory<Prog
     // time, which is too late. So instead of trying to override the secret, mint tokens
     // against whatever appsettings.Development.json actually configures, same as the real
     // Development host will validate against.
-    public static readonly (string SecretKey, string Audience) JwtDevConfig = LoadJwtDevConfig();
+    public static readonly (string SecretKey, string Audience, string Issuer) JwtDevConfig = LoadJwtDevConfig();
 
-    private static (string SecretKey, string Audience) LoadJwtDevConfig([CallerFilePath] string thisFile = "")
+    private static (string SecretKey, string Audience, string Issuer) LoadJwtDevConfig([CallerFilePath] string thisFile = "")
     {
         var opsConsoleDir = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", ".."));
         var config = new ConfigurationBuilder()
             .AddJsonFile(Path.Combine(opsConsoleDir, "appsettings.Development.json"), optional: false)
             .Build();
 
-        return (config["Jwt:SecretKey"]!, config["Jwt:Audience"]!);
+        return (config["Jwt:SecretKey"]!, config["Jwt:Audience"]!, config["Jwt:Issuer"]!);
     }
 
     public AdminOpsService.AdminOpsServiceClient OrderClient { get; } =
@@ -80,7 +80,7 @@ public sealed class OpsConsoleWebApplicationFactory : WebApplicationFactory<Prog
         var client = CreateClient();
         client.DefaultRequestHeaders.Add("X-Admin-Api-Key", AdminApiKey);
         client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", JwtTokenFactory.CreateToken(JwtDevConfig.SecretKey, JwtDevConfig.Audience, roles));
+            new AuthenticationHeaderValue("Bearer", JwtTokenFactory.CreateToken(JwtDevConfig.SecretKey, JwtDevConfig.Audience, JwtDevConfig.Issuer, roles));
         return client;
     }
 
@@ -88,7 +88,16 @@ public sealed class OpsConsoleWebApplicationFactory : WebApplicationFactory<Prog
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", JwtTokenFactory.CreateToken(JwtDevConfig.SecretKey, JwtDevConfig.Audience, roles));
+            new AuthenticationHeaderValue("Bearer", JwtTokenFactory.CreateToken(JwtDevConfig.SecretKey, JwtDevConfig.Audience, JwtDevConfig.Issuer, roles));
+        return client;
+    }
+
+    public HttpClient CreateClientWithJwtIssuer(string issuer, params string[] roles)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Admin-Api-Key", AdminApiKey);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", JwtTokenFactory.CreateToken(JwtDevConfig.SecretKey, JwtDevConfig.Audience, issuer, roles));
         return client;
     }
 

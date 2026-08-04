@@ -35,6 +35,18 @@ public class SagaEndpointsTests : IClassFixture<OpsConsoleWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("SomeOtherIssuer")]
+    [InlineData("")]
+    public async Task GetSagas_ShouldReturn401_WhenTokenIssuerDoesNotMatch(string issuer)
+    {
+        using var client = _factory.CreateClientWithJwtIssuer(issuer, "Admin");
+
+        var response = await client.GetAsync("/api/sagas");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task GetSagas_ShouldReturn403_WhenOperatorLacksRequiredRole()
     {

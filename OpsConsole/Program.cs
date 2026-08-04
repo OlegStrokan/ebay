@@ -42,10 +42,20 @@ builder.Services.AddGrpcClient<AdminInventoryService.AdminInventoryServiceClient
 // pattern).
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 
-if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(jwtSecretKey))
+// Same startup contract as Gateway.Api/Program.cs: all three must be present outside
+// Development and must match Auth's values, or tokens Auth issues get rejected at runtime
+// with no indication of why.
+if (!builder.Environment.IsDevelopment())
 {
-    throw new InvalidOperationException("Jwt:SecretKey must be configured outside development.");
+    if (string.IsNullOrWhiteSpace(jwtSecretKey))
+        throw new InvalidOperationException("Jwt:SecretKey must be configured outside development.");
+    if (string.IsNullOrWhiteSpace(jwtAudience))
+        throw new InvalidOperationException("Jwt:Audience must be configured outside development.");
+    if (string.IsNullOrWhiteSpace(jwtIssuer))
+        throw new InvalidOperationException(
+            "Jwt:Issuer must be configured outside development, and must match the issuer Auth signs tokens with.");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -56,7 +66,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateAudience = !string.IsNullOrWhiteSpace(jwtAudience),
             ValidAudience = jwtAudience,
-            ValidateIssuer = false,
+            // Issuer validation was previously off here while Gateway had it on — one token
+            // format, two policies. Both now key off a configured Jwt:Issuer, which the
+            // guard above makes mandatory outside Development.
+            ValidateIssuer = !string.IsNullOrWhiteSpace(jwtIssuer),
+            ValidIssuer = jwtIssuer,
             IssuerSigningKey = string.IsNullOrWhiteSpace(jwtSecretKey)
                 ? null
                 : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey))

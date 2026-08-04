@@ -11,7 +11,7 @@ namespace OpsConsole.UnitTests.TestHelpers;
 // handler, so the test needs a real token for that check to mean anything.
 public static class JwtTokenFactory
 {
-    public static string CreateToken(string secretKey, string audience, params string[] roles)
+    public static string CreateToken(string secretKey, string audience, string issuer, params string[] roles)
     {
         var claims = new List<Claim>
         {
@@ -24,6 +24,7 @@ public static class JwtTokenFactory
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
+            issuer: issuer,
             audience: audience,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(30),
