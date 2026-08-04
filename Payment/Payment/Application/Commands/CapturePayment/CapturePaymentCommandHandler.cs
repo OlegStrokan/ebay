@@ -71,7 +71,25 @@ internal sealed class CapturePaymentCommandHandler(
             }
             else
             {
+                if (existingPayment.Amount.Amount != amount.Amount
+                    || existingPayment.Amount.Currency != amount.Currency)
+                {
+                    logger.LogWarning(
+                        "Capture amount mismatch for order {OrderId}. Authorized={AuthorizedAmount} {AuthorizedCurrency}, Requested={RequestedAmount} {RequestedCurrency}",
+                        request.OrderId,
+                        existingPayment.Amount.Amount,
+                        existingPayment.Amount.Currency,
+                        amount.Amount,
+                        amount.Currency);
+
+                    return Result<ProcessPaymentResultDto>.Failure(
+                        $"Capture amount {amount.Amount} {amount.Currency} does not match authorized amount {existingPayment.Amount.Amount} {existingPayment.Amount.Currency}.");
+                }
+
                 payment = existingPayment;
+
+                // Re-key so a retried capture hits the (OrderId, ProcessIdempotencyKey) idempotency check above instead of re-calling the provider every time.
+                payment.ReplaceProcessIdempotencyKey(idempotencyKey);
             }
 
             var providerResult = await stripePaymentProvider.CapturePaymentAsync(

@@ -52,7 +52,7 @@ internal sealed class CancelAuthorizationCommandHandler(
                 return Result.Success();
             }
 
-            if (payment.Status is not (PaymentStatus.Created or PaymentStatus.PendingProviderConfirmation))
+            if (payment.Status is not (PaymentStatus.Created or PaymentStatus.PendingProviderConfirmation or PaymentStatus.Authorized))
             {
                 logger.LogInformation(
                     "CancelAuthorization completed with no payment state update due to terminal status. ProviderPaymentIntentId={ProviderPaymentIntentId}, PaymentId={PaymentId}, Status={Status}",

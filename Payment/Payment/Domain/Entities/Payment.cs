@@ -137,6 +137,11 @@ public sealed class Payment : AggregateRoot<PaymentId>
         AddDomainEvent(new PaymentAuthorizedEvent(Id, providerPaymentIntentId, now));
     }
 
+    public void ReplaceProcessIdempotencyKey(IdempotencyKey processIdempotencyKey)
+    {
+        ProcessIdempotencyKey = processIdempotencyKey;
+    }
+
     public void MarkSucceeded(ProviderPaymentIntentId? providerPaymentIntentId = null, DateTime? succeededAt = null)
     {
         PaymentStateMachine.EnsureCanTransition(Status, PaymentStatus.Succeeded);
