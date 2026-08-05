@@ -32,6 +32,8 @@ data:
 
   Jwt__Authority: "http://auth-service:8080"
 
+  ConnectionStrings__Redis: "redis:6379"
+
   Elasticsearch__Uri: "http://elasticsearch:9200"
   Elasticsearch__Url: "http://elasticsearch:9200"
   Elasticsearch__IndexName: "products"
