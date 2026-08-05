@@ -87,9 +87,7 @@ public sealed class LedgerTransaction
         return tx;
     }
 
-    /// <summary>
-    /// Append-only reversing transaction that cancels a prior revenue reversal by swapping every leg.
-    /// </summary>
+    //append-only reversing transaction that cancels a prior revenue reversal by swapping every leg.
     public static LedgerTransaction ForReversalCancellation(LedgerTransaction original, DateTime occurredAt)
     {
         if (original.RefType != TransactionRefType.Reversal)

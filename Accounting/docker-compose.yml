@@ -1,0 +1,45 @@
+# Run shared infra first:  docker compose -f ../docker-compose.infra.yml up -d
+name: accounting-service-deps
+
+networks:
+  free-ebay-local:
+    external: true
+
+volumes:
+  accounting_postgres_data:
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: accounting-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: accounting_db
+    ports:
+      - "5437:5432"
+    volumes:
+      - accounting_postgres_data:/var/lib/postgresql/data
+    networks:
+      - free-ebay-local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d accounting_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # accounting-service:
+  #   build: .
+  #   environment:
+  #     ASPNETCORE_ENVIRONMENT: Development
+  #     ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=accounting_db;Username=postgres;Password=postgres"
+  #     Kestrel__EndpointDefaults__Protocols: Http2
+  #     ASPNETCORE_URLS: "http://+:8080"
+  #   ports:
+  #     - "8085:8080"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - free-ebay-local
