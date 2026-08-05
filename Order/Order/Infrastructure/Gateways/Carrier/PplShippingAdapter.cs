@@ -65,6 +65,11 @@ public sealed class PplShippingAdapter : ICarrierAdapter, IPplBookingPoller
             Packages: items.Select(i => new PackagePayload(i.ProductId, i.Quantity)).ToList()
         );
 
+        // @todo: the POST itself can screw us. if PPL creates the parcel and then the 200
+        // gets lost (timeout / their pod dies / 5xx after commit) we get an exception with
+        // NO referenceId — parcel exists, we can't track it, saga cancels, parcel orphaned.
+        // Real fix needs PPL to expose idempotent create (like DPD) or lookup-by-orderId.
+        // until then this window stays open. if it costs us a parcel, blame the carrier, not me.
         using var response = await _http.PostAsJsonAsync(
             "api/v1/parcels",
             request,
@@ -93,42 +98,71 @@ public sealed class PplShippingAdapter : ICarrierAdapter, IPplBookingPoller
         // PPL booking is two-phase: the depot accepts asynchronously. Poll the booking
         // reference until it settles as accepted (-> parcel ids) or rejected (-> invalid
         // address), or give up once the polling budget is exhausted.
-        for (var attempt = 0; attempt < _maxPolls; attempt++)
+        //
+        // The parcel now EXISTS at PPL. From here, any failure that is not a definitive
+        // rejection must hand the reference to reconciliation (PplBookingPendingException),
+        // never a raw HttpRequestException/InvalidOperationException — otherwise a single
+        // transient poll error (503, timeout, partial body) leaks a real, uncancellable booking.
+        try
         {
-            await Task.Delay(_pollInterval, cancellationToken);
-
-            using var pollResponse = await _http.GetAsync(
-                $"api/v1/parcels/{booking.ReferenceId}",
-                cancellationToken);
-
-            if (!pollResponse.IsSuccessStatusCode)
+            for (var attempt = 0; attempt < _maxPolls; attempt++)
             {
-                var pollErr = await SafeReadAsync(pollResponse, cancellationToken);
-                throw new HttpRequestException(
-                    $"PPL booking poll failed. ReferenceId={booking.ReferenceId}, Status={(int)pollResponse.StatusCode}, Body={pollErr}");
-            }
+                await Task.Delay(_pollInterval, cancellationToken);
 
-            var poll = await pollResponse.Content.ReadFromJsonAsync<PollBookingResponse>(JsonOptions, cancellationToken)
-                       ?? throw new InvalidOperationException("PPL booking poll response is empty.");
+                using var pollResponse = await _http.GetAsync(
+                    $"api/v1/parcels/{booking.ReferenceId}",
+                    cancellationToken);
 
-            switch (poll.Status?.ToLowerInvariant())
-            {
-                case "accepted":
-                    _logger.LogInformation(
-                        "PPL booking accepted. OrderId={OrderId}, ParcelId={ParcelId}, TrackingNumber={TrackingNumber}",
-                        orderId, poll.ParcelId, poll.TrackingNumber);
-                    return new ShipmentResultDto(
-                        poll.ParcelId ?? throw new InvalidOperationException("PPL accepted booking is missing parcelId."),
-                        poll.TrackingNumber ?? throw new InvalidOperationException("PPL accepted booking is missing trackingNumber."));
+                if (!pollResponse.IsSuccessStatusCode)
+                {
+                    var pollErr = await SafeReadAsync(pollResponse, cancellationToken);
+                    throw new HttpRequestException(
+                        $"PPL booking poll failed. ReferenceId={booking.ReferenceId}, Status={(int)pollResponse.StatusCode}, Body={pollErr}");
+                }
 
-                case "rejected":
-                    throw new InvalidAddressException(
-                        $"PPL rejected booking {booking.ReferenceId}. Reason: {poll.Reason ?? "unspecified"}");
+                var poll = await pollResponse.Content.ReadFromJsonAsync<PollBookingResponse>(JsonOptions, cancellationToken)
+                           ?? throw new InvalidOperationException("PPL booking poll response is empty.");
 
-                // "pending" -> keep polling
+                switch (poll.Status?.ToLowerInvariant())
+                {
+                    case "accepted":
+                        if (string.IsNullOrWhiteSpace(poll.ParcelId) || string.IsNullOrWhiteSpace(poll.TrackingNumber))
+                            throw new InvalidOperationException(
+                                $"PPL accepted booking {booking.ReferenceId} is missing parcelId/trackingNumber.");
+
+                        _logger.LogInformation(
+                            "PPL booking accepted. OrderId={OrderId}, ParcelId={ParcelId}, TrackingNumber={TrackingNumber}",
+                            orderId, poll.ParcelId, poll.TrackingNumber);
+                        return new ShipmentResultDto(poll.ParcelId, poll.TrackingNumber);
+
+                    case "rejected":
+                        throw new InvalidAddressException(
+                            $"PPL rejected booking {booking.ReferenceId}. Reason: {poll.Reason ?? "unspecified"}");
+
+                    // "pending" -> keep polling
+                }
             }
         }
+        catch (InvalidAddressException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Transient poll failure after the booking exists — defer to reconciliation
+            // instead of failing the saga and orphaning the parcel.
+            _logger.LogWarning(
+                ex,
+                "PPL poll failed transiently after booking {ReferenceId} was created for order {OrderId}. Deferring to reconciliation.",
+                booking.ReferenceId, orderId);
+            throw new PplBookingPendingException(booking.ReferenceId, orderId);
+        }
 
+        // Poll budget exhausted without settlement — reconcile later.
         throw new PplBookingPendingException(booking.ReferenceId, orderId);
     }
 
