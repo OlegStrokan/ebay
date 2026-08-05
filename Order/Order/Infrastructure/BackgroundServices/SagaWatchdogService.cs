@@ -272,7 +272,7 @@ public class SagaWatchdogService : BackgroundService
             return;
         }
 
-        if (current.Status is not (SagaStatus.Running or SagaStatus.TimedOut or SagaStatus.WaitingForEvent))
+        if (current.Status is not (SagaStatus.Running or SagaStatus.TimedOut or SagaStatus.WaitingForEvent or SagaStatus.Compensating))
         {
             _logger.LogInformation(
                 "Saga {SagaId} is now {Status} after acquiring the lock. No watchdog action needed.",

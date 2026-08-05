@@ -483,9 +483,28 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
                     break;
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Genuine caller/shutdown cancellation - let a later run or the watchdog's
+                    // Compensating scan pick this saga up. Do not record a terminal failure here.
+                    throw;
+                }
                 catch (OperationCanceledException)
                 {
-                    throw;
+                    // Compensation exceeded its own CompensationTimeout budget. Record it so the
+                    // retry worker reaps it, instead of letting the OCE escape and strand the saga
+                    // in Compensating with no FailedToCompensate and no retry row (H-3).
+                    _logger.LogCritical(
+                        "Compensation for {StepName} in saga {SagaId} exceeded the {Timeout} budget. Scheduling automated retry.",
+                        step.StepName, sagaId, CompensationTimeout);
+
+                    sagaState.Status = SagaStatus.FailedToCompensate;
+                    await _sagaRepository.SaveAsync(sagaState, cancellationToken);
+                    await _failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
+                        sagaId, sagaState.SagaType, step.StepName,
+                        $"Compensation timed out after {CompensationTimeout}", cancellationToken);
+
+                    return SagaResult.CriticalFailure(sagaId, "Compensation timed out");
                 }
                 catch (Exception ex) when (_errorClassifier.IsTransient(ex) && retryCount < maxRetries)
                 {

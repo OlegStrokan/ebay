@@ -73,7 +73,7 @@ public class SagaRepository(AppDbContext dbContext) : ISagaRepository
     {
         return await dbContext.SagaStates
             .Where(x =>
-                ((x.Status == SagaStatus.Running || x.Status == SagaStatus.TimedOut)
+            ((x.Status == SagaStatus.Running || x.Status == SagaStatus.TimedOut || x.Status == SagaStatus.Compensating)
                     && x.UpdatedAt < updatedBeforeCutoff)
                 // WaitingForEvent got its own per-step deadline instead. Without this branch
                 // a lost capture response parks the saga forever
