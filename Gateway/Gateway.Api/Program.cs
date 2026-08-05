@@ -100,9 +100,15 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddMemoryCache();
 builder.Services.AddExceptionHandler<GrpcExceptionHandler>();
 builder.Services.AddProblemDetails();
+
+// Redis-backed webhook dedup (survives replica scale-out; abortConnect=false so the
+// Gateway still boots if Redis is briefly unavailable — dedup fails open in that window).
+var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+builder.Services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+    StackExchange.Redis.ConnectionMultiplexer.Connect($"{redisConnection},abortConnect=false"));
+builder.Services.AddSingleton<IWebhookDeduplicator, RedisWebhookDeduplicator>();
 
 builder.Services.AddSingleton<IUserEventPublisher, KafkaUserEventPublisher>();
 builder.Services.AddSingleton<IOrderSagaEventPublisher, KafkaOrderSagaEventPublisher>();

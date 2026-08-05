@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using Gateway.Api.Contracts.Shipping;
 using Gateway.Api.Services;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Gateway.Api.Endpoints;
 
@@ -24,7 +23,7 @@ public static class ShippingWebhookEndpoints
         group.MapPost("/returns/delivered", async (
             HttpContext httpContext,
             IConfiguration configuration,
-            IMemoryCache memoryCache,
+            IWebhookDeduplicator deduplicator,
             IOrderSagaEventPublisher sagaPublisher,
             ILoggerFactory loggerFactory,
             CancellationToken ct) =>
@@ -84,11 +83,16 @@ public static class ShippingWebhookEndpoints
             // Event-ID dedup: reject replayed webhooks that were already accepted.
             // DPD events are cached for 2× the tolerance window (replays older than the
             // window are already rejected by the timestamp check). PPL events have no
-            // timestamp so we keep the seen-set for 24 hours.
+            // timestamp so we keep the seen-set for 24 hours. The marker is written only
+            // AFTER a successful publish (below) — writing it here would poison the retry:
+            // a failed publish would leave the key set and the carrier's re-delivery would
+            // be silently dropped, stranding the return saga in WaitingForEvent.
+            string? dedupKey = null;
+            var dedupTtl = TimeSpan.Zero;
             if (!string.IsNullOrWhiteSpace(envelope.Id))
             {
-                var dedupKey = $"webhook:shipping:{carrier}:{envelope.Id}";
-                if (memoryCache.TryGetValue(dedupKey, out _))
+                dedupKey = $"webhook:shipping:{carrier}:{envelope.Id}";
+                if (await deduplicator.IsDuplicateAsync(dedupKey, ct))
                 {
                     logger.LogWarning(
                         "Rejected duplicate shipping webhook event '{EventId}' from carrier '{Carrier}'.",
@@ -96,10 +100,9 @@ public static class ShippingWebhookEndpoints
                     return Results.Accepted();
                 }
 
-                var dedupTtl = string.Equals(carrier, "dpd", StringComparison.Ordinal)
+                dedupTtl = string.Equals(carrier, "dpd", StringComparison.Ordinal)
                     ? TimeSpan.FromSeconds(toleranceSeconds * 2)
                     : TimeSpan.FromHours(24);
-                memoryCache.Set(dedupKey, true, dedupTtl);
             }
 
             // Only the terminal delivered event resumes the saga. Intermediate progressive
@@ -137,6 +140,13 @@ public static class ShippingWebhookEndpoints
                 trackingNumber: envelope.Data?.ReturnTrackingNumber,
                 deliveredAt: DateTime.UtcNow,
                 ct);
+
+            // Mark processed only now that the event is safely published. If the publish
+            // above throws, the marker is never written, so the carrier's retry re-publishes.
+            if (dedupKey is not null)
+            {
+                await deduplicator.MarkProcessedAsync(dedupKey, dedupTtl, ct);
+            }
 
             logger.LogInformation(
                 "Published ReturnShipmentDeliveredEvent for order {OrderId} (carrier '{Carrier}').",
