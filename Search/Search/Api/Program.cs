@@ -1,8 +1,10 @@
 ﻿using Api.GrpcServices;
+using Api.HealthChecks;
 using Api.Middleware;
 using Application;
 using Infrastructure;
 using Infrastructure.ElasticSearch;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -32,7 +34,13 @@ builder.Services
                 ?? "http://otel-collector:4317");
         }));
 
-builder.Services.AddGrpcHealthChecks();
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddCheck<ElasticsearchHealthCheck>("elasticsearch", tags: ["ready"]);
 
 var app = builder.Build();
 
