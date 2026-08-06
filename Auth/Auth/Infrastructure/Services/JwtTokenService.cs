@@ -11,31 +11,29 @@ namespace Infrastructure.Services;
 
 public class JwtTokenService : IJwtTokenGenerator, IJwtTokenValidator
 {
-    private readonly string _secretKey;
+    private readonly RsaSecurityKey _signingKey;
     private readonly string _issuer;
     private readonly string _audience;
     private readonly int _accessTokenExpirationMinutes;
 
     public JwtTokenService(IConfiguration configuration)
     {
-        _secretKey = configuration["Jwt:SecretKey"] ??
-                     throw new InvalidOperationException("JWT Secret Key not configured");
+        var privateKeyBase64 = configuration["Jwt:PrivateKeyBase64"] ??
+                     throw new InvalidOperationException("JWT private key (Jwt:PrivateKeyBase64) not configured");
         _issuer = configuration["Jwt:Issuer"] ?? "AuthService";
         _audience = configuration["Jwt:Audience"] ?? "ApiGateway";
         _accessTokenExpirationMinutes = int.Parse(configuration["Jwt:AccessTokenExpirationMinutes"] ?? "60");
 
-        if (_secretKey.Length < 32)
-        {
-            throw new InvalidOperationException(
-                "JWT Secret Key should be at least 32 characters long");
-        }
+        // RS256: Auth is the ONLY holder of the private key. Verifiers (Gateway, OpsConsole)
+        // get the public key only, so a compromised verifier can check tokens but never mint them.
+        var rsa = RSA.Create();
+        rsa.ImportFromPem(Encoding.UTF8.GetString(Convert.FromBase64String(privateKeyBase64)));
+        _signingKey = new RsaSecurityKey(rsa);
     }
 
     public string GenerateAccessToken(string userId, string email, IEnumerable<string> roles, string? companyId = null)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(_secretKey);
-
 
         var claims = new List<Claim>
         {
@@ -62,8 +60,7 @@ public class JwtTokenService : IJwtTokenGenerator, IJwtTokenValidator
             Expires = DateTime.UtcNow.AddMinutes(_accessTokenExpirationMinutes),
             Issuer = _issuer,
             Audience = _audience,
-            SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            SigningCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256)
         };
 
         var token = tokenHandler.CreateToken(tokenDescriptor);
@@ -91,14 +88,13 @@ public class JwtTokenService : IJwtTokenGenerator, IJwtTokenValidator
         }
 
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(_secretKey);
 
         try
         {
             var validationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
+                IssuerSigningKey = _signingKey,
                 ValidateIssuer = true,
                 ValidIssuer = _issuer,
                 ValidateAudience = true,

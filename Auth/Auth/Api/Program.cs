@@ -18,6 +18,7 @@ using Infrastructure.Helpers;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Protos.User;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -64,6 +65,15 @@ builder.Services.AddSingleton<IEmailGateway, EmailGateway>();
 // api
 builder.Services.AddGrpc();
 
+// Liveness (default "" service) = cheap self-check; readiness ("ready" service) = real deps.
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddNpgSql(postgresConnectionString, name: "postgres", tags: ["ready"]);
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -73,6 +83,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapGrpcService<AuthGrpcService>();
+app.MapGrpcHealthChecksService();
 
 app.MapGet("/", () => "Hello World!");
 

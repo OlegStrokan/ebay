@@ -38,9 +38,9 @@ builder.Services.AddGrpcClient<AdminInventoryService.AdminInventoryServiceClient
 // read endpoints too ("OpsViewer" policy below) — the shared X-Admin-Api-Key can end
 // up copy-pasted into more places than intended, so viewing saga/payment/DLQ data now
 // also requires a real operator identity. Tokens are the same ones Auth/Gateway already
-// issue (shared Jwt:SecretKey + Jwt:Audience — see Gateway.Api/Program.cs for the same
-// pattern).
-var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
+// issue (RS256: OpsConsole holds only Auth's PUBLIC key — see Gateway.Api/Program.cs for
+// the same verify-only pattern).
+var jwtPublicKeyBase64 = builder.Configuration["Jwt:PublicKeyBase64"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 
@@ -49,13 +49,21 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 // with no indication of why.
 if (!builder.Environment.IsDevelopment())
 {
-    if (string.IsNullOrWhiteSpace(jwtSecretKey))
-        throw new InvalidOperationException("Jwt:SecretKey must be configured outside development.");
+    if (string.IsNullOrWhiteSpace(jwtPublicKeyBase64))
+        throw new InvalidOperationException("Jwt:PublicKeyBase64 must be configured outside development — Auth's RSA public key.");
     if (string.IsNullOrWhiteSpace(jwtAudience))
         throw new InvalidOperationException("Jwt:Audience must be configured outside development.");
     if (string.IsNullOrWhiteSpace(jwtIssuer))
         throw new InvalidOperationException(
             "Jwt:Issuer must be configured outside development, and must match the issuer Auth signs tokens with.");
+}
+
+RsaSecurityKey? jwtSigningKey = null;
+if (!string.IsNullOrWhiteSpace(jwtPublicKeyBase64))
+{
+    var rsa = System.Security.Cryptography.RSA.Create();
+    rsa.ImportFromPem(Encoding.UTF8.GetString(Convert.FromBase64String(jwtPublicKeyBase64)));
+    jwtSigningKey = new RsaSecurityKey(rsa);
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -71,9 +79,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             // guard above makes mandatory outside Development.
             ValidateIssuer = !string.IsNullOrWhiteSpace(jwtIssuer),
             ValidIssuer = jwtIssuer,
-            IssuerSigningKey = string.IsNullOrWhiteSpace(jwtSecretKey)
-                ? null
-                : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey))
+            ValidateIssuerSigningKey = jwtSigningKey is not null,
+            IssuerSigningKey = jwtSigningKey
         };
         options.Events = new JwtBearerEvents
         {
