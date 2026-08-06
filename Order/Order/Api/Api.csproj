@@ -7,6 +7,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.1" />
+        <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="8.0.1" />
         <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.22">
             <PrivateAssets>all</PrivateAssets>

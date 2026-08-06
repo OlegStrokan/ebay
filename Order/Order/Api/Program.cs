@@ -1,4 +1,5 @@
 using Api.GrpcServices;
+using Api.HealthChecks;
 using Application;
 using FluentValidation;
 using Infrastructure;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Protos.Order;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +21,19 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 builder.Services.AddGrpc();
 
-builder.Services.AddGrpcHealthChecks()
-    .AddCheck("Sample", () => HealthCheckResult.Healthy());
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddNpgSql(sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
+        name: "postgres-write", tags: ["ready"])
+    .AddNpgSql(sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("PostgresReadModel")
+            ?? sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
+        name: "postgres-read", tags: ["ready"])
+    .AddRedis(sp => sp.GetRequiredService<IConnectionMultiplexer>(), name: "redis", tags: ["ready"])
+    .AddCheck<KafkaHealthCheck>("kafka", tags: ["ready"]);
 
 
 builder.Services.AddOpenTelemetry()
