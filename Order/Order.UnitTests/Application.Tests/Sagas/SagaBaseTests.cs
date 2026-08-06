@@ -286,6 +286,107 @@ public class SagaBaseTests
         await _step3.Received(1).ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>());
     }
 
+    // a saga parked at a LATER step and resumed at an EARLIER one must still run the
+    // parked step. Logging a parked step as Completed made it skippable, which silently dropped
+    // CapturePayment when a PaymentSucceededEvent resumed the saga at AwaitPaymentConfirmation.
+    [Fact]
+    public async Task ResumeFromStepAsync_ShouldNotSkipParkedStep_WhenResumingAtEarlierStep()
+    {
+        var correlationId = Guid.NewGuid();
+        var sagaId = Guid.NewGuid();
+
+        _step1.Order.Returns(1); _step1.StepName.Returns("Step1");
+        _step1.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new Completed());
+
+        _step2.Order.Returns(2); _step2.StepName.Returns("Step2");
+        _step2.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new Completed());
+
+        _step3.Order.Returns(3); _step3.StepName.Returns("Step3");
+        _step3.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new Completed());
+
+        _repository.GetByCorrelationIdAsync(correlationId, "TestSaga", Arg.Any<CancellationToken>())
+            .Returns(new SagaState
+            {
+                Id = sagaId,
+                CorrelationId = correlationId,
+                Status = SagaStatus.WaitingForEvent,
+                SagaType = "TestSaga",
+                Payload = JsonSerializer.Serialize(new TestSagaData { CorrelationId = correlationId }),
+                Context = JsonSerializer.Serialize(new TestSagaContext()),
+                Steps = new List<SagaStepLog>
+                {
+                    new() { StepName = "Step1", Status = StepStatus.Completed },
+                    new() { StepName = "Step2", Status = StepStatus.Completed },
+                    new() { StepName = "Step3", Status = StepStatus.Waiting }
+                }
+            });
+
+        var result = await Build(_step1, _step2, _step3)
+            .ResumeFromStepAsync(new TestSagaData { CorrelationId = correlationId }, new TestSagaContext(), "Step1", CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        // Step1 is the resume target, so it re-runs to re-evaluate the event's context
+        await _step1.Received(1).ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>());
+        // Step2 genuinely completed → skipped
+        await _step2.DidNotReceive().ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>());
+        // Step3 only parked → must NOT be skipped
+        await _step3.Received(1).ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CompensateAsync_ShouldNotCompensateParkedStep()
+    {
+        var sagaId = Guid.NewGuid();
+
+        _step1.Order.Returns(1); _step1.StepName.Returns("Step1");
+        _step2.Order.Returns(2); _step2.StepName.Returns("Step2");
+
+        _repository.GetByIdAsync(sagaId, Arg.Any<CancellationToken>())
+            .Returns(new SagaState
+            {
+                Id = sagaId,
+                Status = SagaStatus.Failed,
+                Payload = JsonSerializer.Serialize(new TestSagaData()),
+                Context = JsonSerializer.Serialize(new TestSagaContext()),
+                Steps = new List<SagaStepLog>
+                {
+                    new() { StepName = "Step1", Status = StepStatus.Completed },
+                    new() { StepName = "Step2", Status = StepStatus.Waiting }
+                }
+            });
+
+        var result = await Build(_step1, _step2).CompensateAsync(sagaId, CancellationToken.None);
+
+        Assert.Equal(SagaStatus.Compensated, result.Status);
+
+        await _step1.Received(1).CompensateAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>());
+        // Step2 only announced a pause - its side effect never happened
+        await _step2.DidNotReceive().CompensateAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>());
+    }
+
+    // Root-cause guard for BUG-001: if a parked step is ever logged Completed again, every
+    // skip/compensate decision downstream is wrong.
+    [Fact]
+    public async Task ExecuteAsync_ShouldLogParkedStepAsWaiting_NotCompleted()
+    {
+        _step1.Order.Returns(1); _step1.StepName.Returns("Step1");
+        _step1.ExecuteAsync(Arg.Any<TestSagaData>(), Arg.Any<TestSagaContext>(), Arg.Any<CancellationToken>())
+            .Returns(new WaitForEvent("waiting for provider", TimeSpan.FromMinutes(5), WaitRecovery.AwaitPush));
+
+        var result = await Build(_step1)
+            .ExecuteAsync(new TestSagaData { CorrelationId = Guid.NewGuid() }, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+
+        await _repository.Received(1).SaveStepAsync(
+            Arg.Is<SagaStepLog>(s => s.StepName == "Step1" && s.Status == StepStatus.Waiting),
+            Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task ResumeFromStepAsync_ShouldStillPark_ButAlert_WhenParkBudgetExceeded()
     {

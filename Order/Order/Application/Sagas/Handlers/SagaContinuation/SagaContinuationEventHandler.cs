@@ -29,6 +29,26 @@ public abstract class SagaContinuationEventHandler<TEvent, TData, TContext>
     public abstract string SagaType { get; }
     
     
+    /* @todo: this being a hardcoded constant per handler is wrong and it already bit us.
+       it was written when payment parked in exactly one place (AwaitPaymentConfirmation).
+       authorize-early/capture-late made that three places - AuthorizePayment(2),
+       AwaitPaymentConfirmation(3), CapturePayment(6) - and this string still says 3.
+       so a saga that parks at 6 gets rewound to 3 on resume, and then the skip-set in
+       ResumeFromStepAsync has to un-rewind it. that's two things that must agree forever,
+       and they didn't: CapturePayment was logged Completed while parked, landed in the
+       skip-set, got skipped, money captured and the order never marked Paid. StepStatus.Waiting
+       patches the symptom. the rewind is still here.
+
+       do NOT just swap this for sagaState.CurrentStep - ReturnSaga parks at
+       AwaitReturnShipment(2) and resumes at ConfirmReturnReceived(3) on purpose, and that step
+       returns WaitForEvent unconditionally, so re-running it parks forever until ParkBudget
+       screams.
+
+       real fix: let the step say how it wants to come back. WaitForEvent already carries
+       Reason/Deadline/Recovery - add Resume (ReRunThisStep | ContinueAfter), persist it on
+       SagaState next to WaitRecoveryMode, and resume off CurrentStep + that flag. then adding
+       a park to some step doesn't quietly depend on a string in a handler nobody opened.
+     */
     protected abstract string ResumeAtStepName { get; }
 
     protected SagaContinuationEventHandler(

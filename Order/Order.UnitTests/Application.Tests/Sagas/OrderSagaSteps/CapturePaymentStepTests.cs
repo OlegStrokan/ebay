@@ -74,7 +74,49 @@ public class CapturePaymentStepTests
 
         Assert.IsType<Completed>(result);
 
-        await _orderPersistenceService.DidNotReceive().UpdateOrderAsync(
+        await _paymentGateway.DidNotReceive().CaptureAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<string>(),
+            Arg.Any<decimal>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // The capture succeeded out-of-band and a PaymentSucceededEvent resumed the saga. The step
+    // must still mark the order Paid - it is the only place that does.
+    [Fact]
+    public async Task ExecuteAsync_ShouldStillRecordPaymentOnOrder_WhenPaymentAlreadySucceeded()
+    {
+        var context = new OrderSagaContext
+        {
+            PaymentId = "EXISTING_PAY",
+            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+        };
+
+        var result = await BuildStep().ExecuteAsync(CreateSampleData(), context, CancellationToken.None);
+
+        Assert.IsType<Completed>(result);
+        Assert.True(context.PaymentRecorded);
+
+        await _orderPersistenceService.Received(1).UpdateOrderAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<Func<Order, Task>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldNotRecordPaymentTwice_WhenStepRunsAgain()
+    {
+        var context = new OrderSagaContext
+        {
+            PaymentId = "EXISTING_PAY",
+            PaymentStatus = OrderSagaPaymentStatus.Succeeded,
+        };
+
+        var step = BuildStep();
+        var data = CreateSampleData();
+
+        await step.ExecuteAsync(data, context, CancellationToken.None);
+        await step.ExecuteAsync(data, context, CancellationToken.None);
+
+        await _orderPersistenceService.Received(1).UpdateOrderAsync(
             Arg.Any<Guid>(),
             Arg.Any<Func<Order, Task>>(),
             Arg.Any<CancellationToken>());

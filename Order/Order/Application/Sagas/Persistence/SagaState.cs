@@ -68,5 +68,9 @@ public enum StepStatus
     Running,
     Completed,
     Failed,
-    Compensated
+    Compensated,
+    // The step ran but parked the saga (WaitForEvent). Its side effect has NOT happened,
+    // so it must never be treated as Completed: that would skip it on resume and
+    // compensate it as though it had run
+    Waiting
 }

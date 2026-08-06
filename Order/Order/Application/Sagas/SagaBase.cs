@@ -232,9 +232,10 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
             .ToList();
 
         // Steps that completed during a previous (interrupted) resume pass can be skipped.
-        // The resume step itself (fromStepName) must always run - it previously returned
-        // WaitForEvent and its step log is therefore also marked Completed, so we exclude
-        // it from the skip-set explicitly
+        // Parked steps are StepStatus.Waiting, not Completed, so they are never skipped here -
+        // that is what stops a saga parked at CapturePayment from resuming at an earlier step
+        // and silently skipping the capture. fromStepName is excluded explicitly as well: the
+        // handler resumes there so the step re-evaluates the context the event just updated.
         var alreadyCompleted = sagaState.Steps
             .Where(s => s.Status == StepStatus.Completed && s.StepName != fromStepName)
             .Select(s => s.StepName)
@@ -346,7 +347,12 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
                 stepLog.CompletedAt = endTime;
                 stepLog.DurationMs = (int)(endTime - startTime).TotalMilliseconds;
-                stepLog.Status = result is Fail ? StepStatus.Failed : StepStatus.Completed;
+                stepLog.Status = result switch
+                {
+                    Fail => StepStatus.Failed,
+                    WaitForEvent => StepStatus.Waiting,
+                    _ => StepStatus.Completed
+                };
                 stepLog.ErrorMessage = result is Fail failResult ? failResult.Reason : null;
                 stepLog.Response = result is Completed { Data: not null } completed
                     ? JsonSerializer.Serialize(completed.Data)
@@ -476,7 +482,11 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 {
                     await step.CompensateAsync(data, context, ct);
 
-                    var stepLog = sagaState.Steps.First(s => s.StepName == step.StepName);
+                    // A step that parked and later re-ran has both a Waiting and a Completed row;
+                    // mark the Completed one, or the next retry sees it still Completed and
+                    // compensates a second time.
+                    var stepLog = sagaState.Steps.First(s =>
+                        s.StepName == step.StepName && s.Status == StepStatus.Completed);
                     stepLog.Status = StepStatus.Compensated;
                     await _sagaRepository.SaveCompensationStateAsync(
                         sagaState, stepLog, ct);

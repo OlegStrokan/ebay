@@ -39,6 +39,8 @@ public sealed class CapturePaymentStep(
                     data.CorrelationId,
                     context.PaymentId);
 
+                await RecordPaymentOnOrderAsync(data, context, cancellationToken);
+
                 return new Completed(new Dictionary<string, object>
                 {
                     ["PaymentId"] = context.PaymentId,
@@ -182,14 +184,7 @@ public sealed class CapturePaymentStep(
                 context.PaymentId,
                 data.CorrelationId);
 
-            await orderPersistenceService.UpdateOrderAsync(
-                data.CorrelationId,
-                order =>
-                {
-                    order.Pay(PaymentId.From(context.PaymentId!));
-                    return Task.CompletedTask;
-                },
-                cancellationToken);
+            await RecordPaymentOnOrderAsync(data, context, cancellationToken);
 
             return new Completed(new Dictionary<string, object>
             {
@@ -204,6 +199,28 @@ public sealed class CapturePaymentStep(
         var failedMessage = captureResult.ErrorMessage ?? "Capture returned non-succeeded status";
         logger.LogWarning("Payment capture failed for order {OrderId}. Error: {Error}", data.CorrelationId, failedMessage);
         return new Fail($"Payment capture failed: {failedMessage}");
+    }
+
+    private async Task RecordPaymentOnOrderAsync(
+        OrderSagaData data,
+        OrderSagaContext context,
+        CancellationToken cancellationToken)
+    {
+        if (context.PaymentRecorded || string.IsNullOrEmpty(context.PaymentId))
+        {
+            return;
+        }
+
+        await orderPersistenceService.UpdateOrderAsync(
+            data.CorrelationId,
+            order =>
+            {
+                order.Pay(PaymentId.From(context.PaymentId!));
+                return Task.CompletedTask;
+            },
+            cancellationToken);
+
+        context.PaymentRecorded = true;
     }
 
     public async Task CompensateAsync(

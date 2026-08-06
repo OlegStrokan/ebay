@@ -136,7 +136,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         persistedContext!.PaymentStatus.Should().Be(OrderSagaPaymentStatus.Uncertain);
 
         var stepLogs = await sagaRepository.GetStepLogsAsync(persistedSaga.Id, CancellationToken.None);
-        stepLogs.Single(s => s.StepName == "ProcessPayment").Status.Should().Be(StepStatus.Completed);
+        stepLogs.Single(s => s.StepName == "CapturePayment").Status.Should().Be(StepStatus.Waiting);
     }
 
     [Fact]
