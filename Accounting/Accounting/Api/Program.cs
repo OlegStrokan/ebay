@@ -4,6 +4,7 @@ using Application;
 using Infrastructure;
 using Infrastructure.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +17,15 @@ builder.Services.AddGrpc(options =>
 });
 
 builder.Services.AddSingleton<ExceptionHandlingInterceptor>();
-builder.Services.AddGrpcHealthChecks();
+
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddNpgSql(sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
+        name: "postgres", tags: ["ready"]);
 
 var app = builder.Build();
 
