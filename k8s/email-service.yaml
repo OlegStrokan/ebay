@@ -21,12 +21,12 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
-              name: grpc
+              name: http
           env:
             - name: ASPNETCORE_URLS
               value: http://+:8080
             - name: Kestrel__EndpointDefaults__Protocols
-              value: Http2
+              value: Http1AndHttp2
           envFrom:
             - configMapRef:
                 name: common-config
@@ -40,12 +40,14 @@ spec:
               cpu: "500m"
               memory: "512Mi"
           readinessProbe:
-            grpc:
+            httpGet:
+              path: /health/ready
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            grpc:
+            httpGet:
+              path: /health/live
               port: 8080
             initialDelaySeconds: 20
             periodSeconds: 20
@@ -59,7 +61,7 @@ spec:
   selector:
     app: email-service
   ports:
-    - name: grpc
+    - name: http
       port: 8080
       targetPort: 8080
   type: ClusterIP

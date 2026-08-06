@@ -42,6 +42,7 @@ spec:
           readinessProbe:
             grpc:
               port: 8080
+              service: ready
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:

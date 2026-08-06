@@ -46,6 +46,7 @@ spec:
           readinessProbe:
             grpc:
               port: 8080
+              service: ready
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
