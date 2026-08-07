@@ -30,6 +30,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: common-config
+            - secretRef:
+                name: gateway-service-secret
           resources:
             requests:
               cpu: "100m"
