@@ -4,7 +4,11 @@ namespace: free-ebay
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml
+  # Both are gitignored and produced by ./scripts/generate-k8s-secrets.sh. If kustomize
+  # reports them missing, run that script first — no secret is committed to this repo.
+  # To use Sealed Secrets instead, swap secrets.generated.yaml for sealed-secrets.yaml.
+  - secrets.generated.yaml
+  - jwt-public-config.generated.yaml
   - kafka.yaml
   - jaeger.yaml
   - postgres-write.yaml

@@ -30,6 +30,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: common-config
+            - configMapRef:
+                name: jwt-public-config
             - secretRef:
                 name: gateway-service-secret
           resources:

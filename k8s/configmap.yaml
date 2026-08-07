@@ -33,9 +33,9 @@ data:
   Jwt__Authority: "http://auth-service:8080"
   Jwt__Issuer: "AuthService"
   Jwt__Audience: "ApiGateway"
-  # RS256 PUBLIC key only — safe to ship in a ConfigMap. Auth signs with the matching
-  # private key (auth-service-secret); Gateway/OpsConsole verify with this and can never mint.
-  Jwt__PublicKeyBase64: "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFvVjVIdTA4c0VuSEc1N2ZIZnBoNQpSYWlzNDRleXVtM1p1cm9Fc3FEenhJZ1dHaUF5ZU9CcXpkeEd4ZmxpTDRCOUVZczZVOHBnS3NHRnYzZjBOK2p1CjNIb2FuSzRZei8zWFJMTWtEUkNONWdmSWNEKytieFIzS3Evb2VlT3YxV0ozcWRlSFZ3c0lqbTlEazZ5dGg5SDgKRFdiV2duZGJPN1lYeUQ2THVRZjJQSURxOUd3OEtzcVZROEd2cXA3VkpabHZMc3gyaGliYmVxWm8rV3JqN3RmTQo4S0RMYXpaNmF4U1Q3cTAzaXkvekJ4bHBLS09kbnQyY0w5Y2VnMGVJQllIUFA0YUp1NnVmcVdPVGxDTTFtV1QxCkt4MnJ0Y0lBdjJDSU9xNTdVUEhjVGNwQmZXVmdwNkJSUUZKMHhjUWdnTDVDaW9paVg0YVgyU1ZZd2pNekpkQ1AKY3dJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg=="
+  # Jwt__PublicKeyBase64 deliberately does NOT live here: it is regenerated with the private
+  # half by scripts/generate-k8s-secrets.sh and shipped in the gitignored jwt-public-config
+  # ConfigMap, so a committed public key can never drift from the out-of-band private one.
 
   ConnectionStrings__Redis: "redis:6379"
 
