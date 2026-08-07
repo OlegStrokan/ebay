@@ -97,4 +97,48 @@ public sealed class SagaRepositoryTests : IClassFixture<IntegrationFixture>
             "the step log must be retained after the saga transition");
         steps[0].Response.Should().Be(step.Response, "step response JSON must be preserved");
     }
+
+    // A re-run step used to insert a second row, so compensation marked one and left the other
+    // Completed for the retry worker to compensate again.
+    [Fact]
+    public async Task SaveStepAsync_ShouldUpsertOnSagaIdAndStepName_NotInsertDuplicate()
+    {
+        await using var scope = _fixture.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<ISagaRepository>();
+
+        var saga = BuildSaga(SagaStatus.WaitingForEvent);
+        await repo.SaveAsync(saga, CancellationToken.None);
+
+        await repo.SaveStepAsync(
+            new SagaStepLog
+            {
+                Id = Guid.NewGuid(),
+                SagaId = saga.Id,
+                StepName = "CapturePayment",
+                Status = StepStatus.Waiting,
+                StartedAt = DateTime.UtcNow.AddMinutes(-5)
+            },
+            CancellationToken.None);
+
+        // same step runs again after the saga resumes - fresh Guid, same (SagaId, StepName)
+        await repo.SaveStepAsync(
+            new SagaStepLog
+            {
+                Id = Guid.NewGuid(),
+                SagaId = saga.Id,
+                StepName = "CapturePayment",
+                Status = StepStatus.Completed,
+                Response = """{"paymentId":"PAY-002"}""",
+                StartedAt = DateTime.UtcNow,
+                CompletedAt = DateTime.UtcNow
+            },
+            CancellationToken.None);
+
+        var steps = await repo.GetStepLogsAsync(saga.Id, CancellationToken.None);
+
+        steps.Should().ContainSingle(s => s.StepName == "CapturePayment",
+            "a re-run step must update its row, not add a second one");
+        steps.Single(s => s.StepName == "CapturePayment").Status.Should().Be(StepStatus.Completed);
+        steps.Single(s => s.StepName == "CapturePayment").Response.Should().Be("""{"paymentId":"PAY-002"}""");
+    }
 }

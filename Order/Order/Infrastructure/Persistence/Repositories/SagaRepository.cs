@@ -40,19 +40,26 @@ public class SagaRepository(AppDbContext dbContext) : ISagaRepository
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
-
     public async Task SaveStepAsync(SagaStepLog stepLog, CancellationToken cancellationToken)
     {
         var existing = await dbContext.SagaStepLogs
-            .AnyAsync(x => x.Id == stepLog.Id, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.SagaId == stepLog.SagaId && x.StepName == stepLog.StepName,
+                cancellationToken);
 
-        if (!existing)
+        if (existing is null)
         {
             await dbContext.SagaStepLogs.AddAsync(stepLog, cancellationToken);
         }
         else
         {
-            dbContext.SagaStepLogs.Update(stepLog);
+            existing.Status = stepLog.Status;
+            existing.Request = stepLog.Request;
+            existing.Response = stepLog.Response;
+            existing.ErrorMessage = stepLog.ErrorMessage;
+            existing.StartedAt = stepLog.StartedAt;
+            existing.CompletedAt = stepLog.CompletedAt;
+            existing.DurationMs = stepLog.DurationMs;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

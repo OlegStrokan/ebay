@@ -17,5 +17,7 @@ public class SagaStepLogConfiguration : IEntityTypeConfiguration<SagaStepLog>
         builder.Property(x => x.ErrorMessage).HasMaxLength(2000);
 
         builder.HasIndex(x => x.SagaId);
+
+        builder.HasIndex(x => new { x.SagaId, x.StepName }).IsUnique();
     }
 }

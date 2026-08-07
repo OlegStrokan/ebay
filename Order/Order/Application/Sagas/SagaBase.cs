@@ -329,6 +329,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
             var stepLog = new SagaStepLog
             {
+                // we got db constraint to prevent duplicates here
                 Id = Guid.NewGuid(),
                 SagaId = sagaId,
                 StepName = step.StepName,
@@ -482,9 +483,6 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 {
                     await step.CompensateAsync(data, context, ct);
 
-                    // A step that parked and later re-ran has both a Waiting and a Completed row;
-                    // mark the Completed one, or the next retry sees it still Completed and
-                    // compensates a second time.
                     var stepLog = sagaState.Steps.First(s =>
                         s.StepName == step.StepName && s.Status == StepStatus.Completed);
                     stepLog.Status = StepStatus.Compensated;
