@@ -1,4 +1,3 @@
-using System.Globalization;
 using Domain.Enums;
 using Domain.Exceptions;
 using Domain.ValueObjects;
@@ -66,16 +65,22 @@ public sealed class LedgerTransaction
         return tx;
     }
 
-    // Takes back previously recognized revenue on a return: Dr merchant_revenue / Cr refunds_payable.
+    // Takes back previously recognized revenue on a return: Dr merchant_revenue / Cr refunds_payable
     // we now owe this amount back to the customer
-    public static LedgerTransaction ForRevenueReversal(Guid orderId, Money amount, DateTime occurredAt)
+    public static LedgerTransaction ForRevenueReversal(
+        Guid orderId,
+        Guid returnRequestId,
+        Money amount,
+        DateTime occurredAt)
     {
-        var amountKey = amount.Amount.ToString("F4", CultureInfo.InvariantCulture);
+        // An order can be returned more than once, so only the return request identifies a reversal
+        if (returnRequestId == Guid.Empty)
+            throw new ArgumentException("ReturnRequestId is required.", nameof(returnRequestId));
 
         var tx = new LedgerTransaction(
-            transactionRef: $"reversal:{orderId}:{amountKey}:{amount.Currency}",
+            transactionRef: $"reversal:{returnRequestId}",
             refType: TransactionRefType.Reversal,
-            refId: orderId.ToString(),
+            refId: returnRequestId.ToString(),
             currency: amount.Currency,
             orderId: orderId,
             paymentId: null,

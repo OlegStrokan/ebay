@@ -38,6 +38,7 @@ message ReverseRevenueRequest {
   common.DecimalValue amount = 2;
   string currency = 3;
   repeated AccountingItem returned_items = 4;
+  string return_request_id = 5;
 }
 
 message ReverseRevenueResponse {

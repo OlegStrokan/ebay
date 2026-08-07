@@ -29,7 +29,8 @@ public class LedgerTransactionTests
     public void ForRevenueReversal_ShouldDebitRevenueAndCreditRefundsPayable()
     {
         var orderId = Guid.NewGuid();
-        var tx = LedgerTransaction.ForRevenueReversal(orderId, new Money(250.50m, "EUR"), DateTime.UtcNow);
+        var returnRequestId = Guid.NewGuid();
+        var tx = LedgerTransaction.ForRevenueReversal(orderId, returnRequestId, new Money(250.50m, "EUR"), DateTime.UtcNow);
 
         var debit = Assert.Single(tx.Entries.Where(e => e.Direction == EntryDirection.Debit));
         var credit = Assert.Single(tx.Entries.Where(e => e.Direction == EntryDirection.Credit));
@@ -40,10 +41,31 @@ public class LedgerTransactionTests
     }
 
     [Fact]
+    public void ForRevenueReversal_ShouldKeyTransactionRefOnReturnRequest_NotAmount()
+    {
+        var orderId = Guid.NewGuid();
+        var firstReturn = Guid.NewGuid();
+        var secondReturn = Guid.NewGuid();
+
+        var first = LedgerTransaction.ForRevenueReversal(orderId, firstReturn, new Money(50m, "USD"), DateTime.UtcNow);
+        var second = LedgerTransaction.ForRevenueReversal(orderId, secondReturn, new Money(50m, "USD"), DateTime.UtcNow);
+
+        Assert.Equal($"reversal:{firstReturn}", first.TransactionRef);
+        Assert.NotEqual(first.TransactionRef, second.TransactionRef);
+    }
+
+    [Fact]
+    public void ForRevenueReversal_ShouldThrow_WhenReturnRequestIdMissing()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            LedgerTransaction.ForRevenueReversal(Guid.NewGuid(), Guid.Empty, new Money(50m, "USD"), DateTime.UtcNow));
+    }
+
+    [Fact]
     public void ForReversalCancellation_ShouldSwapEveryLegOfOriginal()
     {
         var orderId = Guid.NewGuid();
-        var original = LedgerTransaction.ForRevenueReversal(orderId, new Money(80m, "USD"), DateTime.UtcNow);
+        var original = LedgerTransaction.ForRevenueReversal(orderId, Guid.NewGuid(), new Money(80m, "USD"), DateTime.UtcNow);
 
         var cancellation = LedgerTransaction.ForReversalCancellation(original, DateTime.UtcNow);
 

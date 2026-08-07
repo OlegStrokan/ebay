@@ -27,6 +27,12 @@ at-least-once delivery.
 | `ReverseRevenue` | `merchant_revenue` | `refunds_payable` |
 | `CancelReversal` | reversing entry (swaps the original reversal's legs) | |
 
+`transaction_ref` is derived from the caller's business identifier, never from the amount:
+`refund:{refundId}`, `reversal:{returnRequestId}`, `cancel-reversal:{reversalId}`. An order can be
+returned more than once, so `ReverseRevenue` requires `return_request_id` — keying on
+`(order_id, amount, currency)` made a second return of the same amount look like a retry and
+silently dropped it from the ledger.
+
 Later phases add the Kafka money-event consumer, reconciliation worker, FX/tax reporting, and the
 OpsConsole read views.
 

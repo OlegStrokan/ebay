@@ -1,4 +1,3 @@
-using System.Globalization;
 using Application.Common;
 using Application.Interfaces;
 using Domain.Entities;
@@ -21,21 +20,29 @@ internal sealed class ReverseRevenueCommandHandler(
         if (request.Amount <= 0m)
             return Result<string>.Failure("Reversal amount must be positive.");
 
+        if (request.ReturnRequestId == Guid.Empty)
+            return Result<string>.Failure("ReturnRequestId is required to reverse revenue.");
+
         var money = new Money(request.Amount, request.Currency);
-        var amountKey = money.Amount.ToString("F4", CultureInfo.InvariantCulture);
-        var transactionRef = $"reversal:{request.OrderId}:{amountKey}:{money.Currency}";
+      
+        var transactionRef = $"reversal:{request.ReturnRequestId}";
 
         var existing = await repository.GetByTransactionRefAsync(transactionRef, cancellationToken);
         if (existing is not null)
         {
             logger.LogInformation(
-                "ReverseRevenue is idempotent no-op. OrderId={OrderId}, ReversalId={ReversalId}",
+                "ReverseRevenue is idempotent no-op. OrderId={OrderId}, ReturnRequestId={ReturnRequestId}, ReversalId={ReversalId}",
                 request.OrderId,
+                request.ReturnRequestId,
                 existing.Id);
             return Result<string>.Success(existing.Id.ToString());
         }
 
-        var transaction = LedgerTransaction.ForRevenueReversal(request.OrderId, money, DateTime.UtcNow);
+        var transaction = LedgerTransaction.ForRevenueReversal(
+            request.OrderId,
+            request.ReturnRequestId,
+            money,
+            DateTime.UtcNow);
 
         try
         {
@@ -51,8 +58,9 @@ internal sealed class ReverseRevenueCommandHandler(
         }
 
         logger.LogInformation(
-            "Revenue reversed in ledger. OrderId={OrderId}, ReversalId={ReversalId}, Amount={Amount} {Currency}",
+            "Revenue reversed in ledger. OrderId={OrderId}, ReturnRequestId={ReturnRequestId}, ReversalId={ReversalId}, Amount={Amount} {Currency}",
             request.OrderId,
+            request.ReturnRequestId,
             transaction.Id,
             money.Amount,
             money.Currency);

@@ -48,8 +48,16 @@ public sealed class AccountingGrpcService(
         if (!Guid.TryParse(request.OrderId, out var orderId))
             return new ReverseRevenueResponse { Success = false, ErrorMessage = "A valid OrderId is required." };
 
+        if (!Guid.TryParse(request.ReturnRequestId, out var returnRequestId) || returnRequestId == Guid.Empty)
+            return new ReverseRevenueResponse
+            {
+                Success = false,
+                ErrorMessage = "A valid ReturnRequestId is required — it is the idempotency key for the reversal."
+            };
+
         var command = new ReverseRevenueCommand(
             OrderId: orderId,
+            ReturnRequestId: returnRequestId,
             Amount: request.Amount?.ToDecimal() ?? 0m,
             Currency: request.Currency);
 
@@ -57,8 +65,9 @@ public sealed class AccountingGrpcService(
         if (!result.IsSuccess || result.Value is null)
         {
             logger.LogWarning(
-                "ReverseRevenue gRPC request failed. OrderId={OrderId}, Error={Error}",
+                "ReverseRevenue gRPC request failed. OrderId={OrderId}, ReturnRequestId={ReturnRequestId}, Error={Error}",
                 request.OrderId,
+                request.ReturnRequestId,
                 result.Error);
             return new ReverseRevenueResponse { Success = false, ErrorMessage = result.Error ?? "ReverseRevenue failed." };
         }
