@@ -23,6 +23,7 @@ public class ReturnRequestCreatedEventHandler
         return new ReturnSagaData
         {
             CorrelationId = eventDto.OrderId,
+            ReturnRequestId = eventDto.ReturnRequestId,
             CustomerId = eventDto.CustomerId,
             ReturnReason = eventDto.Reason,
             ReturnedItems = eventDto.ItemsToReturn,

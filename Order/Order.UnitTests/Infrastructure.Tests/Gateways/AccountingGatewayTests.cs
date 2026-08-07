@@ -76,15 +76,18 @@ public class AccountingGatewayTests
     public async Task ReverseRevenueAsync_ShouldReturnReversalId_WhenSucceeds()
     {
         var reversalId = "rev-555";
+        var returnRequestId = Guid.NewGuid();
+        ReverseRevenueRequest? sent = null;
         _client
-            .ReverseRevenueAsync(Arg.Any<ReverseRevenueRequest>(),
+            .ReverseRevenueAsync(Arg.Do<ReverseRevenueRequest>(r => sent = r),
                 Arg.Any<Metadata>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
             .Returns(GrpcCall(new ReverseRevenueResponse { Success = true, ReversalId = reversalId }));
 
         var result = await Build().ReverseRevenueAsync(
-            Guid.NewGuid(), 100m, "USD", new List<OrderItemDto>(), CancellationToken.None);
+            Guid.NewGuid(), returnRequestId, 100m, "USD", new List<OrderItemDto>(), CancellationToken.None);
 
         Assert.Equal(reversalId, result);
+        Assert.Equal(returnRequestId.ToString(), sent?.ReturnRequestId);
     }
 
     [Fact]
@@ -96,7 +99,7 @@ public class AccountingGatewayTests
             .Returns(GrpcCall(new ReverseRevenueResponse { Success = false, ErrorMessage = "reversal failed" }));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Build().ReverseRevenueAsync(Guid.NewGuid(), 100m, "USD", new List<OrderItemDto>(), CancellationToken.None));
+            Build().ReverseRevenueAsync(Guid.NewGuid(), Guid.NewGuid(), 100m, "USD", new List<OrderItemDto>(), CancellationToken.None));
     }
 
     [Fact]
@@ -108,7 +111,7 @@ public class AccountingGatewayTests
             .Returns(GrpcFail<ReverseRevenueResponse>(StatusCode.NotFound, "order not in accounting"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Build().ReverseRevenueAsync(Guid.NewGuid(), 100m, "USD", new List<OrderItemDto>(), CancellationToken.None));
+            Build().ReverseRevenueAsync(Guid.NewGuid(), Guid.NewGuid(), 100m, "USD", new List<OrderItemDto>(), CancellationToken.None));
     }
 
     [Fact]

@@ -195,6 +195,7 @@ public sealed class KafkaEventPublisher : IEventPublisher, IDisposable
 
             ReturnRequestCreatedEvent e => System.Text.Json.JsonSerializer.Serialize(new ReturnRequestCreatedEventDto
             {
+                ReturnRequestId = e.ReturnRequestId.Value,
                 OrderId = e.OrderId.Value,
                 CustomerId = e.CustomerId.Value,
                 Reason = e.Reason,

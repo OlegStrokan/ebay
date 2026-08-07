@@ -56,6 +56,7 @@ public class AccountingGateway(
 
     public async Task<string> ReverseRevenueAsync(
         Guid orderId,
+        Guid returnRequestId,
         decimal amount,
         string currency,
         List<OrderItemDto> returnedItems,
@@ -64,6 +65,7 @@ public class AccountingGateway(
         var request = new ReverseRevenueRequest
         {
             OrderId = orderId.ToString(),
+            ReturnRequestId = returnRequestId.ToString(),
             Amount = amount.ToDecimalValue(),
             Currency = currency
         };
@@ -85,8 +87,9 @@ public class AccountingGateway(
                     $"Revenue reversal failed. OrderId={orderId}, Amount={amount} {currency}, Error={response.ErrorMessage}");
 
             logger.LogInformation(
-                "Revenue reversed in accounting. OrderId={OrderId}, ReversalId={ReversalId}, Amount={Amount} {Currency}",
+                "Revenue reversed in accounting. OrderId={OrderId}, ReturnRequestId={ReturnRequestId}, ReversalId={ReversalId}, Amount={Amount} {Currency}",
                 orderId,
+                returnRequestId,
                 response.ReversalId,
                 amount,
                 currency);

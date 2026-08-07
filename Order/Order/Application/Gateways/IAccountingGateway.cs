@@ -14,6 +14,7 @@ public interface IAccountingGateway
 
     Task<string> ReverseRevenueAsync(
         Guid orderId,
+        Guid returnRequestId,
         decimal amount,
         string currency,
         List<OrderItemDto> returnedItems,

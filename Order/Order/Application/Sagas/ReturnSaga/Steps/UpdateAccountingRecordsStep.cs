@@ -23,6 +23,11 @@ public sealed class UpdateAccountingRecordsStep(
                 return new Fail("RefundId is required but was not found in context");
             }
 
+            if (data.ReturnRequestId == Guid.Empty)
+            {
+                return new Fail("ReturnRequestId is required but was not found in saga data");
+            }
+
             logger.LogInformation(
                 "Updating accounting records for order {OrderId}, refund {RefundId}",
                 data.CorrelationId,
@@ -49,6 +54,7 @@ public sealed class UpdateAccountingRecordsStep(
             // step 2: reverse the revenue
             var reversalId = await accountingGateway.ReverseRevenueAsync(
                 orderId: data.CorrelationId,
+                returnRequestId: data.ReturnRequestId,
                 amount: data.RefundAmount,
                 currency: data.Currency,
                 returnedItems: data.ReturnedItems,

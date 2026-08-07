@@ -441,6 +441,7 @@ public class FakeGrpcAccountingGateway : IAccountingGateway
 
     public async Task<string> ReverseRevenueAsync(
         Guid orderId,
+        Guid returnRequestId,
         decimal amount,
         string currency, 
         List<OrderItemDto> returnedItems,
@@ -449,6 +450,7 @@ public class FakeGrpcAccountingGateway : IAccountingGateway
         var request = new ReverseRevenueRequest
         {
             OrderId = orderId.ToString(),
+            ReturnRequestId = returnRequestId.ToString(),
             Amount = amount.ToDecimalValue(),
             Currency = currency,
         };

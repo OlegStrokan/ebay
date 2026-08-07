@@ -2,6 +2,7 @@ namespace Application.DTOs;
 
 public record ReturnRequestCreatedEventDto
 {
+    public Guid ReturnRequestId { get; init; }
     public Guid OrderId { get; init; }
     public Guid CustomerId { get; init; }
     public string Reason { get; init; } = string.Empty;

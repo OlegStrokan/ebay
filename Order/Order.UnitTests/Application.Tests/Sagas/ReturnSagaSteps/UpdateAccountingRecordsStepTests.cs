@@ -43,6 +43,7 @@ public class UpdateAccountingRecordsStepTests
 
         _accountingGateway.ReverseRevenueAsync(
                 data.CorrelationId,
+                data.ReturnRequestId,
                 data.RefundAmount,
                 data.Currency,
                 data.ReturnedItems,
@@ -68,6 +69,7 @@ public class UpdateAccountingRecordsStepTests
 
         await _accountingGateway.Received(1).ReverseRevenueAsync(
             data.CorrelationId,
+            data.ReturnRequestId,
             data.RefundAmount,
             data.Currency,
             data.ReturnedItems,
@@ -116,6 +118,7 @@ public class UpdateAccountingRecordsStepTests
 
         await _accountingGateway.DidNotReceiveWithAnyArgs().ReverseRevenueAsync(
             Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
             Arg.Any<decimal>(),
             Arg.Any<string>(),
             Arg.Any<List<OrderItemDto>>(),
@@ -139,6 +142,7 @@ public class UpdateAccountingRecordsStepTests
         ).Returns("JE-OK");
 
         _accountingGateway.ReverseRevenueAsync(
+            Arg.Any<Guid>(),
             Arg.Any<Guid>(),
             Arg.Any<decimal>(),
             Arg.Any<string>(),
@@ -178,6 +182,7 @@ public class UpdateAccountingRecordsStepTests
 
         _accountingGateway.ReverseRevenueAsync(
             Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
             Arg.Any<decimal>(),
             Arg.Any<string>(),
             Arg.Any<List<OrderItemDto>>(),
@@ -194,6 +199,62 @@ public class UpdateAccountingRecordsStepTests
             Arg.Is<decimal>(amt => amt == 250.50m),
             Arg.Is<string>(curr => curr == "EUR"),
             Arg.Is<string>(reason => reason.Contains("Defective")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldReturnFailure_WhenReturnRequestIdIsMissing()
+    {
+        var data = CreateSampleData();
+        data.ReturnRequestId = Guid.Empty;
+        var context = new ReturnSagaContext { RefundId = "REF-123" };
+
+        var result = await _step.ExecuteAsync(data, context, CancellationToken.None);
+
+        Assert.IsType<Fail>(result);
+        Assert.Contains("ReturnRequestId is required", ((Fail)result).Reason);
+
+        await _accountingGateway.DidNotReceiveWithAnyArgs().RecordRefundAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<string>(),
+            Arg.Any<decimal>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldForwardReturnRequestId_ToReverseRevenue()
+    {
+        var data = CreateSampleData();
+        var context = new ReturnSagaContext { RefundId = "REF-123" };
+
+        _accountingGateway.RecordRefundAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<string>(),
+            Arg.Any<decimal>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>()
+        ).Returns("JE-OK");
+
+        _accountingGateway.ReverseRevenueAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
+            Arg.Any<decimal>(),
+            Arg.Any<string>(),
+            Arg.Any<List<OrderItemDto>>(),
+            Arg.Any<CancellationToken>()
+        ).Returns("REV-OK");
+
+        await _step.ExecuteAsync(data, context, CancellationToken.None);
+
+        await _accountingGateway.Received(1).ReverseRevenueAsync(
+            Arg.Any<Guid>(),
+            Arg.Is<Guid>(id => id == data.ReturnRequestId),
+            Arg.Any<decimal>(),
+            Arg.Any<string>(),
+            Arg.Any<List<OrderItemDto>>(),
             Arg.Any<CancellationToken>());
     }
     
@@ -293,6 +354,7 @@ public class UpdateAccountingRecordsStepTests
         return new ReturnSagaData
         {
             CorrelationId = Guid.NewGuid(),
+            ReturnRequestId = Guid.NewGuid(),
             RefundAmount = 250.50m,
             Currency = "EUR",
             ReturnReason = "Defective Product",
