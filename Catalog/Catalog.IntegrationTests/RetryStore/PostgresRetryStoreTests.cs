@@ -42,7 +42,7 @@ public sealed class PostgresRetryStoreTests : PostgresFixture
         persisted.Payload.Should().Be(record.Payload);
         persisted.Headers.Should().Be(record.Headers);
         persisted.RetryCount.Should().Be(record.RetryCount);
-        persisted.Status.Should().Be(RetryRecordStatus.Pending);
+        persisted.Status.Should().Be(RetryRecordStatus.InProgress);
         persisted.LastErrorMessage.Should().Be(record.LastErrorMessage);
         persisted.LastErrorType.Should().Be(record.LastErrorType);
         persisted.CorrelationId.Should().Be(record.CorrelationId);

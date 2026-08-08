@@ -48,14 +48,16 @@ public class RetryWorkerBackgroundServiceTests
     public void TearDown() => _sut.Dispose();
 
     [Test]
-    public async Task ProcessDueRecords_WhenNoDueRecords_ShouldNotCallMarkInProgress()
+    public async Task ProcessDueRecords_WhenNoDueRecords_ShouldNotTouchTheStore()
     {
         SetupGetDueRecords([]);
 
         await RunWorkerOnce();
 
         await _retryStore.DidNotReceiveWithAnyArgs()
-            .MarkInProgressAsync(default, default);
+            .MarkSucceededAsync(default, default);
+        await _retryStore.DidNotReceiveWithAnyArgs()
+            .RescheduleAsync(default, default, default, default, default, default);
     }
 
     [Test]
@@ -66,7 +68,9 @@ public class RetryWorkerBackgroundServiceTests
 
         await RunWorkerOnce();
 
-        await _retryStore.Received(1).MarkInProgressAsync(record.Id, Arg.Any<CancellationToken>());
+        // GetDueRecordsAsync claims rows as InProgress in the same statement, so the worker
+        // never calls MarkInProgressAsync.
+        await _retryStore.DidNotReceiveWithAnyArgs().MarkInProgressAsync(default, default);
         await _retryStore.Received(1).MarkSucceededAsync(record.Id, Arg.Any<CancellationToken>());
     }
 
@@ -142,7 +146,7 @@ public class RetryWorkerBackgroundServiceTests
     }
 
     [Test]
-    public async Task ProcessDueRecords_WhenPayloadInvalid_ShouldMoveToDeadLetter()
+    public async Task ProcessDueRecords_WhenPayloadInvalid_ShouldReschedule()
     {
         var record = BuildRecord("ProductCreatedEvent");
         record.Payload = "not-valid-json{{{";
@@ -152,8 +156,14 @@ public class RetryWorkerBackgroundServiceTests
 
         // Invalid JSON causes JsonException which is caught and treated as a failure.
         // With retryCount=0, newRetryCount=1 < limit=3, so it reschedules (not dead-letter).
-        // But we can verify the record was at least marked InProgress and the error was handled.
-        await _retryStore.Received(1).MarkInProgressAsync(record.Id, Arg.Any<CancellationToken>());
+        await _retryStore.Received(1).RescheduleAsync(
+            record.Id,
+            Arg.Any<int>(),
+            Arg.Any<DateTime>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+        await _retryStore.DidNotReceiveWithAnyArgs().MarkSucceededAsync(default, default);
     }
 
     [Test]
