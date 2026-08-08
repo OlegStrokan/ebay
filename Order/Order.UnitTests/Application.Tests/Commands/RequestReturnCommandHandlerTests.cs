@@ -337,4 +337,48 @@ public class RequestReturnCommandHandlerTest
         Assert.False(result.IsSuccess);
         Assert.Contains("is not part of order", result.Error);
     }
+
+    [Fact]
+    public async Task Handle_ShouldReject_WhenOrderAlreadyHasReturnRequest()
+    {
+        var order = CreateCompletedOrder();
+
+        _idempotencyRepository
+            .GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((IdempotencyRecord?)null);
+
+        _orderPersistenceService
+            .LoadOrderAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(order);
+
+        SetupUserGateway(order.CustomerId.Value);
+
+        var existingReturn = RequestReturn.Create(
+            order.Id,
+            order.CustomerId,
+            "Already returned",
+            order.Items.ToList(),
+            Money.Create(100, "USD"),
+            DateTime.UtcNow.AddDays(-1),
+            order.Items.ToList(),
+            TimeSpan.FromDays(30));
+
+        _returnRequestPersistenceService
+            .LoadByOrderIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(existingReturn);
+
+        var result = await BuildHandler().Handle(
+            CreateValidCommand(order.Id.Value, order.Items.First().ProductId.Value),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("already has return request", result.Error);
+
+        // Must not reach the transaction that would trip PK_ReturnRequestLookups.
+        await _returnRequestPersistenceService.DidNotReceive().CreateReturnRequestAsync(
+            Arg.Any<RequestReturn>(),
+            Arg.Any<string?>(),
+            Arg.Any<Guid?>(),
+            Arg.Any<CancellationToken>());
+    }
 }

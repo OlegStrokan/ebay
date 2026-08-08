@@ -113,9 +113,8 @@ public class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifetime
 
         await using var appDb  = new AppDbContext(writeOpts);
         await using var readDb = new ReadDbContext(readOpts);
-        await Task.WhenAll(
-            appDb.Database.EnsureCreatedAsync(),
-            readDb.Database.EnsureCreatedAsync());
+        await appDb.Database.MigrateAsync();
+        await readDb.Database.MigrateAsync();
 
         Console.WriteLine("✅ Schema ready");
 

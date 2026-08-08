@@ -183,9 +183,11 @@ public class FakeInventoryGrpcServer : FakeGrpcServerBase
     public string ReservationIdToReturn { get; set; } = "RES-DEFAULT";
     public string ReserveErrorMessage { get; set; } = string.Empty;
     public bool ReleaseShouldSucceed { get; set; } = true;
+    public bool ConfirmShouldSucceed { get; set; } = true;
 
     public List<ReserveInventoryRequest> ReserveCalls { get; } = new();
     public List<ReleaseInventoryRequest> ReleaseCalls { get; } = new();
+    public List<ConfirmReservationRequest> ConfirmCalls { get; } = new();
 
     public void Reset()
     {
@@ -193,8 +195,10 @@ public class FakeInventoryGrpcServer : FakeGrpcServerBase
         ReservationIdToReturn = "RES-" + Guid.NewGuid().ToString()[..8];
         ReserveErrorMessage = string.Empty;
         ReleaseShouldSucceed = true;
+        ConfirmShouldSucceed = true;
         ReserveCalls.Clear();
         ReleaseCalls.Clear();
+        ConfirmCalls.Clear();
     }
 
     protected override void RegisterServices(IServiceCollection s) 
@@ -249,6 +253,19 @@ public class FakeInventoryServiceImpl : InventoryService.InventoryServiceBase
         {
             Success = _cfg.ReleaseShouldSucceed,
             ErrorMessage = _cfg.ReleaseShouldSucceed ? string.Empty : "Release failed"
+        });
+    }
+
+    public override Task<ConfirmReservationResponse> ConfirmReservation(
+        ConfirmReservationRequest request,
+        ServerCallContext context)
+    {
+        _cfg.ConfirmCalls.Add(request);
+
+        return Task.FromResult(new ConfirmReservationResponse
+        {
+            Success = _cfg.ConfirmShouldSucceed,
+            ErrorMessage = _cfg.ConfirmShouldSucceed ? string.Empty : "Confirm failed"
         });
     }
 }

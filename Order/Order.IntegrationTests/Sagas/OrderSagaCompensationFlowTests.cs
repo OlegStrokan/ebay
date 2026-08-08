@@ -99,6 +99,9 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         var sagaRepository = scope.ServiceProvider.GetRequiredService<ISagaRepository>();
 
         var (_, data) = BuildPendingOrderAndData();
+        // CapturePaymentStep short-circuits with "No authorization hold available to capture"
+        // unless a hold exists, so the gateway would never be reached
+        data.PaymentIntentId = "pi_test_hold";
 
         var steps = new ISagaStep<OrderSagaData, OrderSagaContext>[]
         {
@@ -148,6 +151,9 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         var compensationSequence = new List<string>();
 
         var (_, data) = BuildPendingOrderAndData();
+        // CapturePaymentStep short-circuits with "No authorization hold available to capture"
+        // unless a hold exists, so the gateway would never be reached.
+        data.PaymentIntentId = "pi_test_hold";
 
         var steps = new ISagaStep<OrderSagaData, OrderSagaContext>[]
         {
@@ -189,7 +195,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         persistedContext.PaymentFailureCode.Should().Be("PAYMENT_GATEWAY_UNAVAILABLE");
 
         var stepLogs = await sagaRepository.GetStepLogsAsync(persistedSaga.Id, CancellationToken.None);
-        stepLogs.Single(s => s.StepName == "ProcessPayment").Status.Should().Be(StepStatus.Failed);
+        stepLogs.Single(s => s.StepName == "CapturePayment").Status.Should().Be(StepStatus.Failed);
         stepLogs.Single(s => s.StepName == "ReserveInventory").Status.Should().Be(StepStatus.Compensated);
     }
 

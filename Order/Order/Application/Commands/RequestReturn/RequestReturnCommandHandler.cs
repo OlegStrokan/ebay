@@ -63,8 +63,16 @@ public class RequestReturnCommandHandler(
                         $"Order {request.OrderId} must be completed to request return. " +
                         $"Current status: {order.Status}");
 
+                // ReturnRequestLookups is keyed by OrderId and SagaStates has a unique
+                // (CorrelationId, SagaType) where CorrelationId is the OrderId — a second return
+                // request cannot be persisted, so reject it here instead wait for db exception
                 var existingReturn = await returnRequestPersistenceService.LoadByOrderIdAsync(
                     request.OrderId, cancellationToken);
+
+                if (existingReturn is not null)
+                    return Result<Guid>.Failure(
+                        $"Order {request.OrderId} already has return request {existingReturn.Id.Value}. " +
+                        "Only one return request per order is supported.");
 
                 var itemsToReturn = new List<OrderItem>();
                 foreach (var dto in request.ItemsToReturn)
@@ -74,15 +82,10 @@ public class RequestReturnCommandHandler(
                         return Result<Guid>.Failure(
                             $"Product {dto.ProductId} is not part of order {request.OrderId}");
 
-                    var alreadyReturnedQty = existingReturn?.ItemsToReturn
-                        .Where(i => i.ProductId.Value == dto.ProductId)
-                        .Sum(i => i.Quantity) ?? 0;
-
-                    var maxReturnableQty = originalItem.Quantity - alreadyReturnedQty;
-                    if (dto.Quantity <= 0 || dto.Quantity > maxReturnableQty)
+                    if (dto.Quantity <= 0 || dto.Quantity > originalItem.Quantity)
                         return Result<Guid>.Failure(
                             $"Cannot return {dto.Quantity} of product {dto.ProductId}. " +
-                            $"Maximum returnable quantity is {maxReturnableQty}");
+                            $"Maximum returnable quantity is {originalItem.Quantity}");
 
                     itemsToReturn.Add(OrderItem.Create(
                         originalItem.ProductId,

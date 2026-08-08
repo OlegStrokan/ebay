@@ -50,13 +50,14 @@ public class ReturnPolicyServiceTests
     [InlineData("SK")]
     [InlineData("SI")]
     [InlineData("SE")]
-    public void CalculateReturnWindow_ShouldReturn14Days_ForEuCountry(string countryCode)
+    public void CalculateReturnWindow_ShouldReturn30Days_ForEuCountry(string countryCode)
     {
         var ctx = Build(countryCode: countryCode);
 
         var window = _sut.CalculateReturnWindow(ctx);
 
-        Assert.Equal(TimeSpan.FromDays(14), window);
+        // The EU directive floor is 14; the platform deliberately extends it to 30.
+        Assert.Equal(TimeSpan.FromDays(30), window);
     }
 
     [Fact]
@@ -70,14 +71,14 @@ public class ReturnPolicyServiceTests
     }
     
     [Fact]
-    public void CalculateReturnWindow_ShouldReturn21Days_ForSubscriberTier()
+    public void CalculateReturnWindow_ShouldReturn14Days_ForSubscriberTier()
     {
-        // Subscriber tier applies Max(base, 21) - Max(7, 21) = 21
+        // Subscriber adds 7 on top of the base window: 7 + 7 = 14
         var ctx = Build(customerTier: "Subscriber");
 
         var window = _sut.CalculateReturnWindow(ctx);
 
-        Assert.Equal(TimeSpan.FromDays(21), window);
+        Assert.Equal(TimeSpan.FromDays(14), window);
     }
     
     [Fact]
@@ -111,35 +112,33 @@ public class ReturnPolicyServiceTests
     }
 
     [Fact]
-    public void CalculateReturnWindow_ShouldReturn44Days_ForEuPremium()
+    public void CalculateReturnWindow_ShouldReturn60Days_ForEuPremium()
     {
         var ctx = Build(countryCode: "FR", customerTier: "Premium");
 
         var window = _sut.CalculateReturnWindow(ctx);
 
-        Assert.Equal(TimeSpan.FromDays(44), window); // Max(7,14)=14, then +30
+        Assert.Equal(TimeSpan.FromDays(60), window); // Max(7,30)=30, then +30
     }
 
     [Fact]
-    public void CalculateReturnWindow_ShouldReturn58Days_ForPremiumEuDuringHoliday()
+    public void CalculateReturnWindow_ShouldReturn74Days_ForPremiumEuDuringHoliday()
     {
-        // EU: Max(7,14)=14; Premium: +30; Holiday: +14 => 58 days
         var ctx = Build(countryCode: "DE", customerTier: "Premium", isHolidaySeason: true);
 
         var window = _sut.CalculateReturnWindow(ctx);
 
-        Assert.Equal(TimeSpan.FromDays(58), window); // 14 + 30 + 14
+        Assert.Equal(TimeSpan.FromDays(74), window); // 30 + 30 + 14
     }
 
     [Fact]
-    public void CalculateReturnWindow_ShouldReturn35Days_ForSubscriberDuringHoliday()
+    public void CalculateReturnWindow_ShouldReturn28Days_ForSubscriberDuringHoliday()
     {
-        // Subscriber: Max(7, 21) = 21; Holiday: +14 → 35
         var ctx = Build(customerTier: "Subscriber", isHolidaySeason: true);
 
         var window = _sut.CalculateReturnWindow(ctx);
 
-        Assert.Equal(TimeSpan.FromDays(35), window);
+        Assert.Equal(TimeSpan.FromDays(28), window); // 7 + 7 + 14
     }
 
     [Theory]
