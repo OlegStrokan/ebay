@@ -44,7 +44,7 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
             .Options;
 
         await using var dbContext = new InventoryDbContext(dbOptions);
-        await dbContext.Database.EnsureCreatedAsync();
+        await dbContext.Database.MigrateAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
