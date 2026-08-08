@@ -6,10 +6,9 @@ using Gateway.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
-var jwtAuthority = builder.Configuration["Jwt:Authority"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
-var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
+var jwtPublicKeyBase64 = builder.Configuration["Jwt:PublicKeyBase64"];
 
 
 if (!builder.Environment.IsDevelopment())
@@ -19,16 +18,48 @@ if (!builder.Environment.IsDevelopment())
     if (string.IsNullOrWhiteSpace(jwtIssuer))
         throw new InvalidOperationException(
             "Jwt:Issuer must be configured outside development, and must match the issuer Auth signs tokens with.");
-    if (string.IsNullOrWhiteSpace(jwtSecretKey))
+    if (string.IsNullOrWhiteSpace(jwtPublicKeyBase64))
         throw new InvalidOperationException(
-            "Jwt:SecretKey must be configured outside development, and must match Auth's signing key.");
+            "Jwt:PublicKeyBase64 must be configured outside development — Auth's RSA public key.");
+
+    // A carrier webhook is the only thing between the internet and ProcessRefundStep: forge
+    // return.delivered and the saga refunds an order whose goods never came back. The verifiers
+    // fail closed on a missing secret, but a *published* one is worse than none - it looks
+    // configured. Refuse to boot on either.
+    RequireDeployedSecret("WebhookSecurity:ShippingSharedSecret");
+    RequireDeployedSecret("WebhookSecurity:PplSharedSecret");
+}
+
+void RequireDeployedSecret(string key)
+{
+    var value = builder.Configuration[key];
+
+    if (string.IsNullOrWhiteSpace(value))
+        throw new InvalidOperationException(
+            $"{key} must be configured outside development.");
+
+    // Every placeholder convention used in this repo: appsettings dev_*, and the
+    // replace-me-* / change-me-* markers this repo has used for shared secrets.
+    string[] placeholderPrefixes = ["dev_", "replace-me", "change-me"];
+
+    if (placeholderPrefixes.Any(p => value.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException(
+            $"{key} is still a placeholder. Those values are committed to this repository, " +
+            "so anyone who can read the repo can forge a carrier webhook. Rotate it.");
+}
+
+// RS256: the Gateway holds only Auth's PUBLIC key — it verifies tokens but can never mint them.
+Microsoft.IdentityModel.Tokens.RsaSecurityKey? jwtSigningKey = null;
+if (!string.IsNullOrWhiteSpace(jwtPublicKeyBase64))
+{
+    var rsa = System.Security.Cryptography.RSA.Create();
+    rsa.ImportFromPem(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(jwtPublicKeyBase64)));
+    jwtSigningKey = new Microsoft.IdentityModel.Tokens.RsaSecurityKey(rsa);
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        if (string.IsNullOrWhiteSpace(jwtSecretKey))
-            options.Authority = jwtAuthority;
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
@@ -36,9 +67,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             ValidateIssuer = !string.IsNullOrWhiteSpace(jwtIssuer),
             ValidIssuer = jwtIssuer,
-            IssuerSigningKey = string.IsNullOrWhiteSpace(jwtSecretKey) ? null :
-                new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                    System.Text.Encoding.UTF8.GetBytes(jwtSecretKey))
+            ValidateIssuerSigningKey = jwtSigningKey is not null,
+            IssuerSigningKey = jwtSigningKey
         };
         options.Events = new JwtBearerEvents
         {
