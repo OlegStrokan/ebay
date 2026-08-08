@@ -14,6 +14,7 @@ using Application.UseCases.UpdateUserPassword;
 using Application.UseCases.UpdateUser;
 using Application.UseCases.VerifyCredentials;
 using Application.UseCases.VerifyUserEmail;
+using Microsoft.Extensions.Configuration;
 using NSubstitute;
 
 namespace Api.Tests.TestHelpers;
@@ -35,7 +36,8 @@ internal static class UserGrpcServiceTestFactory
         IAssignRoleUseCase? assignRoleUseCase = null,
         IRevokeRoleUseCase? revokeRoleUseCase = null,
         IGetUserRolesUseCase? getUserRolesUseCase = null,
-        IGetAllRolesUseCase? getAllRolesUseCase = null)
+        IGetAllRolesUseCase? getAllRolesUseCase = null,
+        IConfiguration? configuration = null)
     {
         return new UserGrpcService(
             createUserUseCase ?? Substitute.For<ICreateUserUseCase>(),
@@ -52,6 +54,9 @@ internal static class UserGrpcServiceTestFactory
             assignRoleUseCase ?? Substitute.For<IAssignRoleUseCase>(),
             revokeRoleUseCase ?? Substitute.For<IRevokeRoleUseCase>(),
             getUserRolesUseCase ?? Substitute.For<IGetUserRolesUseCase>(),
-            getAllRolesUseCase ?? Substitute.For<IGetAllRolesUseCase>());
+            getAllRolesUseCase ?? Substitute.For<IGetAllRolesUseCase>(),
+            // Empty by default: leaves Testing:AutoVerifyEmail false and InternalServices:ApiKey
+            // unset, which disables the x-internal-api-key check on GetUserByEmail.
+            configuration ?? new ConfigurationBuilder().AddInMemoryCollection().Build());
     }
 }

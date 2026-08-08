@@ -34,7 +34,7 @@ public class GetUserByEmailGrpcTests
 
         var response = await service.GetUserByEmail(
             new GetUserByEmailRequest { Email = "test@example.com" },
-            Substitute.For<ServerCallContext>());
+            TestServerCallContextFactory.Create());
 
         Assert.NotNull(response.Data);
         Assert.Equal("userId", response.Data.Id);
@@ -55,7 +55,7 @@ public class GetUserByEmailGrpcTests
 
         var response = await service.GetUserByEmail(
             new GetUserByEmailRequest { Email = "missing@example.com" },
-            Substitute.For<ServerCallContext>());
+            TestServerCallContextFactory.Create());
 
         Assert.Null(response.Data);
     }
@@ -70,7 +70,7 @@ public class GetUserByEmailGrpcTests
         var service = UserGrpcServiceTestFactory.Create(getUserByEmailUseCase: useCase);
 
         var exception = await Assert.ThrowsAsync<RpcException>(() =>
-            service.GetUserByEmail(new GetUserByEmailRequest(), Substitute.For<ServerCallContext>()));
+            service.GetUserByEmail(new GetUserByEmailRequest(), TestServerCallContextFactory.Create()));
 
         Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
     }

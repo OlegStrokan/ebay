@@ -38,10 +38,12 @@ public class AssignRoleUseCaseTests
         var roleRepository = Substitute.For<IRoleRepository>();
 
         var user = MakeUser("user-id"); // no roles yet
+        var caller = MakeUser("admin-id", "Admin");
         var role = new RoleEntity { Id = "role-moderator", Name = "Moderator", Description = "Moderator", IsSystem = true };
         var command = new AssignRoleCommand("user-id", "Moderator", "admin-id");
 
         userRepository.GetUserById("user-id").Returns(user);
+        userRepository.GetUserById("admin-id").Returns(caller);
         roleRepository.GetByNameAsync("Moderator").Returns(role);
 
         var useCase = new AssignRoleUseCase(userRepository, roleRepository);

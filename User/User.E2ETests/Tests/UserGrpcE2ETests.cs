@@ -154,11 +154,10 @@ public sealed class UserGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         before.IsValid.Should().BeTrue();
 
         const string newPassword = "NewPassword123!";
-        var newPasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         var update = await _client.UpdateUserPasswordAsync(new UpdateUserPasswordRequest
         {
             UserId = before.Data!.Id,
-            NewPasswordHash = newPasswordHash
+            NewPassword = newPassword
         });
 
         update.Success.Should().BeTrue();
@@ -185,7 +184,7 @@ public sealed class UserGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         var response = await _client.UpdateUserPasswordAsync(new UpdateUserPasswordRequest
         {
             UserId = Guid.NewGuid().ToString(),
-            NewPasswordHash = "$2a$12$anything"
+            NewPassword = "AnyPassword123!"
         });
 
         response.Success.Should().BeFalse();
@@ -260,12 +259,13 @@ public sealed class UserGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         var target = await CreateUserAsync();
         var actor  = await CreateUserAsync();
 
-        // Grant the actor Admin role so they have permission to restrict
+        // Grant the actor Admin role so they have permission to restrict. AssignedBy must be
+        // SYSTEM: AssignRoleUseCase blocks a user promoting themselves above their own tier.
         await _client.AssignRoleAsync(new AssignRoleRequest
         {
             UserId     = actor.Id,
             RoleName   = "Admin",
-            AssignedBy = actor.Id,
+            AssignedBy = "SYSTEM",
         });
 
         var restricted = await _client.RestrictUserAsync(new RestrictUserRequest
@@ -294,7 +294,7 @@ public sealed class UserGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLifet
         {
             UserId     = actor.Id,
             RoleName   = "Admin",
-            AssignedBy = actor.Id,
+            AssignedBy = "SYSTEM",
         });
 
         await _client.RestrictUserAsync(new RestrictUserRequest

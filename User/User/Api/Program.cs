@@ -17,6 +17,7 @@ using Application.UseCases.VerifyCredentials;
 using Application.UseCases.VerifyUserEmail;
 using Infrastructure.DbContext;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Domain.Repositories;
 using Infrastructure.Helpers;
 using Infrastructure.Repositories;
@@ -54,6 +55,13 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 
 builder.Services.AddGrpc();
 
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddNpgSql(postgresConnectionString, name: "postgres", tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -65,8 +73,7 @@ using (var scope = app.Services.CreateScope())
 
 app.MapGrpcService<UserGrpcService>();
 app.MapGrpcService<RoleGrpcService>();
-
-
+app.MapGrpcHealthChecksService();
 
 app.MapGet("/", () => "Hello World!");
 

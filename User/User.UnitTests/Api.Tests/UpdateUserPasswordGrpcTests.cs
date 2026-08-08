@@ -22,7 +22,7 @@ public class UpdateUserPasswordGrpcTests
             new UpdateUserPasswordRequest
             {
                 UserId = "user-id",
-                NewPasswordHash = "new-password-hash"
+                NewPassword = "new-password"
             },
             Substitute.For<ServerCallContext>());
 
@@ -31,7 +31,7 @@ public class UpdateUserPasswordGrpcTests
 
         await useCase.Received(1).ExecuteAsync(
             Arg.Is<UpdateUserPasswordCommand>(c =>
-                c.UserId == "user-id" && c.NewPasswordHash == "new-password-hash"));
+                c.UserId == "user-id" && c.NewPassword == "new-password"));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class UpdateUserPasswordGrpcTests
             new UpdateUserPasswordRequest
             {
                 UserId = "missing-id",
-                NewPasswordHash = "new-password-hash"
+                NewPassword = "new-password"
             },
             Substitute.For<ServerCallContext>());
 
@@ -60,7 +60,7 @@ public class UpdateUserPasswordGrpcTests
     {
         var useCase = Substitute.For<IUpdateUserPasswordUseCase>();
         useCase.ExecuteAsync(Arg.Any<UpdateUserPasswordCommand>())
-            .Throws(new ArgumentException("New password hash is required", "NewPasswordHash"));
+            .Throws(new ArgumentException("New password is required", "NewPassword"));
 
         var service = UserGrpcServiceTestFactory.Create(updateUserPasswordUseCase: useCase);
 

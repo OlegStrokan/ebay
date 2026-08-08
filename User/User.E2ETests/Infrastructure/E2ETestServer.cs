@@ -40,7 +40,10 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
             .Options;
 
         await using var db = new AppDbContext(options);
-        await db.Database.EnsureCreatedAsync();
+        // Must migrate, not EnsureCreated: Program.cs migrates on startup, and EnsureCreated
+        // builds the schema without stamping __EFMigrationsHistory, so that rerun would
+        // fail with 42P07 "relation already exists".
+        await db.Database.MigrateAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
