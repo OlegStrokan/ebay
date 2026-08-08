@@ -57,8 +57,10 @@ public sealed class ElasticsearchSearcherTests
             _fixture.Client,
             NullLogger<ElasticsearchSearcher>.Instance);
 
+        // "Ultra" hits the name field. The searcher queries name/description/attributes only —
+        // categoryId is a keyword that is filtered on, never full-text searched.
         var result = await searcher.SearchAsync(
-            new SearchProductsQuery("Computers", UseAi: false, Page: 1, Size: 10),
+            new SearchProductsQuery("Ultra", UseAi: false, Page: 1, Size: 10),
             CancellationToken.None);
 
         result.WasAiSearch.Should().BeFalse();

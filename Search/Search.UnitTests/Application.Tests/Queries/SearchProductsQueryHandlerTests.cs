@@ -1,5 +1,6 @@
 using Application.Gateways;
 using Application.Queries.SearchProducts;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -21,7 +22,9 @@ public sealed class SearchProductsQueryHandlerTests
         _aiGateway = Substitute.For<IAiSearchGateway>();
         _logger = Substitute.For<ILogger<SearchProductsQueryHandler>>();
 
-        _sut = new SearchProductsQueryHandler(_elasticsearchSearcher, _aiGateway, _logger);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
+
+        _sut = new SearchProductsQueryHandler(_elasticsearchSearcher, _aiGateway, configuration, _logger);
     }
 
     [Test]
