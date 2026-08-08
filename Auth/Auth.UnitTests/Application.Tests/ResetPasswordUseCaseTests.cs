@@ -1,4 +1,3 @@
-using Application.Common.Interfaces;
 using Application.UseCases.ResetPassword;
 using Domain.Entities;
 using Domain.Gateways;
@@ -15,7 +14,6 @@ public class ResetPasswordUseCaseTests
         var passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
         var refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
         var userGateway = Substitute.For<IUserGateway>();
-        var passwordHasher = Substitute.For<IPasswordHasher>();
 
         var resetToken = new PasswordResetTokenEntity
         {
@@ -28,22 +26,21 @@ public class ResetPasswordUseCaseTests
         };
 
         passwordResetTokenRepository.GetByTokenAsync(resetToken.Token).Returns(resetToken);
-        passwordHasher.HashPassword("password").Returns("hashedPassword");
-        userGateway.UpdateUserPasswordAsync(resetToken.UserId, "hashedPassword").Returns(true);
+        userGateway.UpdateUserPasswordAsync(resetToken.UserId, "password").Returns(true);
 
         var command = new ResetPasswordCommand(resetToken.Token, "password");
         
-        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway, passwordHasher);
+        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway);
 
         var result = await useCase.ExecuteAsync(command);
         
         Assert.Equal("Password reset successfully", result.Message);
         Assert.True(result.Success);
         
-        passwordHasher.Received(1).HashPassword("password");
         await passwordResetTokenRepository.Received(1).GetByTokenAsync(resetToken.Token);
         await passwordResetTokenRepository.Received(1).MarkAsUsedAsync(resetToken.Token);
-        await userGateway.Received(1).UpdateUserPasswordAsync(resetToken.UserId, "hashedPassword");
+        // Auth forwards the plaintext; hashing is the User service's job now.
+        await userGateway.Received(1).UpdateUserPasswordAsync(resetToken.UserId, "password");
         await refreshTokenRepository.Received(1).RevokeAllUserTokensAsync(resetToken.UserId);
     }
 
@@ -53,13 +50,12 @@ public class ResetPasswordUseCaseTests
         var passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
         var refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
         var userGateway = Substitute.For<IUserGateway>();
-        var passwordHasher = Substitute.For<IPasswordHasher>();
         
         passwordResetTokenRepository.GetByTokenAsync("token").Returns((PasswordResetTokenEntity?)null);
         
         var command = new ResetPasswordCommand("token", "password");
         
-        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway, passwordHasher);
+        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway);
         
         var result = await useCase.ExecuteAsync(command);
         
@@ -75,7 +71,6 @@ public class ResetPasswordUseCaseTests
         var passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
         var refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
         var userGateway = Substitute.For<IUserGateway>();
-        var passwordHasher = Substitute.For<IPasswordHasher>();
 
         var resetToken = new PasswordResetTokenEntity
         {
@@ -92,7 +87,7 @@ public class ResetPasswordUseCaseTests
         
         var command = new ResetPasswordCommand(resetToken.Token, "password");
         
-        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway, passwordHasher);
+        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway);
         
         var result = await useCase.ExecuteAsync(command);
         
@@ -108,7 +103,6 @@ public class ResetPasswordUseCaseTests
         var passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
         var refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
         var userGateway = Substitute.For<IUserGateway>();
-        var passwordHasher = Substitute.For<IPasswordHasher>();
 
         var resetToken = new PasswordResetTokenEntity
         {
@@ -125,7 +119,7 @@ public class ResetPasswordUseCaseTests
         
         var command = new ResetPasswordCommand(resetToken.Token, "password");
         
-        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway, passwordHasher);
+        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway);
         
         var result = await useCase.ExecuteAsync(command);
         
@@ -141,7 +135,6 @@ public class ResetPasswordUseCaseTests
         var passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
         var refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
         var userGateway = Substitute.For<IUserGateway>();
-        var passwordHasher = Substitute.For<IPasswordHasher>();
 
         var resetToken = new PasswordResetTokenEntity
         {
@@ -154,21 +147,19 @@ public class ResetPasswordUseCaseTests
         };
         
         passwordResetTokenRepository.GetByTokenAsync(resetToken.Token).Returns(resetToken);
-        passwordHasher.HashPassword("password").Returns("hashedPassword");
         userGateway.UpdateUserPasswordAsync(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
         
         var command = new ResetPasswordCommand(resetToken.Token, "password");
         
-        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway, passwordHasher);
+        var useCase = new ResetPasswordUseCase(passwordResetTokenRepository, refreshTokenRepository, userGateway);
         
         var result = await useCase.ExecuteAsync(command);
         
         Assert.False(result.Success);
         Assert.Equal("Failed to update password in user service", result.Message);
         
-        passwordHasher.Received(1).HashPassword("password");
         await passwordResetTokenRepository.Received(1).GetByTokenAsync(resetToken.Token);
-        await userGateway.Received(1).UpdateUserPasswordAsync(resetToken.UserId, "hashedPassword");
+        await userGateway.Received(1).UpdateUserPasswordAsync(resetToken.UserId, "password");
         
     }
     

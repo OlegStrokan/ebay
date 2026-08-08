@@ -1,5 +1,6 @@
 using Grpc.Core;
 using Infrastructure.Gateways;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -10,12 +11,16 @@ namespace Infrastructure.Tests;
 
 public class UserGatewayTests
 {
+    // Substituted IConfiguration returns null for InternalServices:ApiKey, so the gateway
+    // sends an empty x-internal-api-key — which is what these tests assume.
+    private static UserGateway CreateSut(UserServiceProto.UserServiceProtoClient client) =>
+        new(client, Substitute.For<IConfiguration>(), Substitute.For<ILogger<UserGateway>>());
+
     [Fact]
     public async Task ShouldReturnsUserId_WhenUserIsCreatedSuccessfully()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
 
         var email = "test@example.com";
         var expectedId = "userId";
@@ -34,9 +39,8 @@ public class UserGatewayTests
     [Fact]
     public async Task ShouldThrowInvalidOperationException_WhenResponseDataIsNull()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
         
         client.CreateUserAsync(Arg.Any<CreateUserRequest>())
             .Returns(GrpcTestHelper.CreateAsyncUnaryCall(new CreateUserResponse { Data = null }));
@@ -44,18 +48,23 @@ public class UserGatewayTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             sut.CreateUserAsync("test@test.com", "hashedPassword", "Just Hitler", "+3920239200"));
         
-        Assert.Equal("User microservice returned null user", exception.Message);
+        Assert.Contains("User service returned no data", exception.Message);
     }
     
         [Fact]
     public async Task ShouldReturnNullWhenUserNotFoundByEmail()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
 
         var rpcException = new RpcException(new Status(StatusCode.NotFound, "Not Found"));
-        client.GetUserByEmailAsync(Arg.Any<GetUserByEmailRequest>()).Throws(rpcException);
+        // The gateway sends x-internal-api-key, so it calls the Metadata overload.
+        client.GetUserByEmailAsync(
+                Arg.Any<GetUserByEmailRequest>(),
+                Arg.Any<Metadata>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<CancellationToken>())
+            .Throws(rpcException);
         
         var result = await sut.GetUserByEmailAsync("missing@test.com");
 
@@ -66,9 +75,8 @@ public class UserGatewayTests
     [Fact]
     public async Task ShouldReturnUserWhenCredentialsAreValid()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
 
         var response = new VerifyCredentialsResponse
         {
@@ -96,9 +104,8 @@ public class UserGatewayTests
     [Fact]
     public async Task ShouldMapAndReturnUserDtoWhenUserExistsById()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
 
         var userId = "userId";
         var response = new GetUserByIdResponse
@@ -126,9 +133,8 @@ public class UserGatewayTests
     [Fact]
     public async Task ShouldReturnTrueWhenEmailIsVerifiedSuccessfully()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
 
         client.VerifyUserEmailAsync(Arg.Any<VerifyUserEmailRequest>())
             .Returns(GrpcTestHelper.CreateAsyncUnaryCall(new VerifyUserEmailResponse { Success = true }));
@@ -142,9 +148,8 @@ public class UserGatewayTests
     [Fact]
     public async Task ShouldThrowInvalidOperationExceptionWhenPasswordUpdateFails()
     {
-        var logger = Substitute.For<ILogger<UserGateway>>();
         var client = Substitute.For<UserServiceProto.UserServiceProtoClient>();
-        var sut = new UserGateway(client, logger);
+        var sut = CreateSut(client);
 
         client.UpdateUserPasswordAsync(Arg.Any<UpdateUserPasswordRequest>())
             .Throws(new RpcException(new Status(StatusCode.Internal, "Database error")));

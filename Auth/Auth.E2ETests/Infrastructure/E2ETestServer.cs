@@ -79,7 +79,8 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
             .Options;
 
         await using var db = new AppDbContext(options);
-        await db.Database.EnsureCreatedAsync();
+      
+        await db.Database.MigrateAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -213,7 +214,7 @@ internal sealed class FakeUserStore
                 Email = normalizedEmail,
                 FullName = fullName.Trim(),
                 Phone = phone.Trim(),
-                PasswordHash = password, // already BCrypt-hashed by RegisterUseCase
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password), // Auth now sends plaintext; the real User service hashes
                 Status = UserStatusProto.Active,
                 IsEmailVerified = false,
                 CreatedAt = now,
@@ -240,7 +241,7 @@ internal sealed class FakeUserStore
         }
     }
 
-    public (bool Success, string Message) UpdatePassword(string userId, string newPasswordHash)
+    public (bool Success, string Message) UpdatePassword(string userId, string newPassword)
     {
         lock (_lock)
         {
@@ -249,7 +250,7 @@ internal sealed class FakeUserStore
                 return (false, $"User with ID {userId} not found");
             }
 
-            user.PasswordHash = newPasswordHash;
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             user.UpdatedAt = DateTime.UtcNow;
             return (true, "Password updated successfully");
         }
@@ -336,7 +337,7 @@ internal sealed class FakeUserGrpcService(FakeUserStore store) : UserServiceProt
 
     public override Task<UpdateUserPasswordResponse> UpdateUserPassword(UpdateUserPasswordRequest request, ServerCallContext context)
     {
-        var result = store.UpdatePassword(request.UserId, request.NewPasswordHash);
+        var result = store.UpdatePassword(request.UserId, request.NewPassword);
 
         return Task.FromResult(new UpdateUserPasswordResponse
         {
