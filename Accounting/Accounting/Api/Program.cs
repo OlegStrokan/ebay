@@ -14,9 +14,11 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddGrpc(options =>
 {
     options.Interceptors.Add<ExceptionHandlingInterceptor>();
+    options.Interceptors.Add<ApiKeyAuthInterceptor>();
 });
 
 builder.Services.AddSingleton<ExceptionHandlingInterceptor>();
+builder.Services.AddSingleton<ApiKeyAuthInterceptor>();
 
 builder.Services.AddGrpcHealthChecks(o =>
     {
