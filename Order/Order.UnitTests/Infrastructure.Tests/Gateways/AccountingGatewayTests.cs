@@ -1,6 +1,7 @@
 using Application.DTOs;
 using Grpc.Core;
 using Infrastructure.Gateways;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Protos.Accounting;
@@ -15,7 +16,15 @@ public class AccountingGatewayTests
     private readonly ILogger<AccountingGateway> _logger =
         Substitute.For<ILogger<AccountingGateway>>();
 
-    private AccountingGateway Build() => new(_client, _logger);
+    private static IConfiguration BuildConfiguration() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["InternalServices:AccountingApiKey"] = "test-shared-secret"
+            })
+            .Build();
+
+    private AccountingGateway Build() => new(_client, BuildConfiguration(), _logger);
 
     private static AsyncUnaryCall<T> GrpcCall<T>(T response) =>
         new AsyncUnaryCall<T>(
@@ -88,6 +97,20 @@ public class AccountingGatewayTests
 
         Assert.Equal(reversalId, result);
         Assert.Equal(returnRequestId.ToString(), sent?.ReturnRequestId);
+    }
+
+    [Fact]
+    public async Task RecordRefundAsync_ShouldSendInternalApiKeyHeader()
+    {
+        Metadata? sentHeaders = null;
+        _client
+            .RecordRefundAsync(Arg.Any<RecordRefundRequest>(),
+                Arg.Do<Metadata>(m => sentHeaders = m), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .Returns(GrpcCall(new RecordRefundResponse { Success = true, TransactionId = "tx-1" }));
+
+        await Build().RecordRefundAsync(Guid.NewGuid(), "ref-1", 50m, "USD", "reason", CancellationToken.None);
+
+        Assert.Equal("test-shared-secret", sentHeaders?.GetValue("x-internal-api-key"));
     }
 
     [Fact]

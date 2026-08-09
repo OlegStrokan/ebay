@@ -8,8 +8,12 @@ namespace Infrastructure.Gateways;
 
 public class AccountingGateway(
     AccountingService.AccountingServiceClient client,
+    IConfiguration configuration,
     ILogger<AccountingGateway> logger) : IAccountingGateway
 {
+    private Metadata BuildHeaders() =>
+        new() { { "x-internal-api-key", configuration["InternalServices:AccountingApiKey"] ?? string.Empty } };
+
     public async Task<string> RecordRefundAsync(
         Guid orderId,
         string refundId,
@@ -32,7 +36,7 @@ public class AccountingGateway(
 
         try
         {
-            var response = await client.RecordRefundAsync(request, cancellationToken: cancellationToken);
+            var response = await client.RecordRefundAsync(request, BuildHeaders(), cancellationToken: cancellationToken);
 
             if (!response.Success)
                 throw new InvalidOperationException(
@@ -80,7 +84,7 @@ public class AccountingGateway(
 
         try
         {
-            var response = await client.ReverseRevenueAsync(request, cancellationToken: cancellationToken);
+            var response = await client.ReverseRevenueAsync(request, BuildHeaders(), cancellationToken: cancellationToken);
 
             if (!response.Success)
                 throw new InvalidOperationException(
@@ -116,7 +120,7 @@ public class AccountingGateway(
 
         try
         {
-            var response = await client.CancelReversalAsync(request, cancellationToken: cancellationToken);
+            var response = await client.CancelReversalAsync(request, BuildHeaders(), cancellationToken: cancellationToken);
 
             if (!response.Success)
             {
