@@ -69,6 +69,10 @@ operator but does not survive GitOps. Pick one before more than one person deplo
   the template renders one generated value into all four.
 - `AdminApiKey` (`ops-console-service-secret`) must equal `OPS_CONSOLE_ADMIN_API_KEY`
   (`ops-console-web-secret`); likewise rendered from a single value.
+- `InternalServices__AccountingApiKey` must be identical across `order-service-secret` and
+  `accounting-service-secret` — Order is the only caller of Accounting's gRPC API, and
+  Accounting's `ApiKeyAuthInterceptor` is fail-closed (rejects everything if unset or
+  mismatched, since it is the system of financial record).
 - Never paste a rendered value back into `secrets.template.yaml`.
 
 > A private RS256 key was committed to this repo in the past. It is unrecoverable from git
