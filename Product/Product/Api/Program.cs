@@ -1,4 +1,5 @@
 using Api.GrpcServices;
+using Api.HealthChecks;
 using Application;
 using FluentValidation;
 using Infrastructure;
@@ -19,8 +20,15 @@ builder.Services.AddGrpc();
 builder.Services.AddScoped<ProductGrpcHandler>();
 builder.Services.AddScoped<ListingGrpcHandler>();
 
-builder.Services.AddGrpcHealthChecks()
-    .AddCheck("Sample", () => HealthCheckResult.Healthy());
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddNpgSql(sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
+        name: "postgres", tags: ["ready"])
+    .AddCheck<KafkaHealthCheck>("kafka", tags: ["ready"]);
 
 builder.Services.AddOpenTelemetry()
     .WithTracing(b => b

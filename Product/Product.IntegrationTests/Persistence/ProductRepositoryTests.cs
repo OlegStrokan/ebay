@@ -54,7 +54,9 @@ public sealed class ProductRepositoryTests : IClassFixture<IntegrationFixture>
         loaded.Price.Amount.Should().Be(29.99m);
         loaded.Price.Currency.Should().Be("USD");
         loaded.StockQuantity.Should().Be(10);
-        loaded.Status.Should().Be(ProductStatus.Draft);
+        // Product.Create only starts in Draft for a placeholder category; a real one goes
+        // straight to moderation.
+        loaded.Status.Should().Be(ProductStatus.PendingApproval);
     }
 
     [Fact]

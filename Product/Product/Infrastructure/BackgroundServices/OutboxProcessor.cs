@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Application.Interfaces;
 
 namespace Infrastructure.BackgroundServices;
@@ -79,11 +80,10 @@ public sealed class OutboxProcessor(
             CancellationToken = ct
         };
 
+        var outcomes = new ConcurrentQueue<(Guid Id, string? Error)>();
+
         await Parallel.ForEachAsync(groups, options, async (group, groupCt) =>
         {
-            using var groupScope = serviceProvider.CreateScope();
-            var groupOutbox = groupScope.ServiceProvider.GetRequiredService<IOutboxRepository>();
-
             foreach (var message in group)
             {
                 try
@@ -96,7 +96,7 @@ public sealed class OutboxProcessor(
                         message.AggregateId,
                         groupCt);
 
-                    await groupOutbox.MarkAsProcessedAsync(message.Id, groupCt);
+                    outcomes.Enqueue((message.Id, null));
 
                     logger.LogDebug("Published outbox message {MessageId} ({Type})", message.Id, message.Type);
                 }
@@ -107,9 +107,25 @@ public sealed class OutboxProcessor(
                         "Failed to publish outbox message {MessageId} (attempt {Attempt}/{MaxRetries})",
                         message.Id, message.RetryCount + 1, _maxRetries);
 
-                    await groupOutbox.IncrementRetryCountAsync(message.Id, ex.Message, groupCt);
+                    outcomes.Enqueue((message.Id, ex.Message));
+
+                    // Stop this aggregate's group so a later event can't overtake a failed one.
+                    break;
                 }
             }
         });
+
+        // Bookkeeping must run on the connection holding the FOR UPDATE SKIP LOCKED claim.
+        // A second scope means a second connection, which blocks on those row locks until
+        // the command timeout — the publish succeeds and the batch is never marked.
+        foreach (var (id, error) in outcomes)
+        {
+            if (error is null)
+                await outboxRepository.MarkAsProcessedAsync(id, ct);
+            else
+                await outboxRepository.IncrementRetryCountAsync(id, error, ct);
+        }
+
+        await outboxRepository.CommitClaimAsync(ct);
     }
 }

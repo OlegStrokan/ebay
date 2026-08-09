@@ -52,7 +52,7 @@ public class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifetime
             .Options;
 
         await using var db = new ProductDbContext(opts);
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.MigrateAsync();
 
         Console.WriteLine("Schema ready");
     }
