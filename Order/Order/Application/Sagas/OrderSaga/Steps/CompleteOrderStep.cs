@@ -9,7 +9,7 @@ public sealed class CompleteOrderStep(
     ILogger<CompleteOrderStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "CompleteOrder";
+    public string StepName => OrderSagaSteps.CompleteOrder;
     public int Order => 7;
 
     public async Task<StepOutcome> ExecuteAsync(

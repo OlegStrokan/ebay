@@ -19,7 +19,7 @@ public sealed class CreateShipmentStep(
     ILogger<CreateShipmentStep> logger
     ) : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "CreateShipment";
+    public string StepName => OrderSagaSteps.CreateShipment;
     public int Order => 5;
     
     public async Task<StepOutcome> ExecuteAsync(OrderSagaData data, OrderSagaContext context, CancellationToken cancellationToken)

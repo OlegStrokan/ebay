@@ -14,7 +14,7 @@ public sealed class SendConfirmationEmailStep(
 {
     private const int MaxEmailAttempts = 3;
 
-    public string StepName => "SendConfirmationEmail";
+    public string StepName => OrderSagaSteps.SendConfirmationEmail;
     public int Order => 8;
 
 

@@ -8,7 +8,7 @@ public sealed class AwaitPaymentConfirmationStep(
     ILogger<AwaitPaymentConfirmationStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "AwaitPaymentConfirmation";
+    public string StepName => OrderSagaSteps.AwaitPaymentConfirmation;
     public int Order => 3;
 
     public Task<StepOutcome> ExecuteAsync(

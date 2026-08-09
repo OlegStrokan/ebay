@@ -12,7 +12,7 @@ public sealed class ReserveInventoryStep(
     ILogger<ReserveInventoryStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "ReserveInventory";
+    public string StepName => OrderSagaSteps.ReserveInventory;
     public int Order => 1;
 
     public async Task<StepOutcome> ExecuteAsync(OrderSagaData data,

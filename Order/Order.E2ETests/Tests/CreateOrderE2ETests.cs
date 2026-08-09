@@ -164,8 +164,8 @@ public class CreateOrderE2ETests : IClassFixture<E2ETestServer>, IAsyncLifetime
         saga.Should().NotBeNull("saga should pause while payment status is uncertain");
 
         var steps = await _server.GetSagaStepLogsAsync(saga!.Id);
-        steps.Single(s => s.StepName == "ReserveInventory").Status.Should().Be(StepStatus.Completed);
-        steps.Single(s => s.StepName == "ProcessPayment").Status.Should().Be(StepStatus.Completed);
+        steps.Single(s => s.StepName == OrderSagaSteps.ReserveInventory).Status.Should().Be(StepStatus.Completed);
+        steps.Single(s => s.StepName == OrderSagaSteps.AuthorizePayment).Status.Should().Be(StepStatus.Waiting);
 
         _server.InventoryService.ReleaseCalls.Should().BeEmpty(
             "timeout should not trigger compensation/refund flow immediately");
@@ -202,8 +202,8 @@ public class CreateOrderE2ETests : IClassFixture<E2ETestServer>, IAsyncLifetime
         saga.Should().NotBeNull("unavailable payment service should fail payment step and compensate");
 
         var steps = await _server.GetSagaStepLogsAsync(saga!.Id);
-        steps.Single(s => s.StepName == "ProcessPayment").Status.Should().Be(StepStatus.Failed);
-        steps.Single(s => s.StepName == "ReserveInventory").Status.Should().Be(StepStatus.Compensated);
+        steps.Single(s => s.StepName == OrderSagaSteps.AuthorizePayment).Status.Should().Be(StepStatus.Failed);
+        steps.Single(s => s.StepName == OrderSagaSteps.ReserveInventory).Status.Should().Be(StepStatus.Compensated);
 
         _server.InventoryService.ReleaseCalls.Should().HaveCountGreaterOrEqualTo(1);
 
@@ -320,14 +320,14 @@ public class CreateOrderE2ETests : IClassFixture<E2ETestServer>, IAsyncLifetime
 
         var steps = await _server.GetSagaStepLogsAsync(saga.Id);
 
-        steps.Single(s => s.StepName == "ProcessPayment")
+        steps.Single(s => s.StepName == OrderSagaSteps.AuthorizePayment)
             .Status.Should().Be(StepStatus.Failed);
 
-        steps.Single(s => s.StepName == "ReserveInventory")
+        steps.Single(s => s.StepName == OrderSagaSteps.ReserveInventory)
             .Status.Should().Be(StepStatus.Compensated,
                 "inventory must be released when payment fails");
         
-        _output.WriteLine("ProcessPayment=Failed, ReserveInventory=Compensated");
+        _output.WriteLine("AuthorizePayment=Failed, ReserveInventory=Compensated");
 
         _server.InventoryService.ReleaseCalls.Should().HaveCountGreaterOrEqualTo(1);
         _server.InventoryService.ReleaseCalls[0].ReservationId.Should().Be("ReservationId");

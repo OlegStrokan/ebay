@@ -16,7 +16,7 @@ public sealed class CancelOrderOnFailureStep(
     ILogger<CancelOrderOnFailureStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "CancelOrderOnFailure";
+    public string StepName => OrderSagaSteps.CancelOrderOnFailure;
     public int Order => 0;
 
     public Task<StepOutcome> ExecuteAsync(

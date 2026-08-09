@@ -18,7 +18,7 @@ public sealed class AuthorizePaymentStep(
     ILogger<AuthorizePaymentStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "AuthorizePayment";
+    public string StepName => OrderSagaSteps.AuthorizePayment;
     public int Order => 2;
 
     public async Task<StepOutcome> ExecuteAsync(

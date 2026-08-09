@@ -10,7 +10,7 @@ public class UpdateOrderStatusStep(
     )
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "UpdateOrderStatus";
+    public string StepName => OrderSagaSteps.UpdateOrderStatus;
     public int Order => 4;
 
     public async Task<StepOutcome> ExecuteAsync(

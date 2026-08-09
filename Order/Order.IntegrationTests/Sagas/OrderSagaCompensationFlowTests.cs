@@ -84,7 +84,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         stepLogs.Single(s => s.StepName == "CreateShipment").Status.Should().Be(StepStatus.Compensated);
         stepLogs.Single(s => s.StepName == "ReserveInventory").Status.Should().Be(StepStatus.Compensated);
         stepLogs.Single(s => s.StepName == "ProcessPayment").Status.Should().Be(StepStatus.Failed);
-        stepLogs.Single(s => s.StepName == "CancelOrderOnFailure").Status.Should().Be(StepStatus.Compensated);
+        stepLogs.Single(s => s.StepName == OrderSagaSteps.CancelOrderOnFailure).Status.Should().Be(StepStatus.Compensated);
 
         var reloadedOrder = await realOrderPersistence.LoadOrderAsync(data.CorrelationId, CancellationToken.None);
         reloadedOrder.Should().NotBeNull();
@@ -139,7 +139,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         persistedContext!.PaymentStatus.Should().Be(OrderSagaPaymentStatus.Uncertain);
 
         var stepLogs = await sagaRepository.GetStepLogsAsync(persistedSaga.Id, CancellationToken.None);
-        stepLogs.Single(s => s.StepName == "CapturePayment").Status.Should().Be(StepStatus.Waiting);
+        stepLogs.Single(s => s.StepName == OrderSagaSteps.CapturePayment).Status.Should().Be(StepStatus.Waiting);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class OrderSagaCompensationFlowTests : IClassFixture<IntegrationFi
         persistedContext.PaymentFailureCode.Should().Be("PAYMENT_GATEWAY_UNAVAILABLE");
 
         var stepLogs = await sagaRepository.GetStepLogsAsync(persistedSaga.Id, CancellationToken.None);
-        stepLogs.Single(s => s.StepName == "CapturePayment").Status.Should().Be(StepStatus.Failed);
+        stepLogs.Single(s => s.StepName == OrderSagaSteps.CapturePayment).Status.Should().Be(StepStatus.Failed);
         stepLogs.Single(s => s.StepName == "ReserveInventory").Status.Should().Be(StepStatus.Compensated);
     }
 

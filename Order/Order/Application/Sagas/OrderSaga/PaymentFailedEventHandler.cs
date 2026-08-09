@@ -11,7 +11,7 @@ public sealed class PaymentFailedEventHandler
     public override string EventType => "PaymentFailedEvent";
     public override string SagaType => "OrderSaga";
 
-    protected override string ResumeAtStepName => "AwaitPaymentConfirmation";
+    protected override string ResumeAtStepName => OrderSagaSteps.AwaitPaymentConfirmation;
 
     public PaymentFailedEventHandler(
         IOrderSaga saga,

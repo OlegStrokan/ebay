@@ -16,7 +16,7 @@ public sealed class CapturePaymentStep(
     ILogger<CapturePaymentStep> logger)
     : ISagaStep<OrderSagaData, OrderSagaContext>
 {
-    public string StepName => "CapturePayment";
+    public string StepName => OrderSagaSteps.CapturePayment;
     public int Order => 6;
 
     public async Task<StepOutcome> ExecuteAsync(
