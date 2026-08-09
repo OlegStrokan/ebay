@@ -77,6 +77,20 @@ public static class InfrastructureModule
                 $"Stripe:ProviderType '{providerTypeRaw}' is not valid. Valid values: Stripe, MockFintech, Fake.");
         }
 
+        if (providerType == PaymentProviderType.Stripe)
+        {
+            var secretKey = configuration.GetSection(StripeOptions.SectionName).GetValue<string>("SecretKey");
+            string[] placeholderPrefixes = ["dev_", "replace-me", "change-me"];
+
+            if (string.IsNullOrWhiteSpace(secretKey))
+                throw new InvalidOperationException(
+                    "Stripe:SecretKey is required when Stripe:ProviderType is Stripe");
+
+            if (placeholderPrefixes.Any(p => secretKey.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException(
+                    "Stripe:SecretKey is still a placeholder. Rotate it before deploying with the real provider");
+        }
+
         services.AddScoped<IStripePaymentProvider>(sp => providerType switch
         {
             PaymentProviderType.Stripe      => sp.GetRequiredService<StripePaymentProvider>(),
