@@ -90,7 +90,8 @@ public sealed class PaymentGrpcE2ETests : IClassFixture<E2ETestServer>, IAsyncLi
         var refund = await _client.RefundPaymentAsync(new RefundPaymentRequest
         {
             PaymentId = process.PaymentId,
-            Amount = ToDecimalValue(10m),
+            // Full amount: a partial refund deliberately leaves the payment in Succeeded.
+            Amount = ToDecimalValue(30m),
             Currency = "USD",
             Reason = "requested_by_customer",
             IdempotencyKey = $"refund-{Guid.NewGuid():N}",

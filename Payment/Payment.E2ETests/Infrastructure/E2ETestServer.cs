@@ -42,7 +42,7 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
             .Options;
 
         await using var db = new PaymentDbContext(options);
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.MigrateAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -61,6 +61,7 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
                 ["Kafka:BootstrapServers"] = "localhost:9092",
                 ["Kafka:SagaTopic"] = "order.events",
                 ["Kafka:ProducerClientId"] = "payment-e2e",
+                ["Admin:ApiKey"] = AdminApiKey,
             });
         });
 
@@ -86,6 +87,10 @@ public sealed class E2ETestServer : WebApplicationFactory<Program>, IAsyncLifeti
     }
 
     public HttpClient CreateApiClient() => CreateClient();
+
+    // AdminOrderCallbackEndpoint returns 503 when Admin:ApiKey is unset, so the host must
+    // configure one and callers must send it as X-Admin-Key.
+    public const string AdminApiKey = "payment-e2e-admin-key";
 
     public IServiceScope CreateScope() => Services.CreateScope();
 

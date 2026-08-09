@@ -1,9 +1,11 @@
 using Api.Endpoints;
 using Api.GrpcServices;
+using Api.HealthChecks;
 using Api.Middleware;
 using Application;
 using Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +18,19 @@ builder.Services.AddGrpc(options =>
 });
 
 builder.Services.AddSingleton<ExceptionHandlingInterceptor>();
-builder.Services.AddGrpcHealthChecks();
+
+var postgresConnection = builder.Configuration.GetConnectionString("Postgres")
+    ?? throw new InvalidOperationException("ConnectionStrings:Postgres is required");
+
+// Liveness (default "" service) = cheap self-check; readiness ("ready" service) = real deps.
+builder.Services.AddGrpcHealthChecks(o =>
+    {
+        o.Services.MapService("", r => r.Tags.Contains("live"));
+        o.Services.MapService("ready", r => r.Tags.Contains("ready"));
+    })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddNpgSql(postgresConnection, name: "postgres", tags: ["ready"])
+    .AddCheck<KafkaHealthCheck>("kafka", tags: ["ready"]);
 
 var app = builder.Build();
 

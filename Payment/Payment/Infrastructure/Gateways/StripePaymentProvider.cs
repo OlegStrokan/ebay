@@ -13,7 +13,13 @@ internal sealed class StripePaymentProvider(
     ILogger<StripePaymentProvider> logger) : IStripePaymentProvider
 {
     private readonly StripeOptions _stripeOptions = stripeOptions.Value;
-    private readonly IStripeClient _stripeClient = new StripeClient(stripeOptions.Value.SecretKey);
+
+    // StripeClient's ctor rejects an empty key, so building it eagerly made every method
+    // throw instead of degrading through its HasSecretKey guard.
+    private readonly Lazy<IStripeClient> _stripeClient =
+        new(() => new StripeClient(stripeOptions.Value.SecretKey));
+
+    private IStripeClient Client => _stripeClient.Value;
 
     public async Task<ProcessPaymentProviderResult> ProcessPaymentAsync(
         ProcessPaymentProviderRequest request,
@@ -39,7 +45,7 @@ internal sealed class StripePaymentProvider(
                 IdempotencyKey = request.IdempotencyKey,
             };
 
-            var paymentIntentService = new PaymentIntentService(_stripeClient);
+            var paymentIntentService = new PaymentIntentService(Client);
             var paymentIntent = await paymentIntentService.CreateAsync(createOptions, requestOptions, cancellationToken);
 
             return MapProcessPaymentResult(paymentIntent);
@@ -110,7 +116,7 @@ internal sealed class StripePaymentProvider(
                 IdempotencyKey = request.IdempotencyKey,
             };
 
-            var refundService = new RefundService(_stripeClient);
+            var refundService = new RefundService(Client);
             var refund = await refundService.CreateAsync(createOptions, requestOptions, cancellationToken);
 
             return MapRefundPaymentResult(refund);
@@ -157,7 +163,7 @@ internal sealed class StripePaymentProvider(
 
         try
         {
-            var paymentIntentService = new PaymentIntentService(_stripeClient);
+            var paymentIntentService = new PaymentIntentService(Client);
             var paymentIntent = await paymentIntentService.GetAsync(providerPaymentIntentId, null, null, cancellationToken);
 
             return MapPaymentStatusResult(paymentIntent);
@@ -202,7 +208,7 @@ internal sealed class StripePaymentProvider(
 
         try
         {
-            var refundService = new RefundService(_stripeClient);
+            var refundService = new RefundService(Client);
             var refund = await refundService.GetAsync(providerRefundId, null, null, cancellationToken);
 
             return MapRefundStatusResult(refund);
@@ -254,7 +260,7 @@ internal sealed class StripePaymentProvider(
                 IdempotencyKey = request.IdempotencyKey,
             };
 
-            var paymentIntentService = new PaymentIntentService(_stripeClient);
+            var paymentIntentService = new PaymentIntentService(Client);
             var paymentIntent = await paymentIntentService.CaptureAsync(
                 request.ProviderPaymentIntentId,
                 options: null,
@@ -314,7 +320,7 @@ internal sealed class StripePaymentProvider(
 
         try
         {
-            var paymentIntentService = new PaymentIntentService(_stripeClient);
+            var paymentIntentService = new PaymentIntentService(Client);
             await paymentIntentService.CancelAsync(
                 providerPaymentIntentId,
                 options: null,

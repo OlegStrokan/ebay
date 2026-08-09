@@ -106,9 +106,15 @@ public sealed class PaymentHttpEndpointsE2ETests : IClassFixture<E2ETestServer>,
         });
 
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
-        using var response = await _httpClient.PostAsync(
-            "/api/v1/internal/admin/order-callbacks/enqueue",
-            content);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/internal/admin/order-callbacks/enqueue")
+        {
+            Content = content,
+        };
+        request.Headers.Add("X-Admin-Key", E2ETestServer.AdminApiKey);
+
+        using var response = await _httpClient.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 

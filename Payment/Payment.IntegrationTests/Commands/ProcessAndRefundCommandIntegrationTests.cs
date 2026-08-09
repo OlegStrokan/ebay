@@ -82,7 +82,8 @@ public sealed class ProcessAndRefundCommandIntegrationTests
         var refundIdem = $"refund-{Guid.NewGuid():N}";
         var refundCommand = new RefundPaymentCommand(
             PaymentId: paymentId,
-            Amount: 20m,
+            // Full amount: a partial refund deliberately leaves the payment in Succeeded.
+            Amount: 90m,
             Currency: "USD",
             Reason: "requested_by_customer",
             IdempotencyKey: refundIdem);
