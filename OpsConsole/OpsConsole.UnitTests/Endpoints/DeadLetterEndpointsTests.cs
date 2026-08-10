@@ -50,4 +50,24 @@ public class DeadLetterEndpointsTests : IClassFixture<OpsConsoleWebApplicationFa
         Assert.Equal(5, captured!.Skip);
         Assert.Equal(10, captured.Take);
     }
+
+    [Fact]
+    public async Task GetDeadLetters_ShouldRedactPii_InPayload()
+    {
+        var rawPayload = """{"email":"user@example.com","paymentIntentId":"pi_456"}""";
+        _factory.OrderClient
+            .GetDeadLettersAsync(Arg.Any<GetDeadLettersRequest>(), Arg.Any<Metadata>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .Returns(GrpcCall(new GetDeadLettersResponse
+            {
+                Messages = { new DeadLetterSummary { Id = Guid.NewGuid().ToString(), Payload = rawPayload } }
+            }));
+
+        using var client = _factory.CreateAuthorizedClient("OpsViewer");
+
+        var response = await client.GetAsync("/api/deadletters");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("user@example.com", body);
+        Assert.DoesNotContain("pi_456", body);
+    }
 }

@@ -1,3 +1,4 @@
+using OpsConsole.Redaction;
 using Protos.AdminOps;
 
 namespace OpsConsole.Endpoints;
@@ -36,6 +37,13 @@ public static class SagaEndpoints
         group.MapGet("/{id}/events", async (string id, AdminOpsService.AdminOpsServiceClient client) =>
         {
             var response = await client.GetSagaEventsAsync(new GetSagaEventsRequest { SagaId = id });
+
+            foreach (var step in response.Steps)
+            {
+                step.Request = PiiRedactor.RedactJson(step.Request);
+                step.Response = PiiRedactor.RedactJson(step.Response);
+            }
+
             return Results.Ok(response);
         });
     }

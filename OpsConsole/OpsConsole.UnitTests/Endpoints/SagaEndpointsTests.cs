@@ -141,5 +141,29 @@ public class SagaEndpointsTests : IClassFixture<OpsConsoleWebApplicationFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task GetSagaEvents_ShouldRedactPii_InRequestAndResponse()
+    {
+        var rawRequest = """{"CustomerId":"cust-1","DeliveryAddress":{"Street":"123 Main St","City":"Metropolis"},"TotalAmount":59.98}""";
+        var rawResponse = """{"PaymentId":"pay-1","ProviderPaymentIntentId":"pi_123"}""";
+
+        _factory.OrderClient
+            .GetSagaEventsAsync(Arg.Any<GetSagaEventsRequest>(), Arg.Any<Metadata>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .Returns(GrpcCall(new GetSagaEventsResponse
+            {
+                Steps = { new SagaStepEvent { StepName = "AuthorizePayment", Request = rawRequest, Response = rawResponse } }
+            }));
+
+        using var client = _factory.CreateAuthorizedClient("Admin");
+
+        var response = await client.GetAsync($"/api/sagas/{Guid.NewGuid()}/events");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("cust-1", body);
+        Assert.DoesNotContain("123 Main St", body);
+        Assert.DoesNotContain("pi_123", body);
+        Assert.Contains("59.98", body, StringComparison.Ordinal); // amounts stay visible for triage
+    }
+
     private sealed record GetSagasHttpResponse(int TotalCount);
 }

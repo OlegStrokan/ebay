@@ -1,3 +1,4 @@
+using OpsConsole.Redaction;
 using Protos.AdminOps;
 
 namespace OpsConsole.Endpoints;
@@ -18,6 +19,12 @@ public static class DeadLetterEndpoints
                 Skip = skip ?? 0,
                 Take = take ?? 50
             });
+
+            foreach (var message in response.Messages)
+            {
+                message.Payload = PiiRedactor.RedactJson(message.Payload);
+            }
+
             return Results.Ok(response);
         });
     }

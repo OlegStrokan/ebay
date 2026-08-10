@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace OpsConsole.Auth;
 
 // Gates every request from the console frontend/operators. Distinct from the
@@ -18,11 +21,13 @@ public class ApiKeyMiddleware(RequestDelegate next, IConfiguration config, ILogg
             return;
         }
 
-        var expectedKey = config["AdminApiKey"];
+        var expectedKey = config["AdminApiKey"] ?? string.Empty;
 
         if (string.IsNullOrEmpty(expectedKey) ||
             !ctx.Request.Headers.TryGetValue(Header, out var provided) ||
-            !string.Equals(provided, expectedKey, StringComparison.Ordinal))
+            !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(provided.ToString()),
+                Encoding.UTF8.GetBytes(expectedKey)))
         {
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             logger.LogWarning(
