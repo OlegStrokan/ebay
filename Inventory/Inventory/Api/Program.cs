@@ -9,6 +9,26 @@ using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("test"))
+{
+	RequireDeployedSecret("InternalServices:OpsConsoleApiKey");
+}
+
+// fail loudly if someone deploy prod with placeholder
+void RequireDeployedSecret(string key)
+{
+	var value = builder.Configuration[key];
+
+	if (string.IsNullOrWhiteSpace(value))
+		throw new InvalidOperationException($"{key} must be configured outside development.");
+
+	string[] placeholderPrefixes = ["dev_", "replace-me", "change-me"];
+
+	if (placeholderPrefixes.Any(p => value.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+		throw new InvalidOperationException(
+			$"{key} is still a placeholder. Rotate it before deploying outside development.");
+}
+
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
