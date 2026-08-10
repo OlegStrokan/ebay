@@ -11,13 +11,15 @@ using Protos.AdminOps;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<InternalApiKeyInterceptor>();
+builder.Services.AddSingleton<OperatorSubjectInterceptor>();
 
 builder.Services.AddGrpcClient<AdminOpsService.AdminOpsServiceClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["OrderServiceUrl"]
                              ?? "http://localhost:5224");
-}).AddInterceptor<InternalApiKeyInterceptor>();
+}).AddInterceptor<InternalApiKeyInterceptor>().AddInterceptor<OperatorSubjectInterceptor>();
 
 // Phase 6 cross-service correlation: same shared-secret pattern, pointed at
 // Payment's and Inventory's own admin gRPC services instead of Order's.
@@ -25,13 +27,13 @@ builder.Services.AddGrpcClient<AdminPaymentService.AdminPaymentServiceClient>(op
 {
     options.Address = new Uri(builder.Configuration["PaymentServiceUrl"]
                              ?? "http://localhost:5080");
-}).AddInterceptor<InternalApiKeyInterceptor>();
+}).AddInterceptor<InternalApiKeyInterceptor>().AddInterceptor<OperatorSubjectInterceptor>();
 
 builder.Services.AddGrpcClient<AdminInventoryService.AdminInventoryServiceClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["InventoryServiceUrl"]
                              ?? "http://localhost:5074");
-}).AddInterceptor<InternalApiKeyInterceptor>();
+}).AddInterceptor<InternalApiKeyInterceptor>().AddInterceptor<OperatorSubjectInterceptor>();
 
 // JWT auth. Originally (Phase 4) only mutating endpoints required it, with reads
 // staying behind ApiKeyMiddleware alone. Phase 7 extends the same JWT + role check to
@@ -56,6 +58,24 @@ if (!builder.Environment.IsDevelopment())
     if (string.IsNullOrWhiteSpace(jwtIssuer))
         throw new InvalidOperationException(
             "Jwt:Issuer must be configured outside development, and must match the issuer Auth signs tokens with.");
+
+    RequireDeployedSecret("AdminApiKey");
+    RequireDeployedSecret("InternalServices:OpsConsoleApiKey");
+}
+
+// fail loudly if someone deploy prod with placeholder
+void RequireDeployedSecret(string key)
+{
+    var value = builder.Configuration[key];
+
+    if (string.IsNullOrWhiteSpace(value))
+        throw new InvalidOperationException($"{key} must be configured outside development.");
+
+    string[] placeholderPrefixes = ["dev_", "replace-me", "change-me"];
+
+    if (placeholderPrefixes.Any(p => value.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException(
+            $"{key} is still a placeholder. Rotate it before deploying outside development.");
 }
 
 RsaSecurityKey? jwtSigningKey = null;

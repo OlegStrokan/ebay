@@ -62,7 +62,7 @@ Frontend (`.env.local`, never `NEXT_PUBLIC_`-prefixed — these must stay server
 - `OpsConsole/web/Dockerfile` — frontend image, built with Next's `output: "standalone"` (see `next.config.mjs`), non-root, listens on `3000`.
 - `OpsConsole/docker-compose.yml` — local compose template (both services have no database of their own, so there's nothing else to spin up besides the shared infra in `../docker-compose.infra.yml`).
 - `k8s/ops-console-service.yaml` / `k8s/ops-console-web.yaml` — Deployment + Service manifests. The backend is `ClusterIP` (internal-only, only ever called by the frontend's Server Components); the web app is `LoadBalancer` (the actual thing operators reach).
-- Secrets live in `k8s/secrets.yaml` (`ops-console-service-secret`, `ops-console-web-secret`) — replace the `change-me-*` placeholder values before deploying anywhere real, and make sure `InternalServices__OpsConsoleApiKey` matches across `ops-console-service-secret` and the `order-service-secret` / `payment-service-secret` / `inventory-service-secret` entries.
+- Secrets are rendered from `k8s/secrets.template.yaml` by `scripts/generate-k8s-secrets.sh` (`ops-console-service-secret`, `ops-console-web-secret`) — the generator renders one random value into `InternalServices__OpsConsoleApiKey` across `ops-console-service-secret` / `order-service-secret` / `payment-service-secret` / `inventory-service-secret`, and one into `AdminApiKey` / `OPS_CONSOLE_ADMIN_API_KEY`, so they cannot diverge. See [k8s/README.md](../k8s/README.md).
 - CI: `.github/workflows/opsconsole-pipeline.yml` builds/type-checks both halves and publishes both images to GHCR on `main`.
 
 ## Health checks
