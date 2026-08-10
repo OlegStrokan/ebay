@@ -81,6 +81,7 @@ public static class InfrastructureModule
         services.AddScoped<ICompensationRefundRetryRepository, CompensationRefundRetryRepository>();
         services.AddScoped<IFailedCompensationRetryRepository, FailedCompensationRetryRepository>();
         services.AddScoped<IPplPendingBookingRepository, PplPendingBookingRepository>();
+        services.AddScoped<IAdminActionAuditRepository, AdminActionAuditRepository>();
         services.AddScoped<IIdempotencyRepository, IdempotencyRepository>();
         services.AddScoped<IDeadLetterRepository, DeadLetterRepository>();
         services.AddScoped<ISagaRepository, SagaRepository>();

@@ -22,6 +22,7 @@ public class AdminOpsGrpcService(
     ISagaRepository sagaRepository,
     IDeadLetterRepository deadLetterRepository,
     IFailedCompensationRetryRepository failedCompensationRetryRepository,
+    IAdminActionAuditRepository adminActionAuditRepository,
     ISagaDistributedLock distributedLock,
     IOrderSaga orderSaga,
     IReturnSaga returnSaga,
@@ -31,6 +32,7 @@ public class AdminOpsGrpcService(
     : AdminOpsService.AdminOpsServiceBase
 {
     private const string ApiKeyHeader = "x-internal-api-key";
+    private const string OperatorSubjectHeader = "x-operator-subject";
     private const int MaxTake = 200;
 
     // Statuses a stuck saga can safely be force-compensated from. Terminal statuses
@@ -214,13 +216,23 @@ public class AdminOpsGrpcService(
         current.UpdatedAt = DateTime.UtcNow;
         await sagaRepository.SaveAsync(current, context.CancellationToken);
 
+        var operatorSubject = GetOperatorSubject(context);
+
         logger.LogWarning(
-            "Ops Console triggered force-compensation for saga {SagaId} ({SagaType}).",
-            sagaId, saga.SagaType);
+            "Ops Console triggered force-compensation for saga {SagaId} ({SagaType}) by operator {OperatorSubject}.",
+            sagaId, saga.SagaType, operatorSubject);
 
         try
         {
             var result = await sagaInstance.CompensateAsync(sagaId, context.CancellationToken);
+
+            await adminActionAuditRepository.RecordAsync(
+                AdminActionAuditEntry.Create(
+                    "CompensateSaga", sagaId.ToString(), operatorSubject,
+                    success: result.IsSuccess || result.Status == SagaStatus.Compensated,
+                    detail: result.IsSuccess ? null : $"{result.Status}: {result.ErrorMessage}"),
+                context.CancellationToken);
+
             return new MutationResult
             {
                 Success = result.IsSuccess || result.Status == SagaStatus.Compensated,
@@ -238,6 +250,11 @@ public class AdminOpsGrpcService(
 
             await failedCompensationRetryRepository.EnqueueIfNotExistsAsync(
                 sagaId, current.SagaType, current.CurrentStep, ex.Message, context.CancellationToken);
+
+            await adminActionAuditRepository.RecordAsync(
+                AdminActionAuditEntry.Create(
+                    "CompensateSaga", sagaId.ToString(), operatorSubject, success: false, detail: ex.Message),
+                context.CancellationToken);
 
             return new MutationResult
             {
@@ -304,6 +321,11 @@ public class AdminOpsGrpcService(
             "Ops Console scheduled an immediate compensation retry for saga {SagaId} ({SagaType}).",
             sagaId, saga.SagaType);
 
+        await adminActionAuditRepository.RecordAsync(
+            AdminActionAuditEntry.Create(
+                "RetryCompensation", sagaId.ToString(), GetOperatorSubject(context), success: true, detail: null),
+            context.CancellationToken);
+
         return new MutationResult
         {
             Success = true,
@@ -332,6 +354,11 @@ public class AdminOpsGrpcService(
             logger.LogWarning(
                 "Ops Console requeued dead-letter message {MessageId}.",
                 messageId);
+
+            await adminActionAuditRepository.RecordAsync(
+                AdminActionAuditEntry.Create(
+                    "RequeueDeadLetter", messageId.ToString(), GetOperatorSubject(context), success: true, detail: null),
+                context.CancellationToken);
 
             return new MutationResult
             {
@@ -370,6 +397,11 @@ public class AdminOpsGrpcService(
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Caller not authorized."));
         }
     }
+
+    // Ops Console forwards the operator's identity (from its own JWT) as this header —
+    // see OpsConsole/Grpc/OperatorSubjectInterceptor.cs.
+    private static string GetOperatorSubject(ServerCallContext context) =>
+        context.RequestHeaders.GetValue(OperatorSubjectHeader) ?? "unknown";
 
     private static int ClampTake(int requestedTake)
     {

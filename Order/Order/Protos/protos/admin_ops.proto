@@ -7,6 +7,9 @@ package admin_ops;
 // Internal-only admin API for the Ops Console. Not exposed to the Gateway or
 // public clients. Every rpc requires the shared internal API key header
 // (x-internal-api-key) — see InternalServices:OpsConsoleApiKey config.
+// Mutating rpcs (CompensateSaga/RetryCompensation/RequeueDeadLetter) also carry the
+// requesting operator's identity via the x-operator-subject header, forwarded by
+// OpsConsole from its own JWT — see OpsConsole/Grpc/OperatorSubjectInterceptor.cs.
 service AdminOpsService {
   rpc GetSagas(GetSagasRequest) returns (GetSagasResponse);
   rpc GetSaga(GetSagaRequest) returns (GetSagaResponse);

@@ -24,6 +24,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : Microsoft.En
     public DbSet<RequestReturnLookup> ReturnRequestLookups => Set<RequestReturnLookup>();
     public DbSet<KafkaRetryRecord> KafkaRetryRecords => Set<KafkaRetryRecord>();
     public DbSet<PplPendingBooking> PplPendingBookings => Set<PplPendingBooking>();
+    public DbSet<AdminActionAuditEntry> AdminActionAuditEntries => Set<AdminActionAuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -40,6 +41,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : Microsoft.En
         builder.ApplyConfiguration(new ReturnRequestLookupConfiguration());
         builder.ApplyConfiguration(new KafkaRetryRecordConfiguration());
         builder.ApplyConfiguration(new PplPendingBookingConfiguration());
+        builder.ApplyConfiguration(new AdminActionAuditEntryConfiguration());
     }
     
 }
