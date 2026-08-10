@@ -76,6 +76,9 @@ builder.Services.AddGrpcHealthChecks(o =>
 
 var app = builder.Build();
 
+// fail loudly if someone deploy prod with placeholder/missing key
+app.Services.GetRequiredService<JwtTokenService>();
+
 using (var scope = app.Services.CreateScope())
 {
 	var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
