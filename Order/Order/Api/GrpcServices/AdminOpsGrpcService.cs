@@ -6,6 +6,8 @@ using Application.Sagas.Persistence;
 using Application.Sagas.ReturnSaga;
 using Grpc.Core;
 using Protos.AdminOps;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Api.GrpcServices;
 
@@ -389,9 +391,11 @@ public class AdminOpsGrpcService(
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Caller not authorized."));
         }
 
-        var providedKey = context.RequestHeaders.GetValue(ApiKeyHeader);
+        var providedKey = context.RequestHeaders.GetValue(ApiKeyHeader) ?? string.Empty;
 
-        if (providedKey != expectedKey)
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(providedKey),
+                Encoding.UTF8.GetBytes(expectedKey)))
         {
             logger.LogWarning("Rejected admin ops call with missing/invalid {Header}.", ApiKeyHeader);
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Caller not authorized."));
