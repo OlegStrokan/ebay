@@ -84,6 +84,8 @@ flowchart TD
 
 All inter-service communication uses **gRPC**. The Gateway translates external HTTP/REST requests into gRPC calls. Kafka handles async event distribution between services.
 
+Authentication has two boundaries (see [inter-service-auth.md](inter-service-auth.md)): **edge** requests carry an **RS256 JWT** that Auth signs with a private key and the Gateway/OpsConsole verify with the public key (a compromised verifier can check tokens but never mint them); **internal** gRPC hops rely on in-cluster network trust, plus a shared `x-internal-api-key` on the few privileged hops (OpsConsole→admin services, Auth→User bootstrap).
+
 ---
 
 ## Services
