@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     kafka_group_id: str = "vector-indexer-worker"
     kafka_topics: list[str] = ["product.events"]
 
+    health_port: int = 8080
+
     embedding_grpc_url: str = "localhost:50052"
     embedding_model: str = "nomic-embed-text"
 

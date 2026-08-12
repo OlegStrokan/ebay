@@ -2,7 +2,7 @@
 
 Consumes product events from Kafka → builds text corpus → calls EmbeddingService via gRPC -> upserts into Qdrant.
 
-- no http, one gRPC stream to EmbeddingService, long-running async kafka consumer
+- one gRPC stream to EmbeddingService, long-running async kafka consumer, plus a minimal `/health` + `/ready` HTTP server for k8s probes (`/ready` checks Kafka broker reachability)
 - `auto.offset.reset: latest` - won't replay history on (re)start, only new events
 - manual commit after processing — at-least-once delivery, not exactly-once
 - stream to EmbeddingService opens on first event and stays open for the worker's lifetime. if EmbeddingService restarts, worker reconnects automatically once and retries

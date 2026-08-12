@@ -15,5 +15,8 @@ services:
   #     INDEXER_EMBEDDING_GRPC_URL: "embedding-service:50052"
   #     INDEXER_QDRANT_URL: "http://qdrant:6333"
   #     INDEXER_QDRANT_COLLECTION: "products"
+  #     INDEXER_HEALTH_PORT: "8080"
+  #   ports:
+  #     - "8080:8080"
   #   networks:
   #     - free-ebay-local
