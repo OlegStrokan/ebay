@@ -37,3 +37,7 @@ not wired yet, but the plan: AiSearchService reads the Redis profile at search t
 
 - `user:{user_id}:interactions` — list of last N interactions (JSON objects)
 - `user:{user_id}:preference_profile` — computed profile (JSON, 30-day TTL)
+
+## health
+
+Minimal `/health` + `/ready` HTTP server (stdlib only, no web framework) on `health_port` (default 8080). `/ready` checks Kafka broker reachability via `AdminClient.list_topics`; `/health` is a plain liveness check.

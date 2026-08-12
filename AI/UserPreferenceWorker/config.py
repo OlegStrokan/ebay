@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     kafka_group_id: str = "user-preference-worker"
     kafka_topics: list[str] = ["user.events"]
 
+    health_port: int = 8080
+
     redis_url: str = "redis://localhost:6379/0"
 
     # preference computation
