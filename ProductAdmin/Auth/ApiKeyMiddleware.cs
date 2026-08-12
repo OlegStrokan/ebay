@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace ProductAdmin.Auth;
 
 public class ApiKeyMiddleware(RequestDelegate next, IConfiguration config, ILogger<ApiKeyMiddleware> logger)
@@ -6,8 +9,12 @@ public class ApiKeyMiddleware(RequestDelegate next, IConfiguration config, ILogg
 
     public async Task InvokeAsync(HttpContext ctx)
     {
+        var expectedKey = config["AdminApiKey"] ?? string.Empty;
+
         if (!ctx.Request.Headers.TryGetValue(Header, out var provided) ||
-            !string.Equals(provided, config["AdminApiKey"], StringComparison.Ordinal))
+            !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(provided.ToString()),
+                Encoding.UTF8.GetBytes(expectedKey)))
         {
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             logger.LogWarning(
