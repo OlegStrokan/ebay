@@ -47,9 +47,8 @@ Gateway also receives external shipping provider callbacks for return deliveries
 
 ## Authentication
 
-- JWT Bearer token validation
-- Dev: local JWT secret key
-- Prod: Authority URL (external token server)
+- JWT Bearer validation, **RS256 (asymmetric)** — verifies with Auth's **public** key only (`Jwt:PublicKeyBase64`), never signs, so a compromised Gateway cannot mint tokens
+- Issuer (`Jwt:Issuer`) and Audience (`Jwt:Audience`) are validated; startup fails fast if the public key / issuer / audience are missing outside Development
 - `RequireAuthorization()` on non-public endpoints
 
 ## REST Surface
@@ -63,7 +62,7 @@ Gateway also receives external shipping provider callbacks for return deliveries
 - `GrpcServices` section: `AuthUrl`, `UserUrl`, `ProductUrl`, `OrderUrl`, `PaymentUrl`, `InventoryUrl`, `SearchUrl`
 - `Kafka` section: `BootstrapServers`, `UserEventsTopic`, `SagaTopic`
 - `WebhookSecurity` section: `ShippingSharedSecret` (DPD HMAC secret) and `PplSharedSecret` (PPL plain-header secret); an empty value disables the check (local dev only)
-- JWT: Authority, SecretKey (dev)
+- JWT: PublicKeyBase64 (RS256 RSA public key — verify only), Issuer, Audience
 - Health: `/health/live`, `/health/ready`
 - Rate limiting policies are defined in code (no config knobs); adjust `PermitLimit` / `Window` values in `Program.cs` if limits need tuning
 
