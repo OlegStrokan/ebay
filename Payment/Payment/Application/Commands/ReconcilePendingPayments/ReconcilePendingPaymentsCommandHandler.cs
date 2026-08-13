@@ -183,7 +183,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
 
                         if (payment.Status is PaymentStatus.RefundPending or PaymentStatus.RefundFailed)
                         {
-                            payment.MarkRefunded(refund.Id, refund.ProviderRefundId, refund.Amount, clock.UtcNow);
+                            payment.MarkRefunded(refund.Id, refund.Amount, refund.ProviderRefundId, clock.UtcNow);
                             await paymentRepository.UpdateAsync(payment, cancellationToken);
                         }
 

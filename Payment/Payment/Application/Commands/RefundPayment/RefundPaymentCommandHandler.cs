@@ -89,7 +89,7 @@ internal sealed class RefundPaymentCommandHandler(
 
                     var providerRefundId = ProviderRefundId.From(providerResult.ProviderRefundId);
                     refund.MarkSucceeded(providerRefundId, now);
-                    payment.MarkRefunded(refund.Id, providerRefundId, refund.Amount, now);
+                    payment.MarkRefunded(refund.Id, refund.Amount, providerRefundId, now);
                     responseStatus = RefundPaymentStatus.Succeeded;
                     break;
                 }

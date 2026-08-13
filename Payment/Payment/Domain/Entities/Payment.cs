@@ -201,19 +201,19 @@ public sealed class Payment : AggregateRoot<PaymentId>
         AddDomainEvent(new RefundRequestedEvent(Id, refundId, amount, reason.Trim(), now));
     }
 
-    public void MarkRefunded(RefundId refundId, ProviderRefundId? providerRefundId = null, Money? amountRefunded = null, DateTime? refundedAt = null)
+    public void MarkRefunded(RefundId refundId, Money amountRefunded, ProviderRefundId? providerRefundId = null, DateTime? refundedAt = null)
     {
         var now = refundedAt ?? DateTime.UtcNow;
         ProviderRefundId = providerRefundId ?? ProviderRefundId;
         FailureReason = null;
 
-        if (amountRefunded is not null && !AppliedRefundIds.Contains(refundId.Value))
+        if (!AppliedRefundIds.Contains(refundId.Value))
         {
             AppliedRefundIds.Add(refundId.Value);
             TotalRefundedAmount += amountRefunded.Amount;
         }
 
-        var isFullyRefunded = amountRefunded is null || TotalRefundedAmount >= Amount.Amount;
+        var isFullyRefunded = TotalRefundedAmount >= Amount.Amount;
         var targetStatus = isFullyRefunded ? PaymentStatus.Refunded : PaymentStatus.Succeeded;
 
         PaymentStateMachine.EnsureCanTransition(Status, targetStatus);

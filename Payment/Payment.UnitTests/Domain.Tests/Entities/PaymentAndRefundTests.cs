@@ -432,17 +432,18 @@ public class PaymentTests
     }
 
     [Fact]
-    public void MarkRefunded_WithNoAmount_ShouldDefaultToRefunded()
+    public void MarkRefunded_WithoutFullRefundAmount_ShouldReturnToSucceeded()
     {
-        // When no amount is supplied (backward compat / unknown amount), always go terminal.
+        // Partial refund: TotalRefundedAmount stays below the payment amount, so status is not terminal.
         var payment = CreateSucceededPayment();
         var refundId = RefundId.CreateUnique();
         payment.StartRefund(refundId, Money.Create(50, "USD"), "reason");
         payment.ClearDomainEvents();
 
-        payment.MarkRefunded(refundId);
+        payment.MarkRefunded(refundId, Money.Create(50, "USD"));
 
-        Assert.Equal(PaymentStatus.Refunded, payment.Status);
+        Assert.Equal(PaymentStatus.Succeeded, payment.Status);
+        Assert.Equal(50m, payment.TotalRefundedAmount);
     }
 
     [Fact]
@@ -453,7 +454,7 @@ public class PaymentTests
         payment.StartRefund(refundId, Money.Create(50, "USD"), "reason");
         payment.ClearDomainEvents();
 
-        payment.MarkRefunded(refundId, ProviderRefundId.From("re_abc"));
+        payment.MarkRefunded(refundId, Money.Create(50, "USD"), ProviderRefundId.From("re_abc"));
 
         var evt = Assert.IsType<RefundSucceededEvent>(payment.DomainEvents[0]);
         Assert.Equal(refundId, evt.RefundId);
