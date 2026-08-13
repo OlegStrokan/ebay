@@ -77,7 +77,7 @@ public sealed class SearchGrpcServiceTests
 
         Assert.That(response.Items, Has.Count.EqualTo(1));
         Assert.That(response.Items[0].Name, Is.EqualTo("Gaming Laptop"));
-        Assert.That(response.Items[0].Price, Is.EqualTo(1299.99).Within(0.000001));
+        Assert.That(Protos.Common.DecimalValueMapper.ToDecimal(response.Items[0].Price), Is.EqualTo(1299.99m));
         Assert.That(response.Items[0].ImageUrls, Has.Count.EqualTo(1));
 
         await _handler.Received(1).HandleAsync(

@@ -4,14 +4,13 @@ using Application.Queries.SearchProducts;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Protos.AiSearch;
+using Protos.Common;
 
 namespace Infrastructure.AiSearch;
 
-/// <summary>
-/// Opens a bidirectional gRPC stream per request.
-/// Sends one query, yields two phases (keyword then merged), closes.
-/// Cancellation (client disconnect) propagates to server and kills in-flight Qdrant work.
-/// </summary>
+// Opens a bidirectional gRPC stream per request.
+// Sends one query, yields two phases (keyword then merged), closes.
+// Cancellation (client disconnect) propagates to server and kills in-flight Qdrant work.
 public sealed class AiSearchStreamGateway(
     AiSearchService.AiSearchServiceClient client,
     ILogger<AiSearchStreamGateway> logger) : IAiSearchStreamGateway
@@ -45,7 +44,7 @@ public sealed class AiSearchStreamGateway(
                     ProductId: Guid.Parse(i.ProductId),
                     Name: i.Name,
                     Category: i.Category,
-                    Price: (decimal)i.Price,
+                    Price: DecimalValueMapper.ToDecimal(i.Price),
                     Currency: i.Currency,
                     RelevanceScore: i.RelevanceScore,
                     ImageUrls: i.ImageUrls.ToList()))

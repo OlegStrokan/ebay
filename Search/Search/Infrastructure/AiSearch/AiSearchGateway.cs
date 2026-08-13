@@ -2,6 +2,7 @@ using Application.Gateways;
 using Application.Queries.SearchProducts;
 using Microsoft.Extensions.Logging;
 using Protos.AiSearch;
+using Protos.Common;
 
 namespace Infrastructure.AiSearch;
 
@@ -31,7 +32,7 @@ public class AiSearchGateway(
                 ProductId: Guid.Parse(i.ProductId),
                 Name: i.Name,
                 Category: i.Category,
-                Price: (decimal)i.Price,
+                Price: DecimalValueMapper.ToDecimal(i.Price),
                 Currency: i.Currency,
                 RelevanceScore: i.RelevanceScore,
                 ImageUrls: i.ImageUrls.ToList())

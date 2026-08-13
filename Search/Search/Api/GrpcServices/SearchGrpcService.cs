@@ -4,6 +4,7 @@ using Application.Queries.GetSimilarItems;
 using Application.Queries.SearchProducts;
 using Domain.Common.Interfaces;
 using Grpc.Core;
+using Protos.Common;
 using Protos.Search;
 
 namespace Api.GrpcServices;
@@ -73,7 +74,7 @@ public sealed class SearchGrpcService(
                 ProductId = i.ProductId.ToString(),
                 Name = i.Name,
                 Category = i.Category,
-                Price = (double)i.Price,
+                Price = DecimalValueMapper.ToProto(i.Price),
                 Currency = i.Currency,
                 RelevanceScore = i.RelevanceScore
             };
@@ -130,7 +131,7 @@ public sealed class SearchGrpcService(
                     ProductId = i.ProductId.ToString(),
                     Name = i.Name,
                     Category = i.Category,
-                    Price = (double)i.Price,
+                    Price = DecimalValueMapper.ToProto(i.Price),
                     Currency = i.Currency,
                     RelevanceScore = i.RelevanceScore
                 };
