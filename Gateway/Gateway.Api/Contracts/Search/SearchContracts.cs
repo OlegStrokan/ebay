@@ -12,7 +12,7 @@ public sealed record SearchResultItemResponse(
     string ProductId,
     string Name,
     string Category,
-    double Price,
+    decimal Price,
     string Currency,
     double RelevanceScore,
     IReadOnlyList<string> ImageUrls);

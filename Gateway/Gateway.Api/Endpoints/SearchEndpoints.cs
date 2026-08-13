@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Gateway.Api.Contracts.Common;
 using Gateway.Api.Contracts.Search;
+using Gateway.Api.Mappers;
 using Grpc.Core;
 using GrpcSearch = Protos.Search;
 
@@ -36,7 +37,7 @@ public static class SearchEndpoints
                     i.ProductId,
                     i.Name,
                     i.Category,
-                    i.Price,
+                    DecimalValueMapper.ToDecimal(i.Price),
                     i.Currency,
                     i.RelevanceScore,
                     i.ImageUrls.ToList())).ToList(),
@@ -124,7 +125,7 @@ public static class SearchEndpoints
                         i.ProductId,
                         i.Name,
                         i.Category,
-                        i.Price,
+                        DecimalValueMapper.ToDecimal(i.Price),
                         i.Currency,
                         i.RelevanceScore,
                         i.ImageUrls.ToList())).ToList(),
