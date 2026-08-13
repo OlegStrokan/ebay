@@ -40,7 +40,7 @@ gRPC authentication service that handles login, registration, token management (
 
 ## Configuration
 
-- env/appsettings: PostgreSQL connection, User service gRPC URL, JWT settings (SecretKey, Issuer, Audience, AccessTokenExpirationMinutes), Kafka bootstrap servers
+- env/appsettings: PostgreSQL connection, User service gRPC URL, JWT settings (PrivateKeyBase64 — the RS256 RSA signing key; Issuer, Audience, AccessTokenExpirationMinutes), Kafka bootstrap servers. Auth is the **only** holder of the private key; verifiers (Gateway, OpsConsole) get the public key from the `jwt-public-config` ConfigMap. The deployed keypair is generated out-of-band by `scripts/generate-k8s-secrets.sh` and never committed — only `appsettings.Development.json` carries a throwaway local keypair.
 
 ## Testing
 
