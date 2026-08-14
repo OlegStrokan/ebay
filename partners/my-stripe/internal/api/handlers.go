@@ -136,7 +136,16 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existing, ok := s.store.GetIntent(intentID); ok && existing.Status == "canceled" {
+	existing, ok := s.store.GetIntent(intentID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			ErrorCode: "resource_missing",
+			ErrorMessage: "No such payment_intent: '" + intentID + "'",
+		})
+		return
+	}
+
+	if existing.Status == "canceled" {
 		resp := captureResponse{
 			ID: intentID,
 			Status: "failed",
@@ -148,7 +157,7 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existing, ok := s.store.GetIntent(intentID); ok && existing.Status == "expired" {
+	if existing.Status == "expired" {
 		resp := captureResponse{
 			ID: intentID,
 			Status: "failed",
@@ -160,13 +169,12 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fail is client simulated failure case, success othervise + the intent may
-	// not exists in the store, so we tolerate a missing record like real stripe
+	// fail is client simulated failure case, success otherwise. existence was
+	// already confirmed above, so UpdateIntentStatus is guaranteed to find it.
 	failed := strings.Contains(strings.ToLower(intentID), "fail")
 
 	var resp captureResponse
 	var updated store.PaymentIntent
-	var known bool
 	if failed {
 		resp = captureResponse{
 			ID: intentID,
@@ -175,21 +183,17 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 			ErrorMessage: "Simulated capture failure.",
 			TestMode: true,
 		}
-		updated, known = s.store.UpdateIntentStatus(intentID, "failed", resp.ErrorCode, resp.ErrorMessage)
+		updated, _ = s.store.UpdateIntentStatus(intentID, "failed", resp.ErrorCode, resp.ErrorMessage)
 	} else {
 		resp = captureResponse{
 			ID: intentID,
 			Status: "succeeded",
 			TestMode: true,
 		}
-		updated, known = s.store.UpdateIntentStatus(intentID, "succeeded", "", "")
+		updated, _ = s.store.UpdateIntentStatus(intentID, "succeeded", "", "")
 	}
 
-	if known {
-		s.enqueueIntentEvent(updated)
-	} else {
-		s.logger.Printf("[api] capture of unknown intent %s: no webhook emitted", intentID)
-	}
+	s.enqueueIntentEvent(updated)
 
 	s.writeAndCache(w, scopeCapture, req.IdempotencyKey, resp)
 }
@@ -218,6 +222,24 @@ func (s *Server) enqueueIntentEvent(pi store.PaymentIntent) {
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	intentID := r.PathValue("id")
+
+	existing, ok := s.store.GetIntent(intentID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorResponse{
+			ErrorCode: "resource_missing",
+			ErrorMessage: "No such payment_intent: '" + intentID + "'",
+		})
+		return
+	}
+
+	if existing.Status == "succeeded" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{
+			ErrorCode: "payment_intent_unexpected_state",
+			ErrorMessage: "You cannot cancel this PaymentIntent because it has a status of succeeded.",
+		})
+		return
+	}
+
 	s.store.UpdateIntentStatus(intentID, "canceled", "", "")
 	writeJSON(w, http.StatusOK, cancelResponse{
 		ID: intentID,
