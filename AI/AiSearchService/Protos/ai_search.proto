@@ -1,5 +1,7 @@
 ﻿syntax = "proto3";
 
+import "common.proto";
+
 option csharp_namespace = "Protos.AiSearch";
 
 package ai_search;
@@ -30,7 +32,7 @@ message SearchResultItem {
   string product_id = 1;
   string name = 2;
   string category = 3;
-  double price = 4;
+  common.DecimalValue price = 4;
   string currency = 5;
   double relevance_score = 6;
   repeated string image_urls = 7;

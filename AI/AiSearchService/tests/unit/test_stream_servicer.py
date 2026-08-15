@@ -181,6 +181,37 @@ async def test_stream_drops_stale_results(monkeypatch) -> None:
         assert call.kwargs["request_id"] == "latest"
 
 
+async def test_stream_queue_is_bounded(monkeypatch) -> None:
+    """A slow consumer must not let a fast producer queue results without limit."""
+    servicer = _make_servicer()
+    monkeypatch.setattr("grpc_server.settings.stream_queue_maxsize", 1)
+
+    produced: list[int] = []
+
+    async def fast_producer(**kwargs):
+        for i in range(5):
+            produced.append(i)
+            yield _keyword_result(f"p{i}")
+
+    monkeypatch.setattr("grpc_server.run_streaming_search", lambda **kw: fast_producer(**kw))
+
+    request_iter = _async_iter([_FakeStreamRequest(request_id="r1", query="keyboard")])
+    context = MagicMock()
+
+    gen = servicer.SearchStream(request_iter, context)
+
+    # Pull only the first response and let pending tasks run — the producer must
+    # not have raced ahead and filled an unbounded queue with all 5 items.
+    await gen.__anext__()
+    await asyncio.sleep(0.01)
+    assert len(produced) < 5
+
+    # Draining the rest must not hang: backpressure releases as items are consumed.
+    async for _ in gen:
+        pass
+    assert len(produced) == 5
+
+
 async def test_stream_handles_empty_results(monkeypatch) -> None:
     """Query with no results should still yield two phases with empty items."""
     servicer = _make_servicer()

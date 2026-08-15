@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     top_k: int = 50
     rrf_k: int = 60
 
+    # SearchStream is single-flight per connection; this only bounds how far a slow
+    # client can lag behind a fast producer before backpressure kicks in.
+    stream_queue_maxsize: int = 32
+
     redis_url: str = "redis://localhost:6379"
     reranking_enabled: bool = True
 

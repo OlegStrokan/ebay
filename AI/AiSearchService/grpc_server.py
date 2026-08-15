@@ -2,7 +2,7 @@ import json
 import asyncio
 import grpc
 import structlog
-from generated import ai_search_pb2, ai_search_pb2_grpc
+from generated import ai_search_pb2, ai_search_pb2_grpc, common_pb2
 from pipeline.orchestrator import run_search_pipeline
 from pipeline.streaming_orchestrator import run_streaming_search, SearchPhase
 from config import settings
@@ -13,6 +13,12 @@ _PHASE_TO_PROTO = {
     SearchPhase.KEYWORD: ai_search_pb2.SEARCH_PHASE_KEYWORD,
     SearchPhase.MERGED: ai_search_pb2.SEARCH_PHASE_MERGED,
 }
+
+
+def _to_decimal_value(price: float) -> common_pb2.DecimalValue:
+    units = int(price)
+    nanos = round((price - units) * 1_000_000_000)
+    return common_pb2.DecimalValue(units=units, nanos=nanos)
 
 
 class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
@@ -97,7 +103,7 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
                 product_id=item.product_id,
                 name=item.name,
                 category=item.category,
-                price=item.price,
+                price=_to_decimal_value(item.price),
                 currency=item.currency,
                 relevance_score=item.relevance_score,
                 image_urls=item.image_urls,
@@ -127,12 +133,19 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
           2. Push ES keyword results as soon as ready (+-40 ms)
           3. Push RRF-merged results when Qdrant responds (+-1-2 s)
         Stream stays open until the client closes it
+
+        At most one search is ever live per connection, so staleness is tracked with
+        our own generation counter rather than the client-supplied request_id — a
+        plain int compare can't race, unlike matching against a mutable string that a
+        concurrent request could reassign. The queue is bounded: a slow client (not
+        pulling the response generator forward) must not let producers queue results
+        without limit.
         """
         current_task: asyncio.Task | None = None
-        current_request_id: str | None = None
-        send_queue: asyncio.Queue = asyncio.Queue()
+        current_generation = 0
+        send_queue: asyncio.Queue = asyncio.Queue(maxsize=settings.stream_queue_maxsize)
 
-        async def _run_and_enqueue(request_id: str, query: str, page: int, page_size: int, user_id: str):
+        async def _run_and_enqueue(generation: int, request_id: str, query: str, page: int, page_size: int, user_id: str):
             try:
                 async for partial in run_streaming_search(
                     query=query,
@@ -150,12 +163,12 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
                     qdrant_raw=self._qdrant_raw,
                     qdrant_collection=self._qdrant_collection,
                 ):
-                    await send_queue.put((request_id, partial))
+                    await send_queue.put((generation, request_id, partial))
             except asyncio.CancelledError:
                 log.info("stream_search_cancelled", request_id=request_id)
 
         async def _read_requests():
-            nonlocal current_task, current_request_id
+            nonlocal current_task, current_generation
             async for req in request_iterator:
                 log.info("stream_query_received", request_id=req.request_id, query=req.query)
 
@@ -167,9 +180,10 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
                     except asyncio.CancelledError:
                         pass
 
-                current_request_id = req.request_id
+                current_generation += 1
                 current_task = asyncio.create_task(
                     _run_and_enqueue(
+                        current_generation,
                         req.request_id,
                         req.query,
                         req.page or 1,
@@ -191,10 +205,10 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
                 if item is None:
                     break
 
-                request_id, partial = item
+                generation, request_id, partial = item
 
                 # drop stale results from a cancelled search that raced
-                if request_id != current_request_id:
+                if generation != current_generation:
                     continue
 
                 proto_items = [
@@ -202,7 +216,7 @@ class AiSearchServicer(ai_search_pb2_grpc.AiSearchServiceServicer):
                         product_id=it.product_id,
                         name=it.name,
                         category=it.category,
-                        price=it.price,
+                        price=_to_decimal_value(it.price),
                         currency=it.currency,
                         relevance_score=it.relevance_score,
                         image_urls=it.image_urls,

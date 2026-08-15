@@ -22,9 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+import common_pb2 as common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61i_search.proto\x12\tai_search\"_\n\rSearchRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x0c\n\x04page\x18\x02 \x01(\x05\x12\x11\n\tpage_size\x18\x03 \x01(\x05\x12\r\n\x05\x64\x65\x62ug\x18\x04 \x01(\x08\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"~\n\x0eSearchResponse\x12*\n\x05items\x18\x01 \x03(\x0b\x32\x1b.ai_search.SearchResultItem\x12\x13\n\x0btotal_count\x18\x02 \x01(\x05\x12\x1a\n\x12parsed_query_debug\x18\x03 \x01(\t\x12\x0f\n\x07used_ai\x18\x04 \x01(\x08\"\x94\x01\n\x10SearchResultItem\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x03 \x01(\t\x12\r\n\x05price\x18\x04 \x01(\x01\x12\x10\n\x08\x63urrency\x18\x05 \x01(\t\x12\x17\n\x0frelevance_score\x18\x06 \x01(\x01\x12\x12\n\nimage_urls\x18\x07 \x03(\t\"j\n\x13StreamSearchRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\r\n\x05query\x18\x02 \x01(\t\x12\x0c\n\x04page\x18\x03 \x01(\x05\x12\x11\n\tpage_size\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"\xa3\x01\n\x14StreamSearchResponse\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12%\n\x05phase\x18\x02 \x01(\x0e\x32\x16.ai_search.SearchPhase\x12*\n\x05items\x18\x03 \x03(\x0b\x32\x1b.ai_search.SearchResultItem\x12\x13\n\x0btotal_count\x18\x04 \x01(\x05\x12\x0f\n\x07used_ai\x18\x05 \x01(\x08\"e\n\x16GetSimilarItemsRequest\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05\x12\x10\n\x08\x63\x61tegory\x18\x03 \x01(\t\x12\x11\n\tcondition\x18\x04 \x01(\t\"5\n\x0bSimilarItem\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\"@\n\x17GetSimilarItemsResponse\x12%\n\x05items\x18\x01 \x03(\x0b\x32\x16.ai_search.SimilarItem\"L\n\"GetFrequentlyBoughtTogetherRequest\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05\":\n\x10\x43oOccurrenceItem\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\"Q\n#GetFrequentlyBoughtTogetherResponse\x12*\n\x05items\x18\x01 \x03(\x0b\x32\x1b.ai_search.CoOccurrenceItem*@\n\x0bSearchPhase\x12\x18\n\x14SEARCH_PHASE_KEYWORD\x10\x00\x12\x17\n\x13SEARCH_PHASE_MERGED\x10\x01\x32\xfd\x02\n\x0f\x41iSearchService\x12=\n\x06Search\x12\x18.ai_search.SearchRequest\x1a\x19.ai_search.SearchResponse\x12S\n\x0cSearchStream\x12\x1e.ai_search.StreamSearchRequest\x1a\x1f.ai_search.StreamSearchResponse(\x01\x30\x01\x12X\n\x0fGetSimilarItems\x12!.ai_search.GetSimilarItemsRequest\x1a\".ai_search.GetSimilarItemsResponse\x12|\n\x1bGetFrequentlyBoughtTogether\x12-.ai_search.GetFrequentlyBoughtTogetherRequest\x1a..ai_search.GetFrequentlyBoughtTogetherResponseB\x12\xaa\x02\x0fProtos.AiSearchb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61i_search.proto\x12\tai_search\x1a\x0c\x63ommon.proto\"_\n\rSearchRequest\x12\r\n\x05query\x18\x01 \x01(\t\x12\x0c\n\x04page\x18\x02 \x01(\x05\x12\x11\n\tpage_size\x18\x03 \x01(\x05\x12\r\n\x05\x64\x65\x62ug\x18\x04 \x01(\x08\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"~\n\x0eSearchResponse\x12*\n\x05items\x18\x01 \x03(\x0b\x32\x1b.ai_search.SearchResultItem\x12\x13\n\x0btotal_count\x18\x02 \x01(\x05\x12\x1a\n\x12parsed_query_debug\x18\x03 \x01(\t\x12\x0f\n\x07used_ai\x18\x04 \x01(\x08\"\xaa\x01\n\x10SearchResultItem\x12\x12\n\nproduct_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x03 \x01(\t\x12#\n\x05price\x18\x04 \x01(\x0b\x32\x14.common.DecimalValue\x12\x10\n\x08\x63urrency\x18\x05 \x01(\t\x12\x17\n\x0frelevance_score\x18\x06 \x01(\x01\x12\x12\n\nimage_urls\x18\x07 \x03(\t\"j\n\x13StreamSearchRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\r\n\x05query\x18\x02 \x01(\t\x12\x0c\n\x04page\x18\x03 \x01(\x05\x12\x11\n\tpage_size\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"\xa3\x01\n\x14StreamSearchResponse\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12%\n\x05phase\x18\x02 \x01(\x0e\x32\x16.ai_search.SearchPhase\x12*\n\x05items\x18\x03 \x03(\x0b\x32\x1b.ai_search.SearchResultItem\x12\x13\n\x0btotal_count\x18\x04 \x01(\x05\x12\x0f\n\x07used_ai\x18\x05 \x01(\x08\"e\n\x16GetSimilarItemsRequest\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05\x12\x10\n\x08\x63\x61tegory\x18\x03 \x01(\t\x12\x11\n\tcondition\x18\x04 \x01(\t\"5\n\x0bSimilarItem\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\"@\n\x17GetSimilarItemsResponse\x12%\n\x05items\x18\x01 \x03(\x0b\x32\x16.ai_search.SimilarItem\"L\n\"GetFrequentlyBoughtTogetherRequest\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05\":\n\x10\x43oOccurrenceItem\x12\x17\n\x0f\x63\x61talog_item_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\"Q\n#GetFrequentlyBoughtTogetherResponse\x12*\n\x05items\x18\x01 \x03(\x0b\x32\x1b.ai_search.CoOccurrenceItem*@\n\x0bSearchPhase\x12\x18\n\x14SEARCH_PHASE_KEYWORD\x10\x00\x12\x17\n\x13SEARCH_PHASE_MERGED\x10\x01\x32\xfd\x02\n\x0f\x41iSearchService\x12=\n\x06Search\x12\x18.ai_search.SearchRequest\x1a\x19.ai_search.SearchResponse\x12S\n\x0cSearchStream\x12\x1e.ai_search.StreamSearchRequest\x1a\x1f.ai_search.StreamSearchResponse(\x01\x30\x01\x12X\n\x0fGetSimilarItems\x12!.ai_search.GetSimilarItemsRequest\x1a\".ai_search.GetSimilarItemsResponse\x12|\n\x1bGetFrequentlyBoughtTogether\x12-.ai_search.GetFrequentlyBoughtTogetherRequest\x1a..ai_search.GetFrequentlyBoughtTogetherResponseB\x12\xaa\x02\x0fProtos.AiSearchb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,30 +33,30 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'ai_search_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\252\002\017Protos.AiSearch'
-  _globals['_SEARCHPHASE']._serialized_start=1125
-  _globals['_SEARCHPHASE']._serialized_end=1189
-  _globals['_SEARCHREQUEST']._serialized_start=30
-  _globals['_SEARCHREQUEST']._serialized_end=125
-  _globals['_SEARCHRESPONSE']._serialized_start=127
-  _globals['_SEARCHRESPONSE']._serialized_end=253
-  _globals['_SEARCHRESULTITEM']._serialized_start=256
-  _globals['_SEARCHRESULTITEM']._serialized_end=404
-  _globals['_STREAMSEARCHREQUEST']._serialized_start=406
-  _globals['_STREAMSEARCHREQUEST']._serialized_end=512
-  _globals['_STREAMSEARCHRESPONSE']._serialized_start=515
-  _globals['_STREAMSEARCHRESPONSE']._serialized_end=678
-  _globals['_GETSIMILARITEMSREQUEST']._serialized_start=680
-  _globals['_GETSIMILARITEMSREQUEST']._serialized_end=781
-  _globals['_SIMILARITEM']._serialized_start=783
-  _globals['_SIMILARITEM']._serialized_end=836
-  _globals['_GETSIMILARITEMSRESPONSE']._serialized_start=838
-  _globals['_GETSIMILARITEMSRESPONSE']._serialized_end=902
-  _globals['_GETFREQUENTLYBOUGHTTOGETHERREQUEST']._serialized_start=904
-  _globals['_GETFREQUENTLYBOUGHTTOGETHERREQUEST']._serialized_end=980
-  _globals['_COOCCURRENCEITEM']._serialized_start=982
-  _globals['_COOCCURRENCEITEM']._serialized_end=1040
-  _globals['_GETFREQUENTLYBOUGHTTOGETHERRESPONSE']._serialized_start=1042
-  _globals['_GETFREQUENTLYBOUGHTTOGETHERRESPONSE']._serialized_end=1123
-  _globals['_AISEARCHSERVICE']._serialized_start=1192
-  _globals['_AISEARCHSERVICE']._serialized_end=1573
+  _globals['_SEARCHPHASE']._serialized_start=1161
+  _globals['_SEARCHPHASE']._serialized_end=1225
+  _globals['_SEARCHREQUEST']._serialized_start=44
+  _globals['_SEARCHREQUEST']._serialized_end=139
+  _globals['_SEARCHRESPONSE']._serialized_start=141
+  _globals['_SEARCHRESPONSE']._serialized_end=267
+  _globals['_SEARCHRESULTITEM']._serialized_start=270
+  _globals['_SEARCHRESULTITEM']._serialized_end=440
+  _globals['_STREAMSEARCHREQUEST']._serialized_start=442
+  _globals['_STREAMSEARCHREQUEST']._serialized_end=548
+  _globals['_STREAMSEARCHRESPONSE']._serialized_start=551
+  _globals['_STREAMSEARCHRESPONSE']._serialized_end=714
+  _globals['_GETSIMILARITEMSREQUEST']._serialized_start=716
+  _globals['_GETSIMILARITEMSREQUEST']._serialized_end=817
+  _globals['_SIMILARITEM']._serialized_start=819
+  _globals['_SIMILARITEM']._serialized_end=872
+  _globals['_GETSIMILARITEMSRESPONSE']._serialized_start=874
+  _globals['_GETSIMILARITEMSRESPONSE']._serialized_end=938
+  _globals['_GETFREQUENTLYBOUGHTTOGETHERREQUEST']._serialized_start=940
+  _globals['_GETFREQUENTLYBOUGHTTOGETHERREQUEST']._serialized_end=1016
+  _globals['_COOCCURRENCEITEM']._serialized_start=1018
+  _globals['_COOCCURRENCEITEM']._serialized_end=1076
+  _globals['_GETFREQUENTLYBOUGHTTOGETHERRESPONSE']._serialized_start=1078
+  _globals['_GETFREQUENTLYBOUGHTTOGETHERRESPONSE']._serialized_end=1159
+  _globals['_AISEARCHSERVICE']._serialized_start=1228
+  _globals['_AISEARCHSERVICE']._serialized_end=1609
 # @@protoc_insertion_point(module_scope)
