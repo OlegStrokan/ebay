@@ -5,6 +5,7 @@ import {
   REFRESH_COOKIE,
   REFRESH_MAX_AGE_SECONDS,
 } from "@/lib/sessionCookies";
+import { isJwtExpired } from "@/lib/jwt";
 
 const GATEWAY_URL = process.env.GATEWAY_API_URL ?? "http://localhost:5081";
 
@@ -16,7 +17,8 @@ const cookieOptions = {
 };
 
 export async function middleware(request: NextRequest) {
-  if (request.cookies.get(ACCESS_COOKIE)?.value) {
+  const accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
+  if (accessToken && !isJwtExpired(accessToken)) {
     return NextResponse.next();
   }
 

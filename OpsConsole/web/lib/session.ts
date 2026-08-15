@@ -6,6 +6,7 @@ import {
   REFRESH_COOKIE,
   REFRESH_MAX_AGE_SECONDS,
 } from "./sessionCookies";
+import { decodeJwtPayload } from "./jwt";
 
 // Server-only session helpers. The operator's JWT (obtained via /login, which
 // proxies to the Gateway's existing /api/v1/auth/login) is stored in an
@@ -66,11 +67,6 @@ export async function getSessionEmail(): Promise<string | null> {
   const token = await getSessionToken();
   if (!token) return null;
 
-  try {
-    const payloadSegment = token.split(".")[1];
-    const json = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8"));
-    return typeof json.email === "string" ? json.email : null;
-  } catch {
-    return null;
-  }
+  const payload = decodeJwtPayload<{ email?: string }>(token);
+  return typeof payload?.email === "string" ? payload.email : null;
 }
