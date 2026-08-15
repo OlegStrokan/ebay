@@ -2,7 +2,7 @@ name: Email Service Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "Email/**"
       - ".github/workflows/email-pipeline.yml"

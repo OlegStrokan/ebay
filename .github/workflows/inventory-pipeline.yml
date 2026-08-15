@@ -2,7 +2,7 @@ name: Inventory Service Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "Inventory/**"
       - ".github/workflows/inventory-pipeline.yml"
@@ -145,7 +145,7 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: test-e2e
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write

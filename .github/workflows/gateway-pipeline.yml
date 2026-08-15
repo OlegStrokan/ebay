@@ -2,7 +2,7 @@ name: Gateway Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "Gateway/**"
       - ".github/workflows/gateway-pipeline.yml"

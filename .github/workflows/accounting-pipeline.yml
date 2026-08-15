@@ -1,0 +1,112 @@
+name: Accounting Service Pipeline
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "Accounting/**"
+      - ".github/workflows/accounting-pipeline.yml"
+  pull_request:
+    paths:
+      - "Accounting/**"
+      - ".github/workflows/accounting-pipeline.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  SOLUTION: Accounting/Accounting.sln
+  BUILD_CONFIG: Release
+  IMAGE_NAME: accounting-service
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Accounting/**/packages.lock.json', 'Accounting/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - run: dotnet restore ${{ env.SOLUTION }}
+      - run: dotnet build ${{ env.SOLUTION }} --no-restore -c ${{ env.BUILD_CONFIG }} /property:GenerateFullPaths=true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: accounting-build-output
+          path: Accounting/
+          retention-days: 1
+
+  test-unit:
+    name: Unit (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [Domain.Tests, Application.Tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Accounting/**/packages.lock.json', 'Accounting/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - uses: actions/download-artifact@v4
+        with:
+          name: accounting-build-output
+          path: Accounting/
+      - run: |
+          dotnet test Accounting/Accounting.UnitTests/${{ matrix.project }} \
+            --no-build -c ${{ env.BUILD_CONFIG }} \
+            --logger "trx;LogFileName=${{ matrix.project }}.trx" \
+            --results-directory ./test-results
+      - uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Accounting Unit – ${{ matrix.project }}
+          path: ./test-results/${{ matrix.project }}.trx
+          reporter: dotnet-trx
+
+  docker-publish:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test-unit
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./Accounting
+          file: ./Accounting/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

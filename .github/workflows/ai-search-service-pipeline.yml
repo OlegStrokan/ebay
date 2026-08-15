@@ -2,7 +2,7 @@ name: AI Search Service Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "AI/AiSearchService/**"
       - ".github/workflows/ai-search-service-pipeline.yml"

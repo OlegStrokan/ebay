@@ -2,7 +2,7 @@ name: Payment Service Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "Payment/**"
       - ".github/workflows/payment-pipeline.yml"

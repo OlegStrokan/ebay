@@ -2,7 +2,7 @@ name: Embedding Service Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "AI/EmbeddingService/**"
       - ".github/workflows/embedding-service-pipeline.yml"
@@ -84,7 +84,7 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write

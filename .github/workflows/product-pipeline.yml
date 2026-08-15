@@ -2,7 +2,7 @@ name: Product Service Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "Product/**"
       - ".github/workflows/product-pipeline.yml"

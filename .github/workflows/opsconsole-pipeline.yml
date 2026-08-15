@@ -2,7 +2,7 @@ name: OpsConsole Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "OpsConsole/**"
       - ".github/workflows/opsconsole-pipeline.yml"
@@ -94,7 +94,7 @@ jobs:
     name: Build & Push Backend Image
     runs-on: ubuntu-latest
     needs: test-backend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
@@ -127,7 +127,7 @@ jobs:
     name: Build & Push Web Image
     runs-on: ubuntu-latest
     needs: build-frontend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write

@@ -37,7 +37,7 @@ Two-part internal admin tool for operators to monitor sagas, inspect dead-letter
 ## Authentication (two layers, both required for mutations)
 
 1. **`X-Admin-Api-Key`** (`ApiKeyMiddleware`) — shared secret between the Next.js backend and the .NET backend. Gates every request.
-2. **Operator JWT** (`AddJwtBearer`, same `Jwt:SecretKey`/`Jwt:Audience` Auth/Gateway use) — `OpsViewer` policy (Admin/SuperAdmin/OpsViewer roles) required for reads, `OpsAdmin` policy (Admin/SuperAdmin only) required for mutations (compensate, retry-compensation, requeue dead letter).
+2. **Operator JWT** (`AddJwtBearer`, **RS256** — verifies with Auth's **public** key `Jwt:PublicKeyBase64`, the same key Gateway uses; OpsConsole never holds the signing key) — `OpsViewer` policy (Admin/SuperAdmin/OpsViewer roles) required for reads, `OpsAdmin` policy (Admin/SuperAdmin only) required for mutations (compensate, retry-compensation, requeue dead letter).
 3. Outbound to Order/Payment/Inventory: `InternalServices:OpsConsoleApiKey` via `InternalApiKeyInterceptor` — a third, separate shared secret. All three secrets are independent; rotating one doesn't require rotating the others, but Order/Payment/Inventory's own `InternalServices:OpsConsoleApiKey` config must always match this service's copy or every admin RPC returns `PermissionDenied` (fails closed, not open).
 
 ## Configuration
@@ -45,20 +45,20 @@ Two-part internal admin tool for operators to monitor sagas, inspect dead-letter
 - `AdminApiKey` — validates `X-Admin-Api-Key` from the frontend.
 - `OrderServiceUrl`, `PaymentServiceUrl`, `InventoryServiceUrl` — flat (non-`GrpcServices__*`) gRPC channel addresses, deliberately different naming from the rest of the repo's convention since this service was added later.
 - `InternalServices:OpsConsoleApiKey` — outbound gRPC auth to the three admin services.
-- `Jwt:SecretKey`, `Jwt:Audience` — **must exactly match Auth's signing key**; `Program.cs` throws at startup if empty outside Development.
+- `Jwt:PublicKeyBase64`, `Jwt:Issuer`, `Jwt:Audience` — Auth's RSA **public** key / issuer / audience; `Program.cs` throws at startup if empty outside Development. Verify-only — OpsConsole never holds the signing key.
 - Frontend: `OPS_CONSOLE_API_URL`, `OPS_CONSOLE_ADMIN_API_KEY`, `GATEWAY_API_URL` in `.env.local` (see `web/.env.local.example`).
 
 ## Testing
 
 - **Backend**: `OpsConsole/OpsConsole.UnitTests` — xUnit + NSubstitute, driven through `WebApplicationFactory<Program>` (`TestHelpers/OpsConsoleWebApplicationFactory.cs`). Only the three outbound gRPC clients (Order/Payment/Inventory) are swapped for NSubstitute fakes; `ApiKeyMiddleware`, the real JwtBearer scheme, and the `OpsViewer`/`OpsAdmin` policies all run for real, so a passing test proves the actual auth pipeline.
-  - `Program.cs` reads `Jwt:SecretKey`/`Jwt:Audience` into local variables before `builder.Build()` runs, so `WebApplicationFactory`'s `ConfigureAppConfiguration` can't override them (it only layers in at `Build()` time). Tests mint JWTs against whatever `appsettings.Development.json` actually configures (see `OpsConsoleWebApplicationFactory.JwtDevConfig`) instead of trying to inject a fake secret — don't reintroduce a `Jwt:SecretKey` override in `ConfigureAppConfiguration`, it will silently have no effect and every authenticated test will 401.
+  - `Program.cs` reads `Jwt:PublicKeyBase64`/`Jwt:Audience`/`Jwt:Issuer` into local variables before `builder.Build()` runs, so `WebApplicationFactory`'s `ConfigureAppConfiguration` can't override them (it only layers in at `Build()` time). Tests mint JWTs with a dev RSA **private** key held in `OpsConsoleWebApplicationFactory` (the host validates them with the public key from `appsettings.Development.json`, mirroring prod) — don't reintroduce a `Jwt:*` override in `ConfigureAppConfiguration`, it will silently have no effect and every authenticated test will 401.
   - `AdminApiKey` and `InternalServices:OpsConsoleApiKey` **are** read live from `IConfiguration` at request time, so overriding those two via `ConfigureAppConfiguration` does work.
   - `OpsConsole.UnitTests` lives inside `OpsConsole/` (unlike sibling services, which keep test projects as source-tree siblings of the main project's own folder) — `OpsConsole.csproj` explicitly excludes it via `<Compile Remove>`/`<Content Remove>`/etc. If you add another nested test project, exclude it the same way or its generated `AssemblyInfo.cs` collides with the main project's during a solution build (`CS0579`).
 - **Frontend**: no test project yet. If you add one, check how the sibling Next.js frontends in this repo (if any) are set up first.
 
 ## Key Rules
 
-- Never let `AdminApiKey`, `InternalServices:OpsConsoleApiKey`, or `Jwt:SecretKey` leak into logs or API responses.
+- Never let `AdminApiKey` or `InternalServices:OpsConsoleApiKey` leak into logs or API responses. (The JWT public key is not sensitive; the private key lives only in Auth.)
 - Every mutating endpoint must require the `OpsAdmin` policy explicitly — reads only need `OpsViewer`. Don't downgrade a mutation to `OpsViewer` for convenience.
 - If you add a field to `admin_ops.proto`, update **both** copies (`Order/Order/Protos/protos/admin_ops.proto` and `OpsConsole/Protos/admin_ops.proto`) in the same change — they're not code-generated from a shared source.
 - Frontend server-only env vars must never gain a `NEXT_PUBLIC_` prefix — that would ship them to the browser.
