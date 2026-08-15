@@ -16,7 +16,11 @@ public static class InfrastructureModule
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("ConnectionStrings:Postgres is not configured.");
 
-        services.AddDbContext<AccountingDbContext>(opt => opt.UseNpgsql(connectionString));
+        // read commited low is fine: the unique constraint on TransactionRef,
+        // not isolation level, closes the check-then-insert race - a collision becomes
+        // DuplicateLedgerTransactionException, which every handler turns into an idempotent success.
+        services.AddDbContext<AccountingDbContext>(opt =>
+            opt.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure()));
 
         services.AddScoped<ILedgerTransactionRepository, LedgerTransactionRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
