@@ -27,6 +27,9 @@ type Config struct {
 	// how long "requires_capture" stays valid before it auto-expires and can no
 	// longer be captured. mirrors real card netowrk +- 7 days
 	AuthHoldTTL time.Duration
+	// how long a cached idempotency-key response stays valid before the worker
+	// evicts it. mirrors real Stripe's ~24h idempotency key retention
+	IdempotencyTTL time.Duration
 }
 
 func Load() Config {
@@ -40,6 +43,7 @@ func Load() Config {
 		WebhookBaseDelay: getEnvDuration("WORKER_BASE_DELAY", 2*time.Second),
 		WorkerInterval: getEnvDuration("WORKER_INTERVAL", time.Second),
 		AuthHoldTTL: getEnvDuration("AUTH_HOLD_TTL", 8*24*time.Hour),
+		IdempotencyTTL: getEnvDuration("IDEMPOTENCY_TTL", 24*time.Hour),
 	}
 
 	if cfg.WebhookSecret == "" {

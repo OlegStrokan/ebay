@@ -1,5 +1,7 @@
 // in-memory persistence layer. it's intentionally not backed by a database:
-// the service never moves real money. all guarded by single mutex
+// the service never moves real money. all guarded by single mutex.
+// restart wipes everything (idempotency keys included) — that's an accepted
+// consequence of staying in-memory, not something TTL eviction fixes.
 package store
 
 import (
@@ -83,15 +85,22 @@ type Store struct {
 	mu sync.Mutex
 	intents map[string]*PaymentIntent;
 	refunds map[string]*Refund
-	idem map[string][]byte
+	idem map[string]idempotentEntry
 	events []*WebhookEvent
+}
+
+// cached response body for an idempotency key, plus when it was saved so a
+// background sweep can evict it once it's older than the configured TTL.
+type idempotentEntry struct {
+	body []byte
+	savedAt time.Time
 }
 
 func New() *Store {
 	return &Store {
 		intents: make(map[string]*PaymentIntent),
 		refunds: make(map[string]*Refund),
-		idem: make(map[string][]byte),
+		idem: make(map[string]idempotentEntry),
 	}
 }
 
@@ -102,8 +111,11 @@ func (s *Store) Idempotent(scope, key string) ([]byte, bool) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	body, ok := s.idem[scope+":"+key]
-	return body, ok
+	entry, ok := s.idem[scope+":"+key]
+	if !ok {
+		return nil, false
+	}
+	return entry.body, true
 }
 
 // cashes a response body for scope+key
@@ -115,7 +127,24 @@ func (s *Store) SaveIdempotent(scope, key string, body []byte) {
 	defer s.mu.Unlock();
 	cp := make([]byte, len(body))
 	copy(cp, body)
-	s.idem[scope+":"+key] = cp
+	s.idem[scope+":"+key] = idempotentEntry{body: cp, savedAt: time.Now().UTC()}
+}
+
+// EvictExpiredIdempotency drops idempotency keys older than ttl so the map
+// can't grow without bound over the life of the process. Returns the count
+// removed, for logging.
+func (s *Store) EvictExpiredIdempotency(now time.Time, ttl time.Duration) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	removed := 0
+	for key, entry := range s.idem {
+		if now.Sub(entry.savedAt) >= ttl {
+			delete(s.idem, key)
+			removed++
+		}
+	}
+	return removed
 }
 
 func (s *Store) PutIntent(pi *PaymentIntent) {

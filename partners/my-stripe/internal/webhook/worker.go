@@ -93,6 +93,10 @@ func (w *Worker) tick(ctx context.Context) {
 	for _, ev := range w.store.TakeDueEvents(now, 50) {
 		w.deliver(ctx, ev);
 	}
+
+	if removed := w.store.EvictExpiredIdempotency(now, w.cfg.IdempotencyTTL); removed > 0 {
+		w.logger.Printf("[worker] evicted %d expired idempotency key(s)", removed)
+	}
 }
 
 func (w *Worker) deliver(ctx context.Context, ev *store.WebhookEvent) {
