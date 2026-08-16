@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.Sagas;
 
-public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
+public abstract class SagaBase<TData, TContext> : ISagaBase<TData, TContext>
     where TData : SagaData
     where TContext : SagaContext, new()
 {
@@ -170,7 +170,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
     public async Task<SagaResult> ResumeFromStepAsync(
         TData data,
-        SagaContext context,
+        TContext context,
         string fromStepName,
         CancellationToken cancellationToken)
     {
@@ -183,8 +183,6 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
             "Resuming {SagaType} for correlation {CorrelationId} from step {StepName}",
             SagaType, data.CorrelationId, fromStepName);
 
-        var typedContext = (TContext)context; // Safe because of generic constraints
-        
         var sagaState = await _sagaRepository.GetByCorrelationIdAsync(
             data.CorrelationId,
             SagaType,
@@ -214,7 +212,7 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
 
         sagaState.Status = SagaStatus.Running;
         sagaState.UpdatedAt = DateTime.UtcNow;
-        sagaState.Context = JsonSerializer.Serialize(typedContext);
+        sagaState.Context = JsonSerializer.Serialize(context);
         // leaving WaitingForEvent, so the park's clock goes with it
         sagaState.ClearWait();
 
@@ -254,9 +252,9 @@ public abstract class SagaBase<TData, TContext> : ISagaBase<TData>
                 }
 
                 var stepResult = await ExecuteStepAsync(
-                    sagaState.Id, step, data, typedContext, resumeCancellationToken);
+                    sagaState.Id, step, data, context, resumeCancellationToken);
 
-                sagaState.Context = JsonSerializer.Serialize(typedContext); 
+                sagaState.Context = JsonSerializer.Serialize(context); 
                 sagaState.CurrentStep = step.StepName;
                 sagaState.UpdatedAt = DateTime.UtcNow;
 

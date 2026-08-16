@@ -15,7 +15,7 @@ public class ProcessRefundStep(
     ILogger<ProcessRefundStep> logger
     ) : ISagaStep<ReturnSagaData, ReturnSagaContext>
 {
-    public string StepName => "ProcessRefund";
+    public string StepName => ReturnSagaSteps.ProcessRefund;
     public int Order => 4;
 
     public async Task<StepOutcome> ExecuteAsync(

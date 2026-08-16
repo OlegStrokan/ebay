@@ -12,7 +12,7 @@ public sealed class AwaitReturnShipmentStep(
     ILogger<AwaitReturnShipmentStep> logger
     ) : ISagaStep<ReturnSagaData, ReturnSagaContext>
 {
-    public string StepName => "AwaitReturnShipment";
+    public string StepName => ReturnSagaSteps.AwaitReturnShipment;
     public int Order => 2;
 
     public async Task<StepOutcome> ExecuteAsync(

@@ -12,7 +12,7 @@ public sealed class CompleteReturnStep(
     ILogger<CompleteReturnStep> logger)
 : ISagaStep<ReturnSagaData, ReturnSagaContext>
 {
-    public string StepName => "CompleteReturn";
+    public string StepName => ReturnSagaSteps.CompleteReturn;
     public int Order => 6;
 
     public async Task<StepOutcome> ExecuteAsync(

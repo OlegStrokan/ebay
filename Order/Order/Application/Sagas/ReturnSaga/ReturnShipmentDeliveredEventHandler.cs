@@ -11,7 +11,7 @@ public class ReturnShipmentDeliveredEventHandler
     public override string EventType => "ReturnShipmentDeliveredEvent";
     public override string SagaType => "ReturnSaga";
 
-    protected override string ResumeAtStepName => "ConfirmReturnReceived";
+    protected override string ResumeAtStepName => ReturnSagaSteps.ConfirmReturnReceived;
 
     public ReturnShipmentDeliveredEventHandler(
         IReturnSaga saga,

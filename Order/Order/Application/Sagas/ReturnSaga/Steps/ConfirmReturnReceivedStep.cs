@@ -14,7 +14,7 @@ public sealed class ConfirmReturnReceivedStep(
     ILogger<ConfirmReturnReceivedStep> logger
     ) : ISagaStep<ReturnSagaData, ReturnSagaContext>
 {
-    public string StepName => "ConfirmReturnReceived";
+    public string StepName => ReturnSagaSteps.ConfirmReturnReceived;
     public int Order => 3;
 
     public async Task<StepOutcome> ExecuteAsync(

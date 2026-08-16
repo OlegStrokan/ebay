@@ -1,5 +1,5 @@
 namespace Application.Sagas.OrderSaga;
 
-public interface IOrderSaga : ISagaBase<OrderSagaData>
+public interface IOrderSaga : ISagaBase<OrderSagaData, OrderSagaContext>
 {
 }

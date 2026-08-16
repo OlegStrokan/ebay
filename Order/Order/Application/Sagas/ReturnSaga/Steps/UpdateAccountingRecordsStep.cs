@@ -8,7 +8,7 @@ public sealed class UpdateAccountingRecordsStep(
     IAccountingGateway accountingGateway,
     ILogger<UpdateAccountingRecordsStep> logger) : ISagaStep<ReturnSagaData, ReturnSagaContext>
 {
-    public string StepName => "UpdateAccountingRecords";
+    public string StepName => ReturnSagaSteps.UpdateAccountingRecords;
     public int Order => 5;
 
     public async Task<StepOutcome> ExecuteAsync(

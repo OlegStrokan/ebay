@@ -17,7 +17,7 @@ public sealed class ValidateReturnRequestStep(
     ILogger<ValidateReturnRequestStep> logger
     ) : ISagaStep<ReturnSagaData, ReturnSagaContext>
 {
-    public string StepName => "ValidateReturnRequest";
+    public string StepName => ReturnSagaSteps.ValidateReturnRequest;
     public int Order => 1;
 
     public async Task<StepOutcome> ExecuteAsync(

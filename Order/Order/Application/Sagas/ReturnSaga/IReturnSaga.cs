@@ -1,5 +1,5 @@
 namespace Application.Sagas.ReturnSaga;
 
-public interface IReturnSaga : ISagaBase<ReturnSagaData>{
+public interface IReturnSaga : ISagaBase<ReturnSagaData, ReturnSagaContext>{
     
 }

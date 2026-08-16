@@ -18,7 +18,14 @@ public interface ISagaBase<TData> : ISaga
 
 {
     Task<SagaResult> ExecuteAsync(TData data, CancellationToken cancellationToken);
+}
 
-    Task<SagaResult> ResumeFromStepAsync(TData saga, SagaContext context, string fromStepName,
+// Adds the strongly-typed resume path once TContext is known to the caller, so resuming
+// never needs to downcast the base SagaContext back to the concrete type at runtime.
+public interface ISagaBase<TData, TContext> : ISagaBase<TData>
+    where TData : SagaData
+    where TContext : SagaContext
+{
+    Task<SagaResult> ResumeFromStepAsync(TData saga, TContext context, string fromStepName,
         CancellationToken cancellationToken);
 }
