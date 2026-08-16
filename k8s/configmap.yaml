@@ -10,6 +10,7 @@ data:
   Kafka__OrderEventsTopic: "order.events"
   Kafka__ReturnEventsTopic: "return.events"
   Kafka__SagaTopic: "order.events"
+  Kafka__MoneyEventsTopic: "payment.money-events"
   Kafka__EmailEventsTopic: "email.events"
   Kafka__EmailDlqTopic: "email.events.dlq"
   Kafka__ProductEventsTopic: "product.events"
