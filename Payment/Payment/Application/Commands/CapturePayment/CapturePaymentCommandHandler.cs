@@ -19,6 +19,7 @@ internal sealed class CapturePaymentCommandHandler(
     IPaymentRepository paymentRepository,
     IStripePaymentProvider stripePaymentProvider,
     IOrderCallbackQueueService orderCallbackQueueService,
+    IMoneyEventQueueService moneyEventQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<CapturePaymentCommandHandler> logger)
@@ -116,6 +117,7 @@ internal sealed class CapturePaymentCommandHandler(
                 responseStatus = ProcessPaymentStatus.Succeeded;
 
                 await orderCallbackQueueService.QueuePaymentSucceededAsync(payment, cancellationToken);
+                await moneyEventQueueService.QueuePaymentCapturedAsync(payment, cancellationToken);
             }
             else
             {

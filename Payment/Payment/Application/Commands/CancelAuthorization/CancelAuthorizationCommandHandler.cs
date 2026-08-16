@@ -1,6 +1,7 @@
 using Application.Common;
 using Application.Gateways;
 using Application.Interfaces;
+using Application.Services;
 using Domain.Enums;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -13,6 +14,7 @@ namespace Application.Commands.CancelAuthorization;
 internal sealed class CancelAuthorizationCommandHandler(
     IPaymentRepository paymentRepository,
     IStripePaymentProvider stripePaymentProvider,
+    IMoneyEventQueueService moneyEventQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<CancelAuthorizationCommandHandler> logger)
@@ -64,7 +66,13 @@ internal sealed class CancelAuthorizationCommandHandler(
             }
 
             var reason = FailureReason.Create(AuthorizationCanceledCode, AuthorizationCanceledMessage);
+            var releasedHold = payment.Status == PaymentStatus.Authorized;
             payment.MarkFailed(reason, clock.UtcNow);
+
+            if (releasedHold)
+            {
+                await moneyEventQueueService.QueuePaymentVoidedAsync(payment, cancellationToken);
+            }
 
             await paymentRepository.UpdateAsync(payment, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);

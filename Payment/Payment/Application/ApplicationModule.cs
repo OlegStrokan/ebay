@@ -18,6 +18,7 @@ public static class ApplicationModule
 
         services.AddValidatorsFromAssembly(typeof(ApplicationModule).Assembly);
         services.AddScoped<IOrderCallbackQueueService, OrderCallbackQueueService>();
+        services.AddScoped<IMoneyEventQueueService, MoneyEventQueueService>();
 
         return services;
     }

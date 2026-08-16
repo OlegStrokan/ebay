@@ -17,6 +17,7 @@ internal sealed class HandleStripeWebhookCommandHandler(
     IPaymentRepository paymentRepository,
     IRefundRepository refundRepository,
     IOrderCallbackQueueService orderCallbackQueueService,
+    IMoneyEventQueueService moneyEventQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<HandleStripeWebhookCommandHandler> logger)
@@ -138,6 +139,7 @@ internal sealed class HandleStripeWebhookCommandHandler(
 
                 payment.MarkSucceeded(providerPaymentIntentId, now);
                 await orderCallbackQueueService.QueuePaymentSucceededAsync(payment, cancellationToken);
+                await moneyEventQueueService.QueuePaymentCapturedAsync(payment, cancellationToken);
                 return;
             }
             case StripeWebhookOutcome.PaymentFailed:
@@ -151,8 +153,17 @@ internal sealed class HandleStripeWebhookCommandHandler(
                     request.FailureCode,
                     request.FailureMessage ?? "Payment failed via webhook callback.");
 
+                // A failure on a live hold releases it, so the ledger must see a void.
+                var releasedHold = payment.Status == PaymentStatus.Authorized;
+
                 payment.MarkFailed(reason, now);
                 await orderCallbackQueueService.QueuePaymentFailedAsync(payment, reason, cancellationToken);
+
+                if (releasedHold)
+                {
+                    await moneyEventQueueService.QueuePaymentVoidedAsync(payment, cancellationToken);
+                }
+
                 return;
             }
             case StripeWebhookOutcome.RefundSucceeded:
@@ -182,6 +193,7 @@ internal sealed class HandleStripeWebhookCommandHandler(
                 }
 
                 await orderCallbackQueueService.QueueRefundSucceededAsync(payment, refund, cancellationToken);
+                await moneyEventQueueService.QueueRefundIssuedAsync(payment, refund, cancellationToken);
                 return;
             }
             case StripeWebhookOutcome.RefundFailed:

@@ -4,6 +4,7 @@ using Domain.Interfaces;
 using Infrastructure.BackgroundServices;
 using Infrastructure.Callbacks;
 using Infrastructure.Gateways;
+using Infrastructure.Messaging;
 using Infrastructure.Options;
 using Infrastructure.Persistence.DbContext;
 using Infrastructure.Persistence.Repositories;
@@ -25,6 +26,7 @@ public static class InfrastructureModule
         services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
         services.Configure<MockFintechOptions>(configuration.GetSection(MockFintechOptions.SectionName));
         services.Configure<OrderCallbackOptions>(configuration.GetSection(OrderCallbackOptions.SectionName));
+        services.Configure<MoneyEventOptions>(configuration.GetSection(MoneyEventOptions.SectionName));
         services.Configure<ReconciliationWorkerOptions>(configuration.GetSection(ReconciliationWorkerOptions.SectionName));
 
         var connectionString = configuration.GetConnectionString("Postgres")
@@ -36,11 +38,13 @@ public static class InfrastructureModule
         services.AddScoped<IRefundRepository, RefundRepository>();
         services.AddScoped<IPaymentWebhookEventRepository, PaymentWebhookEventRepository>();
         services.AddScoped<IOutboundOrderCallbackRepository, OutboundOrderCallbackRepository>();
+        services.AddScoped<IOutboundMoneyEventRepository, OutboundMoneyEventRepository>();
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddSingleton<IClock, SystemClock>();
 
         services.AddScoped<IOrderCallbackPayloadSerializer, OrderCallbackPayloadSerializer>();
+        services.AddScoped<IMoneyEventPayloadSerializer, MoneyEventPayloadSerializer>();
 
         services.AddScoped<StripePaymentProvider>();
         services.AddScoped<FakePaymentProvider>();
@@ -100,8 +104,10 @@ public static class InfrastructureModule
         });
 
         services.AddSingleton<IOrderCallbackDispatcher, OrderCallbackKafkaDispatcher>();
+        services.AddSingleton<IMoneyEventDispatcher, MoneyEventKafkaDispatcher>();
 
         services.AddHostedService<OrderCallbackDeliveryWorker>();
+        services.AddHostedService<MoneyEventDeliveryWorker>();
         services.AddHostedService<PendingPaymentsReconciliationWorker>();
 
         return services;

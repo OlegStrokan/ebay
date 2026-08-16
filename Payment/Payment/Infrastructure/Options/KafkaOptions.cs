@@ -8,5 +8,7 @@ public sealed class KafkaOptions
 
     public string SagaTopic { get; init; } = "order.events";
 
+    public string MoneyEventsTopic { get; init; } = "payment.money-events";
+
     public string ProducerClientId { get; init; } = "payment-service";
 }

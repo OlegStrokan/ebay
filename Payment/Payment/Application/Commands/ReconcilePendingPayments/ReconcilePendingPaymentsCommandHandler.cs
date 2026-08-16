@@ -18,6 +18,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
     IRefundRepository refundRepository,
     IStripePaymentProvider stripePaymentProvider,
     IOrderCallbackQueueService orderCallbackQueueService,
+    IMoneyEventQueueService moneyEventQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<ReconcilePendingPaymentsCommandHandler> logger)
@@ -75,6 +76,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                         payment.MarkSucceeded(payment.ProviderPaymentIntentId, clock.UtcNow);
                         await paymentRepository.UpdateAsync(payment, cancellationToken);
                         await orderCallbackQueueService.QueuePaymentSucceededAsync(payment, cancellationToken);
+                        await moneyEventQueueService.QueuePaymentCapturedAsync(payment, cancellationToken);
 
                         paymentsSucceeded++;
                         callbacksQueued++;
@@ -93,9 +95,17 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                             providerStatus.ErrorMessage
                             ?? "Provider marked payment as failed during reconciliation.");
 
+                        // A failure on a live hold releases it, so the ledger must see a void.
+                        var releasedHold = payment.Status == PaymentStatus.Authorized;
+
                         payment.MarkFailed(reason, clock.UtcNow);
                         await paymentRepository.UpdateAsync(payment, cancellationToken);
                         await orderCallbackQueueService.QueuePaymentFailedAsync(payment, reason, cancellationToken);
+
+                        if (releasedHold)
+                        {
+                            await moneyEventQueueService.QueuePaymentVoidedAsync(payment, cancellationToken);
+                        }
 
                         paymentsFailed++;
                         callbacksQueued++;
@@ -188,6 +198,7 @@ internal sealed class ReconcilePendingPaymentsCommandHandler(
                         }
 
                         await orderCallbackQueueService.QueueRefundSucceededAsync(payment, refund, cancellationToken);
+                        await moneyEventQueueService.QueueRefundIssuedAsync(payment, refund, cancellationToken);
 
                         refundsSucceeded++;
                         callbacksQueued++;

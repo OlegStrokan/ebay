@@ -4,6 +4,7 @@ using Application.Gateways;
 using Application.Gateways.Models;
 using Application.Interfaces;
 using Application.Mappers;
+using Application.Services;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -17,6 +18,7 @@ namespace Application.Commands.ProcessPayment;
 internal sealed class ProcessPaymentCommandHandler(
     IPaymentRepository paymentRepository,
     IStripePaymentProvider stripePaymentProvider,
+    IMoneyEventQueueService moneyEventQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<ProcessPaymentCommandHandler> logger)
@@ -83,6 +85,7 @@ internal sealed class ProcessPaymentCommandHandler(
 
                     payment.MarkSucceeded(providerIntentId, now);
                     responseStatus = ProcessPaymentStatus.Succeeded;
+                    await moneyEventQueueService.QueuePaymentCapturedAsync(payment, cancellationToken);
                     break;
                 }
                 case ProviderProcessPaymentStatus.Pending:
@@ -119,6 +122,7 @@ internal sealed class ProcessPaymentCommandHandler(
                         now);
 
                     responseStatus = ProcessPaymentStatus.Authorized;
+                    await moneyEventQueueService.QueuePaymentAuthorizedAsync(payment, cancellationToken);
                     break;
                 }
                 case ProviderProcessPaymentStatus.Failed:

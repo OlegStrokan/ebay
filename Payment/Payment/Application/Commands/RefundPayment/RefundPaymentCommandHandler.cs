@@ -4,6 +4,7 @@ using Application.Gateways;
 using Application.Gateways.Models;
 using Application.Interfaces;
 using Application.Mappers;
+using Application.Services;
 using Domain.Entities;
 using Domain.Exceptions;
 using Domain.Interfaces;
@@ -17,6 +18,7 @@ internal sealed class RefundPaymentCommandHandler(
     IPaymentRepository paymentRepository,
     IRefundRepository refundRepository,
     IStripePaymentProvider stripePaymentProvider,
+    IMoneyEventQueueService moneyEventQueueService,
     IUnitOfWork unitOfWork,
     IClock clock,
     ILogger<RefundPaymentCommandHandler> logger)
@@ -91,6 +93,7 @@ internal sealed class RefundPaymentCommandHandler(
                     refund.MarkSucceeded(providerRefundId, now);
                     payment.MarkRefunded(refund.Id, refund.Amount, providerRefundId, now);
                     responseStatus = RefundPaymentStatus.Succeeded;
+                    await moneyEventQueueService.QueueRefundIssuedAsync(payment, refund, cancellationToken);
                     break;
                 }
                 case ProviderRefundPaymentStatus.Pending:

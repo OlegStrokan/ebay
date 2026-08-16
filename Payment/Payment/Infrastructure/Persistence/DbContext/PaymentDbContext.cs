@@ -14,6 +14,8 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
 
     public DbSet<OutboundOrderCallback> OutboundOrderCallbacks => Set<OutboundOrderCallback>();
 
+    public DbSet<OutboundMoneyEvent> OutboundMoneyEvents => Set<OutboundMoneyEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PaymentDbContext).Assembly);
