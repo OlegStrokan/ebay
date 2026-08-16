@@ -13,7 +13,7 @@ namespace Application.Tests.Sagas;
 public class SagaContinuationEventHandlerTests
 {
     private readonly ISagaRepository _repository = Substitute.For<ISagaRepository>();
-    private readonly ISagaBase<ContData> _sagaBase = Substitute.For<ISagaBase<ContData>>();
+    private readonly ISagaBase<ContData, ContContext> _sagaBase = Substitute.For<ISagaBase<ContData, ContContext>>();
     private readonly ILogger _logger = Substitute.For<ILogger>();
     private readonly ISagaDistributedLock _lock = Substitute.For<ISagaDistributedLock>();
     private readonly ISagaLockHandle _lockHandle = Substitute.For<ISagaLockHandle>();
@@ -52,7 +52,7 @@ public class SagaContinuationEventHandlerTests
         _sagaBase
             .ResumeFromStepAsync(
                 Arg.Any<ContData>(),
-                Arg.Any<SagaContext>(),
+                Arg.Any<ContContext>(),
                 "UpdateStatus",
                 Arg.Any<CancellationToken>())
             .Returns(SagaResult.Success(Guid.NewGuid()));
@@ -61,7 +61,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.Received(1).ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             "UpdateStatus",
             Arg.Any<CancellationToken>());
     }
@@ -80,7 +80,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.DidNotReceive().ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -100,7 +100,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.DidNotReceive().ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -126,7 +126,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.DidNotReceive().ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -153,7 +153,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.DidNotReceive().ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -180,7 +180,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.DidNotReceive().ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -199,7 +199,7 @@ public class SagaContinuationEventHandlerTests
         _sagaBase
             .ResumeFromStepAsync(
                 Arg.Any<ContData>(),
-                Arg.Any<SagaContext>(),
+                Arg.Any<ContContext>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(SagaResult.Success(Guid.NewGuid()));
@@ -209,7 +209,7 @@ public class SagaContinuationEventHandlerTests
         // Verify context mutation was passed; ShipmentId should be "SHP-UPDATED"
         await _sagaBase.Received(1).ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Is<SagaContext>(c => ((ContContext)c).ShipmentId == "SHP-UPDATED"),
+            Arg.Is<ContContext>(c => c.ShipmentId == "SHP-UPDATED"),
             "UpdateStatus",
             Arg.Any<CancellationToken>());
     }
@@ -234,14 +234,14 @@ public class SagaContinuationEventHandlerTests
             });
 
         _sagaBase
-            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<SagaContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<ContContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(SagaResult.Success(Guid.NewGuid()));
 
         await BuildSut().HandleAsync(payload, CancellationToken.None);
 
         await _sagaBase.Received(1).ResumeFromStepAsync(
             Arg.Is<ContData>(d => d.SomeValue == "stored-value"),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -257,7 +257,7 @@ public class SagaContinuationEventHandlerTests
             .Returns(WaitingState(correlationId));
 
         _sagaBase
-            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<SagaContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<ContContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("Unexpected saga error"));
 
         // Must not throw
@@ -297,7 +297,7 @@ public class SagaContinuationEventHandlerTests
 
         await _sagaBase.DidNotReceive().ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
     }
@@ -322,7 +322,7 @@ public class SagaContinuationEventHandlerTests
             });
 
         _sagaBase
-            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<SagaContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<ContContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(SagaResult.Success(Guid.NewGuid()));
 
         await BuildSut().HandleAsync(payload, CancellationToken.None);
@@ -338,7 +338,7 @@ public class SagaContinuationEventHandlerTests
         // But execution still proceeds (not Completed/Failed) - ResumeFromStepAsync is called
         await _sagaBase.Received(1).ResumeFromStepAsync(
             Arg.Any<ContData>(),
-            Arg.Any<SagaContext>(),
+            Arg.Any<ContContext>(),
             "UpdateStatus",
             Arg.Any<CancellationToken>());
     }
@@ -360,7 +360,7 @@ public class SagaContinuationEventHandlerTests
         await _repository.DidNotReceive()
             .GetByCorrelationIdAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         await _sagaBase.DidNotReceive()
-            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<SagaContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<ContContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public class SagaContinuationEventHandlerTests
             .Returns(WaitingState(correlationId));
 
         _sagaBase
-            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<SagaContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<ContContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(SagaResult.Success(Guid.NewGuid()));
 
         await BuildSut().HandleAsync(payload, CancellationToken.None);
@@ -418,7 +418,7 @@ public class SagaContinuationEventHandlerTests
             .Returns(WaitingState(correlationId));
 
         _sagaBase
-            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<SagaContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ResumeFromStepAsync(Arg.Any<ContData>(), Arg.Any<ContContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("saga exploded"));
 
         await BuildSut().HandleAsync(payload, CancellationToken.None);
@@ -452,7 +452,7 @@ public class TestContinuationHandler
     protected override string ResumeAtStepName => "UpdateStatus";
 
     public TestContinuationHandler(
-        ISagaBase<ContData> saga,
+        ISagaBase<ContData, ContContext> saga,
         ISagaRepository repository,
         ISagaDistributedLock distributedLock,
         ILogger logger)

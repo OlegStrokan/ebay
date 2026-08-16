@@ -1,5 +1,6 @@
 using Application.Sagas;
 using Application.Sagas.Persistence;
+using Application.Sagas.ReturnSaga;
 using Confluent.Kafka;
 using Domain.Common;
 using Domain.Entities.RequestReturn;
@@ -120,7 +121,7 @@ public class RequestReturnE2ETests : IClassFixture<E2ETestServer>, IAsyncLifetim
         saga.Should().NotBeNull("saga must be created");
         saga!.Status.Should().Be(SagaStatus.WaitingForEvent,
             "saga should pause after AwaitReturnShipment step");
-        saga.CurrentStep.Should().Be("AwaitReturnShipment");
+        saga.CurrentStep.Should().Be(ReturnSagaSteps.AwaitReturnShipment);
 
         _output.WriteLine($"✅ Saga paused: Status={saga.Status}, Step={saga.CurrentStep}");
 
@@ -154,12 +155,12 @@ public class RequestReturnE2ETests : IClassFixture<E2ETestServer>, IAsyncLifetim
 
         var expectedSteps = new[]
         {
-            "ValidateReturnRequest",
-            "AwaitReturnShipment",
-            "ConfirmReturnReceived",
-            "ProcessRefund",
-            "UpdateAccountingRecords",
-            "CompleteReturn"
+            ReturnSagaSteps.ValidateReturnRequest,
+            ReturnSagaSteps.AwaitReturnShipment,
+            ReturnSagaSteps.ConfirmReturnReceived,
+            ReturnSagaSteps.ProcessRefund,
+            ReturnSagaSteps.UpdateAccountingRecords,
+            ReturnSagaSteps.CompleteReturn
         };
 
         steps.Select(s => s.StepName).Should().BeEquivalentTo(expectedSteps);
@@ -341,11 +342,11 @@ public class RequestReturnE2ETests : IClassFixture<E2ETestServer>, IAsyncLifetim
 
         var steps = await _server.GetSagaStepLogsAsync(saga.Id);
 
-        steps.Single(s => s.StepName == "ProcessRefund")
+        steps.Single(s => s.StepName == ReturnSagaSteps.ProcessRefund)
             .Status.Should().Be(StepStatus.Failed);
-        steps.Single(s => s.StepName == "ConfirmReturnReceived")
+        steps.Single(s => s.StepName == ReturnSagaSteps.ConfirmReturnReceived)
             .Status.Should().Be(StepStatus.Compensated);
-        steps.Single(s => s.StepName == "AwaitReturnShipment")
+        steps.Single(s => s.StepName == ReturnSagaSteps.AwaitReturnShipment)
             .Status.Should().Be(StepStatus.Compensated);
         
         _output.WriteLine("ProcessRefund=Failed, earlier steps=Compensated");
