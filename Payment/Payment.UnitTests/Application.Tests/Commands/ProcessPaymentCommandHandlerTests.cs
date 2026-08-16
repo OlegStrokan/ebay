@@ -3,6 +3,7 @@ using Application.DTOs;
 using Application.Gateways;
 using Application.Gateways.Models;
 using Application.Interfaces;
+using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
@@ -19,6 +20,7 @@ public class ProcessPaymentCommandHandlerTests
 
     private readonly IPaymentRepository _paymentRepository = Substitute.For<IPaymentRepository>();
     private readonly IStripePaymentProvider _stripePaymentProvider = Substitute.For<IStripePaymentProvider>();
+    private readonly IMoneyEventQueueService _moneyEventQueueService = Substitute.For<IMoneyEventQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<ProcessPaymentCommandHandler> _logger =
@@ -30,7 +32,7 @@ public class ProcessPaymentCommandHandlerTests
     }
 
     private ProcessPaymentCommandHandler BuildHandler() =>
-        new(_paymentRepository, _stripePaymentProvider, _unitOfWork, _clock, _logger);
+        new(_paymentRepository, _stripePaymentProvider, _moneyEventQueueService, _unitOfWork, _clock, _logger);
 
     private static ProcessPaymentCommand ValidCommand(decimal amount = 100m) =>
         new(

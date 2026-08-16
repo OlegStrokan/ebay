@@ -1,6 +1,7 @@
 using Application.Commands.CancelAuthorization;
 using Application.Gateways;
 using Application.Interfaces;
+using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
@@ -17,6 +18,7 @@ public class CancelAuthorizationCommandHandlerTests
 
     private readonly IPaymentRepository _paymentRepository = Substitute.For<IPaymentRepository>();
     private readonly IStripePaymentProvider _stripePaymentProvider = Substitute.For<IStripePaymentProvider>();
+    private readonly IMoneyEventQueueService _moneyEventQueueService = Substitute.For<IMoneyEventQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<CancelAuthorizationCommandHandler> _logger =
@@ -28,7 +30,7 @@ public class CancelAuthorizationCommandHandlerTests
     }
 
     private CancelAuthorizationCommandHandler BuildHandler() =>
-        new(_paymentRepository, _stripePaymentProvider, _unitOfWork, _clock, _logger);
+        new(_paymentRepository, _stripePaymentProvider, _moneyEventQueueService, _unitOfWork, _clock, _logger);
 
     private static Payment CreatePendingPayment(string providerPaymentIntentId = "pi_auth_1")
     {

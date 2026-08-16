@@ -22,6 +22,7 @@ public class CapturePaymentCommandHandlerTests
     private readonly IStripePaymentProvider _stripePaymentProvider = Substitute.For<IStripePaymentProvider>();
     private readonly IOrderCallbackQueueService _orderCallbackQueueService =
         Substitute.For<IOrderCallbackQueueService>();
+    private readonly IMoneyEventQueueService _moneyEventQueueService = Substitute.For<IMoneyEventQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<CapturePaymentCommandHandler> _logger =
@@ -33,7 +34,7 @@ public class CapturePaymentCommandHandlerTests
     }
 
     private CapturePaymentCommandHandler BuildHandler() =>
-        new(_paymentRepository, _stripePaymentProvider, _orderCallbackQueueService, _unitOfWork, _clock, _logger);
+        new(_paymentRepository, _stripePaymentProvider, _orderCallbackQueueService, _moneyEventQueueService, _unitOfWork, _clock, _logger);
 
     private static CapturePaymentCommand ValidCommand(decimal amount = 100m) =>
         new(
@@ -227,6 +228,60 @@ public class CapturePaymentCommandHandlerTests
 
         await _orderCallbackQueueService.Received(1).QueuePaymentSucceededAsync(
             Arg.Is<Payment>(p => p.Status == PaymentStatus.Succeeded),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldQueueOneCapturedMoneyEvent_WhenCaptureSucceeds()
+    {
+        // The ledger posting must be written in the same transaction as the money mutation,
+        // otherwise a crash after capture leaves the ledger permanently short.
+        _paymentRepository
+            .GetByOrderIdAndIdempotencyKeyAsync(
+                Arg.Any<string>(),
+                Arg.Any<IdempotencyKey>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Payment?)null);
+
+        _stripePaymentProvider
+            .CapturePaymentAsync(Arg.Any<CapturePaymentProviderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new CapturePaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.Succeeded,
+                ProviderPaymentIntentId: "pi_test_123",
+                ErrorCode: null,
+                ErrorMessage: null));
+
+        await BuildHandler().Handle(ValidCommand(), CancellationToken.None);
+
+        await _moneyEventQueueService.Received(1).QueuePaymentCapturedAsync(
+            Arg.Is<Payment>(p => p.Status == PaymentStatus.Succeeded),
+            Arg.Any<CancellationToken>());
+
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldNotQueueMoneyEvent_WhenCaptureFails()
+    {
+        _paymentRepository
+            .GetByOrderIdAndIdempotencyKeyAsync(
+                Arg.Any<string>(),
+                Arg.Any<IdempotencyKey>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Payment?)null);
+
+        _stripePaymentProvider
+            .CapturePaymentAsync(Arg.Any<CapturePaymentProviderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new CapturePaymentProviderResult(
+                Status: ProviderProcessPaymentStatus.Failed,
+                ProviderPaymentIntentId: "pi_test_123",
+                ErrorCode: "card_declined",
+                ErrorMessage: "Card declined."));
+
+        await BuildHandler().Handle(ValidCommand(), CancellationToken.None);
+
+        await _moneyEventQueueService.DidNotReceive().QueuePaymentCapturedAsync(
+            Arg.Any<Payment>(),
             Arg.Any<CancellationToken>());
     }
 

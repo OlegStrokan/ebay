@@ -22,6 +22,7 @@ public class ReconcilePendingPaymentsCommandHandlerTests
     private readonly IRefundRepository _refundRepository = Substitute.For<IRefundRepository>();
     private readonly IStripePaymentProvider _stripePaymentProvider = Substitute.For<IStripePaymentProvider>();
     private readonly IOrderCallbackQueueService _queueService = Substitute.For<IOrderCallbackQueueService>();
+    private readonly IMoneyEventQueueService _moneyEventQueueService = Substitute.For<IMoneyEventQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<ReconcilePendingPaymentsCommandHandler> _logger = NullLogger<ReconcilePendingPaymentsCommandHandler>.Instance;
@@ -40,7 +41,7 @@ public class ReconcilePendingPaymentsCommandHandlerTests
     }
 
     private ReconcilePendingPaymentsCommandHandler BuildHandler() =>
-        new(_paymentRepository, _refundRepository, _stripePaymentProvider, _queueService, _unitOfWork, _clock, _logger);
+        new(_paymentRepository, _refundRepository, _stripePaymentProvider, _queueService, _moneyEventQueueService, _unitOfWork, _clock, _logger);
 
     private static Payment CreatePendingPayment(
         string paymentId = "pay-1",

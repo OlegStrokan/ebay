@@ -3,6 +3,7 @@ using Application.DTOs;
 using Application.Gateways;
 using Application.Gateways.Models;
 using Application.Interfaces;
+using Application.Services;
 using Domain.Entities;
 using Domain.Enums;
 using Domain.Interfaces;
@@ -20,6 +21,7 @@ public class RefundPaymentCommandHandlerTests
     private readonly IPaymentRepository _paymentRepository = Substitute.For<IPaymentRepository>();
     private readonly IRefundRepository _refundRepository = Substitute.For<IRefundRepository>();
     private readonly IStripePaymentProvider _stripePaymentProvider = Substitute.For<IStripePaymentProvider>();
+    private readonly IMoneyEventQueueService _moneyEventQueueService = Substitute.For<IMoneyEventQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<RefundPaymentCommandHandler> _logger = NullLogger<RefundPaymentCommandHandler>.Instance;
@@ -30,7 +32,7 @@ public class RefundPaymentCommandHandlerTests
     }
 
     private RefundPaymentCommandHandler BuildHandler() =>
-        new(_paymentRepository, _refundRepository, _stripePaymentProvider, _unitOfWork, _clock, _logger);
+        new(_paymentRepository, _refundRepository, _stripePaymentProvider, _moneyEventQueueService, _unitOfWork, _clock, _logger);
 
     private static Payment CreateSucceededPayment()
     {
@@ -152,5 +154,40 @@ public class RefundPaymentCommandHandlerTests
         await _refundRepository.Received(1).AddAsync(Arg.Any<Refund>(), Arg.Any<CancellationToken>());
         await _paymentRepository.Received(1).UpdateAsync(Arg.Any<Payment>(), Arg.Any<CancellationToken>());
         await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        // The refund cash leg has exactly one owner: this money-event feeds the ledger.
+        await _moneyEventQueueService.Received(1).QueueRefundIssuedAsync(
+            Arg.Any<Payment>(),
+            Arg.Is<Refund>(r => r.Status == RefundStatus.Succeeded),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldNotQueueMoneyEvent_WhenProviderRefundIsPending()
+    {
+        var payment = CreateSucceededPayment();
+
+        _paymentRepository.GetByIdAsync(Arg.Any<PaymentId>(), Arg.Any<CancellationToken>())
+            .Returns(payment);
+        _refundRepository.GetByPaymentIdAndIdempotencyKeyAsync(
+                Arg.Any<PaymentId>(),
+                Arg.Any<IdempotencyKey>(),
+                Arg.Any<CancellationToken>())
+            .Returns((Refund?)null);
+
+        _stripePaymentProvider.RefundPaymentAsync(Arg.Any<RefundPaymentProviderRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RefundPaymentProviderResult(
+                ProviderRefundPaymentStatus.Pending,
+                ProviderRefundId: "re_pending",
+                ErrorCode: null,
+                ErrorMessage: null));
+
+        await BuildHandler().Handle(ValidCommand(), CancellationToken.None);
+
+        // No money moved yet. Webhook or reconciliation emits the event when it settles.
+        await _moneyEventQueueService.DidNotReceive().QueueRefundIssuedAsync(
+            Arg.Any<Payment>(),
+            Arg.Any<Refund>(),
+            Arg.Any<CancellationToken>());
     }
 }

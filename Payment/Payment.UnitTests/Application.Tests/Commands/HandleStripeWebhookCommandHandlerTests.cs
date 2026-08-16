@@ -20,6 +20,7 @@ public class HandleStripeWebhookCommandHandlerTests
     private readonly IPaymentRepository _paymentRepository = Substitute.For<IPaymentRepository>();
     private readonly IRefundRepository _refundRepository = Substitute.For<IRefundRepository>();
     private readonly IOrderCallbackQueueService _queueService = Substitute.For<IOrderCallbackQueueService>();
+    private readonly IMoneyEventQueueService _moneyEventQueueService = Substitute.For<IMoneyEventQueueService>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IClock _clock = Substitute.For<IClock>();
     private readonly ILogger<HandleStripeWebhookCommandHandler> _logger = NullLogger<HandleStripeWebhookCommandHandler>.Instance;
@@ -30,7 +31,7 @@ public class HandleStripeWebhookCommandHandlerTests
     }
 
     private HandleStripeWebhookCommandHandler BuildHandler() =>
-        new(_webhookRepository, _paymentRepository, _refundRepository, _queueService, _unitOfWork, _clock, _logger);
+        new(_webhookRepository, _paymentRepository, _refundRepository, _queueService, _moneyEventQueueService, _unitOfWork, _clock, _logger);
 
     private static Payment CreatePendingPayment()
     {
