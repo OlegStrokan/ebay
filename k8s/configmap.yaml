@@ -64,6 +64,11 @@ data:
   ReconciliationWorker__IntervalSeconds: "60"
   ReconciliationWorker__OlderThanMinutes: "15"
   ReconciliationWorker__BatchSize: "100"
+  
+  MoneyEventConsumer__Enabled: "true"
+  MoneyEventConsumer__ConsumerGroupId: "accounting-service-money-events"
+  MoneyEventConsumer__MaxOffsetRetries: "5"
+  MoneyEventConsumer__RetryDelaySeconds: "5"
 
   Email__SmtpHost: "mailhog"
   Email__SmtpPort: "1025"
