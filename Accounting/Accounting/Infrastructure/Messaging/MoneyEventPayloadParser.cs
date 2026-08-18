@@ -3,8 +3,6 @@ using Application.Contracts;
 
 namespace Infrastructure.Messaging;
 
-// Payment serializes money-events with a camelCase naming policy; case-insensitive matching
-// reads those onto the PascalCase record without a second naming policy to keep in step.
 internal static class MoneyEventPayloadParser
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -12,9 +10,6 @@ internal static class MoneyEventPayloadParser
         PropertyNameCaseInsensitive = true,
     };
 
-    // Returns false for anything that is not a usable money-event rather than throwing: the
-    // caller has to decide what to do with a bad message, and a malformed payload is a
-    // permanent condition, not a transient one.
     public static bool TryParse(string? json, out MoneyEventPayload? payload, out string? error)
     {
         payload = null;
