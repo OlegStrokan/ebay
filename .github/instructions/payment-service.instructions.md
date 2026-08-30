@@ -46,6 +46,11 @@ gRPC payment processor that integrates with Stripe for payment capture, refunds,
 - Pending → Delivered | PermanentFailure (with Failed state for retry cycles)
 - Tracks: CallbackEventId, OrderId, PaymentId, EventType, Payload, AttemptCount, NextRetryAt, LastError
 
+### OutboundMoneyEvent
+- Sibling outbox feeding the accounting ledger; same Pending → Delivered | PermanentFailure lifecycle
+- Tracks: EventId, PaymentId, OrderId, EventType, Payload, AttemptCount, NextRetryAt, LastError
+- Deterministic EventId (`{paymentId}:captured`, `{refundId}:refunded`) is UNIQUE, so a repeated leg collapses to one row
+
 ### PaymentWebhookEvent
 - Received → Processed | Failed | IgnoredDuplicate
 - Deduplicates via ProviderEventId unique index
@@ -125,12 +130,26 @@ The `IStripePaymentProvider` abstraction has three implementations chosen at sta
 - PaymentSucceededEvent, PaymentFailedEvent, RefundSucceededEvent, RefundFailedEvent
 - Published to Kafka (saga topic) with OrderId as key + event-type header
 
+## Money Events (Outbound to Accounting Ledger)
+
+### MoneyEventDeliveryWorker
+- Drains `outbound_money_events` and publishes to `Kafka:MoneyEventsTopic` (`payment.money-events`)
+- Keyed on PaymentId so every leg of one payment stays ordered in one partition
+- Same batch/backoff/max-attempt shape as the callback worker, configured under `MoneyEvent:*`
+
+### Money Event Types
+- PaymentAuthorizedEvent, PaymentVoidedEvent, PaymentCapturedEvent, RefundIssuedEvent
+- Emission rules: `Authorized` on transition to Authorized; `Captured` on transition to Succeeded; `Voided` only when an **Authorized** payment transitions to Failed (a live hold is released); `Refunded` when a Refund transitions to Succeeded
+- `IMoneyEventQueueService` is called inside the handler, before the same `SaveChangesAsync` that persists the money mutation — the event and the mutation commit together or not at all
+- `fee` and `tax` ship on the payload but post as zero: Payment stores neither yet
+
 ## Idempotency
 
 - **Payments**: (OrderId, ProcessIdempotencyKey) UNIQUE — duplicate request returns cached result
 - **Refunds**: (PaymentId, IdempotencyKey) UNIQUE
 - **Webhooks**: (ProviderEventId) UNIQUE — prevents duplicate webhook processing
 - **Callbacks**: (CallbackEventId) UNIQUE — prevents duplicate callback queueing
+- **Money events**: (EventId) UNIQUE — capture, webhook and reconciliation all resolve the same payment, so the deterministic id collapses them to one ledger posting
 - On unique violation: catch DbUpdateException, re-fetch and return existing record
 
 ## gRPC API
@@ -151,6 +170,8 @@ The `IStripePaymentProvider` abstraction has three implementations chosen at sta
 - **Stripe**: ProviderType (Stripe|MockFintech|Fake), SecretKey, WebhookSecret, WebhookToleranceSeconds (300), DefaultCurrency
 - **MockFintech**: BaseUrl, ApiKey, TimeoutSeconds (used when ProviderType=MockFintech)
 - **OrderCallback**: EndpointUrl, SharedSecret, TimeoutSeconds, BatchSize (100), MaxAttempts (8), BaseRetryDelaySeconds (5), MaxRetryDelaySeconds (300)
+- **MoneyEvent**: PollIntervalSeconds (5), BatchSize (100), MaxAttempts (8), BaseRetryDelaySeconds (5), MaxRetryDelaySeconds (300)
+- **Kafka**: BootstrapServers, SagaTopic (`order.events`), MoneyEventsTopic (`payment.money-events`), ProducerClientId
 - **Reconciliation**: Enabled, IntervalSeconds (60), OlderThanMinutes (15), BatchSize
 
 ## Testing
