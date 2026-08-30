@@ -1,5 +1,7 @@
 using Application.Interfaces;
 using Domain.Interfaces;
+using Infrastructure.BackgroundServices;
+using Infrastructure.Options;
 using Infrastructure.Persistence.DbContext;
 using Infrastructure.Persistence.Repositories;
 using Infrastructure.Persistence.UnitOfWork;
@@ -13,6 +15,10 @@ public static class InfrastructureModule
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.Configure<KafkaOptions>(configuration.GetSection(KafkaOptions.SectionName));
+        services.Configure<MoneyEventConsumerOptions>(
+            configuration.GetSection(MoneyEventConsumerOptions.SectionName));
+
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("ConnectionStrings:Postgres is not configured.");
 
@@ -23,7 +29,10 @@ public static class InfrastructureModule
             opt.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure()));
 
         services.AddScoped<ILedgerTransactionRepository, LedgerTransactionRepository>();
+        services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+
+        services.AddHostedService<MoneyEventsConsumerService>();
 
         return services;
     }
