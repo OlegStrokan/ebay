@@ -43,20 +43,110 @@ public sealed class LedgerTransaction
         CreatedAt = DateTime.UtcNow;
     }
 
+ public static LedgerTransaction ForAuthorization(
+        Guid? orderId,
+        Guid? paymentId,
+        string paymentRef,
+        Money amount,
+        DateTime occurredAt)
+    {
+        var tx = NewPaymentTransaction(
+            transactionRef: $"authorize:{RequirePaymentRef(paymentRef)}",
+            refType: TransactionRefType.Authorize,
+            paymentRef: paymentRef,
+            currency: amount.Currency,
+            orderId: orderId,
+            paymentId: paymentId,
+            occurredAt: occurredAt);
+
+        tx.AddEntry(LedgerAccount.CustomerAuthorized, EntryDirection.Debit, amount);
+        tx.AddEntry(LedgerAccount.AuthorizationHold, EntryDirection.Credit, amount);
+        tx.EnsureBalanced();
+        return tx;
+    }
+
+    // Releases a hold without taking the money: the exact mirror of ForAuthorization
+    public static LedgerTransaction ForAuthorizationVoid(
+        Guid? orderId,
+        Guid? paymentId,
+        string paymentRef,
+        Money amount,
+        DateTime occurredAt)
+    {
+        var tx = NewPaymentTransaction(
+            transactionRef: $"void:{RequirePaymentRef(paymentRef)}",
+            refType: TransactionRefType.Void,
+            paymentRef: paymentRef,
+            currency: amount.Currency,
+            orderId: orderId,
+            paymentId: paymentId,
+            occurredAt: occurredAt);
+
+        tx.AddEntry(LedgerAccount.AuthorizationHold, EntryDirection.Debit, amount);
+        tx.AddEntry(LedgerAccount.CustomerAuthorized, EntryDirection.Credit, amount);
+        tx.EnsureBalanced();
+        return tx;
+    }
+
+   public static LedgerTransaction ForCapture(
+        Guid? orderId,
+        Guid? paymentId,
+        string paymentRef,
+        Money gross,
+        decimal fee,
+        decimal tax,
+        DateTime occurredAt)
+    {
+        if (fee < 0m)
+            throw new ArgumentOutOfRangeException(nameof(fee), "Gateway fee cannot be negative.");
+
+        if (tax < 0m)
+            throw new ArgumentOutOfRangeException(nameof(tax), "Tax cannot be negative.");
+
+        if (fee > gross.Amount)
+            throw new ArgumentOutOfRangeException(
+                nameof(fee), $"Gateway fee {fee} exceeds the captured amount {gross.Amount}.");
+
+        if (tax > gross.Amount)
+            throw new ArgumentOutOfRangeException(
+                nameof(tax), $"Tax {tax} exceeds the captured amount {gross.Amount}.");
+
+        var tx = NewPaymentTransaction(
+            transactionRef: $"capture:{RequirePaymentRef(paymentRef)}",
+            refType: TransactionRefType.Capture,
+            paymentRef: paymentRef,
+            currency: gross.Currency,
+            orderId: orderId,
+            paymentId: paymentId,
+            occurredAt: occurredAt);
+
+        tx.AddEntryIfPositive(LedgerAccount.CustomerCaptured, EntryDirection.Debit, gross.Amount - fee, gross.Currency);
+        tx.AddEntryIfPositive(LedgerAccount.GatewayFees, EntryDirection.Debit, fee, gross.Currency);
+        tx.AddEntryIfPositive(LedgerAccount.MerchantRevenue, EntryDirection.Credit, gross.Amount - tax, gross.Currency);
+        tx.AddEntryIfPositive(LedgerAccount.TaxPayable, EntryDirection.Credit, tax, gross.Currency);
+        tx.EnsureBalanced();
+        return tx;
+    }
+
     // Pays out the refund liability in cash: Dr refunds_payable / Cr customer_captured
     // our dept actually paid
-    public static LedgerTransaction ForRefund(Guid orderId, string refundId, Money amount, DateTime occurredAt)
+    public static LedgerTransaction ForRefund(
+        Guid? orderId,
+        string refundId,
+        Money amount,
+        DateTime occurredAt,
+        Guid? paymentId = null)
     {
         if (string.IsNullOrWhiteSpace(refundId))
             throw new ArgumentException("RefundId is required.", nameof(refundId));
 
         var tx = new LedgerTransaction(
-            transactionRef: $"refund:{refundId}",
+            transactionRef: $"refund:{refundId.Trim()}",
             refType: TransactionRefType.Refund,
-            refId: refundId,
+            refId: refundId.Trim(),
             currency: amount.Currency,
             orderId: orderId,
-            paymentId: null,
+            paymentId: paymentId,
             occurredAt: occurredAt);
 
         tx.AddEntry(LedgerAccount.RefundsPayable, EntryDirection.Debit, amount);
@@ -121,9 +211,35 @@ public sealed class LedgerTransaction
         return tx;
     }
 
+    private static string RequirePaymentRef(string paymentRef)
+    {
+        if (string.IsNullOrWhiteSpace(paymentRef))
+            throw new ArgumentException("PaymentRef is required.", nameof(paymentRef));
+
+        return paymentRef.Trim();
+    }
+
+    private static LedgerTransaction NewPaymentTransaction(
+        string transactionRef,
+        TransactionRefType refType,
+        string paymentRef,
+        string currency,
+        Guid? orderId,
+        Guid? paymentId,
+        DateTime occurredAt) =>
+        new(transactionRef, refType, paymentRef.Trim(), currency, orderId, paymentId, occurredAt);
+
     private void AddEntry(LedgerAccount account, EntryDirection direction, Money amount)
     {
         _entries.Add(new LedgerEntry(Id, account, direction, amount.Amount, amount.Currency, CreatedAt));
+    }
+
+    private void AddEntryIfPositive(LedgerAccount account, EntryDirection direction, decimal amount, string currency)
+    {
+        if (amount <= 0m)
+            return;
+
+        _entries.Add(new LedgerEntry(Id, account, direction, amount, currency, CreatedAt));
     }
 
     private void EnsureBalanced()
