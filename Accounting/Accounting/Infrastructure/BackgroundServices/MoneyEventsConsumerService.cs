@@ -1,5 +1,6 @@
 using System.Text;
 using Application.Commands.IngestMoneyEvent;
+using Application.Interfaces;
 using Confluent.Kafka;
 using Infrastructure.Messaging;
 using Infrastructure.Options;
@@ -14,6 +15,7 @@ public sealed class MoneyEventsConsumerService : BackgroundService
     private const string EventIdHeader = "event-id";
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IMoneyEventConsumerMonitor _monitor;
     private readonly ILogger<MoneyEventsConsumerService> _logger;
     private readonly MoneyEventConsumerOptions _consumerOptions;
     private readonly string _topic;
@@ -23,11 +25,13 @@ public sealed class MoneyEventsConsumerService : BackgroundService
 
     public MoneyEventsConsumerService(
         IServiceScopeFactory scopeFactory,
+        IMoneyEventConsumerMonitor monitor,
         IOptions<KafkaOptions> kafkaOptions,
         IOptions<MoneyEventConsumerOptions> consumerOptions,
         ILogger<MoneyEventsConsumerService> logger)
     {
         _scopeFactory = scopeFactory;
+        _monitor = monitor;
         _logger = logger;
         _consumerOptions = consumerOptions.Value;
 
@@ -90,6 +94,7 @@ public sealed class MoneyEventsConsumerService : BackgroundService
                     {
                         _failuresAtCurrentOffset = 0;
                         consumer.Commit(result);
+                        _monitor.RecordProcessed(GetLag(consumer, result), DateTime.UtcNow);
                         continue;
                     }
 
@@ -112,16 +117,19 @@ public sealed class MoneyEventsConsumerService : BackgroundService
                     // payment, so the offset moves on. The ledger is now knowingly short one
                     // posting: that is exactly the aggregate drift ReconcileLedgerWorker exists to
                     // catch, and the event is still in Kafka to be replayed once the cause is fixed.
+                    var abandonedEventId = GetHeader(result, EventIdHeader) ?? "unknown";
+
                     _logger.LogCritical(
                         "Giving up on money event {EventId} at {Topic}-{Partition} offset {Offset} after {Attempts} attempts. " +
                         "Committing past it to keep the partition moving. THE LEDGER IS NOW MISSING THIS POSTING and will show drift until the event is replayed.",
-                        GetHeader(result, EventIdHeader) ?? "unknown",
+                        abandonedEventId,
                         result.Topic,
                         result.Partition.Value,
                         result.Offset.Value,
                         _failuresAtCurrentOffset);
 
                     _failuresAtCurrentOffset = 0;
+                    _monitor.RecordSkipped(abandonedEventId);
                     consumer.Commit(result);
                 }
                 catch (ConsumeException ex)
@@ -226,6 +234,23 @@ public sealed class MoneyEventsConsumerService : BackgroundService
     {
         var header = result.Message.Headers?.FirstOrDefault(h => h.Key == key);
         return header is null ? null : Encoding.UTF8.GetString(header.GetValueBytes());
+    }
+
+    private static long GetLag(IConsumer<string, string> consumer, ConsumeResult<string, string> result)
+    {
+        try
+        {
+            var watermarks = consumer.GetWatermarkOffsets(result.TopicPartition);
+            if (watermarks.High.IsSpecial)
+                return 0;
+
+            var lag = watermarks.High.Value - (result.Offset.Value + 1);
+            return lag < 0 ? 0 : lag;
+        }
+        catch (KafkaException)
+        {
+            return 0;
+        }
     }
 
     private static int NormalizePositive(int value, int fallback) => value > 0 ? value : fallback;
