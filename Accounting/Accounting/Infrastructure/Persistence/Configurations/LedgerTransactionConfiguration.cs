@@ -52,6 +52,14 @@ internal sealed class LedgerTransactionConfiguration : IEntityTypeConfiguration<
             .HasColumnName("created_at")
             .IsRequired();
 
+        builder.Property(x => x.Reason)
+            .HasColumnName("reason")
+            .HasMaxLength(512);
+
+        builder.Property(x => x.PostedBy)
+            .HasColumnName("posted_by")
+            .HasMaxLength(256);
+
         builder.HasMany(x => x.Entries)
             .WithOne()
             .HasForeignKey(e => e.TransactionId)
