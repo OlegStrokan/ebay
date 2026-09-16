@@ -12,6 +12,10 @@ public sealed class AccountingDbContext(DbContextOptions<AccountingDbContext> op
 
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
 
+    public DbSet<FxRate> FxRates => Set<FxRate>();
+
+    public DbSet<LedgerReportingEntry> LedgerReportingEntries => Set<LedgerReportingEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AccountingDbContext).Assembly);
