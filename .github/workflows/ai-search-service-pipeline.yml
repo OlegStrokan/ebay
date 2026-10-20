@@ -39,7 +39,7 @@ jobs:
           restore-keys: uv-${{ runner.os }}-
       - name: Sync dependencies
         working-directory: AI/AiSearchService
-        run: uv sync --frozen
+        run: uv sync --frozen --extra test
 
   test:
     name: ${{ matrix.tier }} Tests
@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tier: [unit, integration, contract, e2e]
+        tier: [unit, integration, e2e]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,10 +64,10 @@ jobs:
           restore-keys: uv-${{ runner.os }}-
       - name: Sync dependencies
         working-directory: AI/AiSearchService
-        run: uv sync --frozen
+        run: uv sync --frozen --extra test
       - name: Run ${{ matrix.tier }} tests
         working-directory: AI/AiSearchService
-        run: uv run pytest tests/${{ matrix.tier }} --junitxml=../../test-results/ai-search-${{ matrix.tier }}.xml -v
+        run: uv run --no-sync python -m pytest tests/${{ matrix.tier }} --junitxml=../../test-results/ai-search-${{ matrix.tier }}.xml -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:

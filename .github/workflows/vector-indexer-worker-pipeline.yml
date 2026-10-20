@@ -38,7 +38,7 @@ jobs:
           restore-keys: uv-${{ runner.os }}-
       - name: Sync dependencies
         working-directory: AI/VectorIndexerWorker
-        run: uv sync --frozen
+        run: uv sync --frozen --extra test
 
   test:
     name: ${{ matrix.tier }} Tests
@@ -63,10 +63,10 @@ jobs:
           restore-keys: uv-${{ runner.os }}-
       - name: Sync dependencies
         working-directory: AI/VectorIndexerWorker
-        run: uv sync --frozen
+        run: uv sync --frozen --extra test
       - name: Run ${{ matrix.tier }} tests
         working-directory: AI/VectorIndexerWorker
-        run: uv run pytest tests/${{ matrix.tier }} --junitxml=../../test-results/vector-indexer-${{ matrix.tier }}.xml -v
+        run: uv run --no-sync python -m pytest tests/${{ matrix.tier }} --junitxml=../../test-results/vector-indexer-${{ matrix.tier }}.xml -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:

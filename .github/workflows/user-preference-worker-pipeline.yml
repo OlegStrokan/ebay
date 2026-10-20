@@ -1,0 +1,57 @@
+name: User Preference Worker Pipeline
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "AI/UserPreferenceWorker/**"
+      - ".github/workflows/user-preference-worker-pipeline.yml"
+  pull_request:
+    paths:
+      - "AI/UserPreferenceWorker/**"
+      - ".github/workflows/user-preference-worker-pipeline.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('AI/UserPreferenceWorker/uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      # Test tools (pytest, pytest-asyncio, fakeredis) are in the "test" extra.
+      - name: Sync dependencies
+        working-directory: AI/UserPreferenceWorker
+        run: uv sync --frozen --extra test
+      # The tests use fakeredis, so no Redis service is needed.
+      - name: Run tests
+        working-directory: AI/UserPreferenceWorker
+        run: uv run --no-sync python -m pytest tests --junitxml=../../test-results/user-preference-worker.xml -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: user-preference-worker-results
+          path: test-results/user-preference-worker.xml
+      - uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: User Preference Worker
+          path: test-results/user-preference-worker.xml
+          reporter: java-junit
