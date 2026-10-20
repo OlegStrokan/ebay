@@ -7,6 +7,7 @@ mocked — this validates the full in-process pipeline from a single entry point
 without requiring generated proto stubs or a running gRPC server.
 """
 import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -14,13 +15,16 @@ import pytest
 import respx
 from asgi_lifespan import LifespanManager
 
-# Inject mock proto stubs (same pattern as unit test)
+# Inject mock proto stubs (same pattern as tests/unit/test_grpc_servicer.py)
 _pb2 = MagicMock()
 _pb2_grpc = MagicMock()
+_pb2_grpc.AiSearchServiceServicer = type("AiSearchServiceServicer", (), {})
 _generated = MagicMock(ai_search_pb2=_pb2, ai_search_pb2_grpc=_pb2_grpc)
 sys.modules.setdefault("generated", _generated)
-sys.modules.setdefault("generated.ai_search_pb2", _pb2)
-sys.modules.setdefault("generated.ai_search_pb2_grpc", _pb2_grpc)
+_pb2 = sys.modules.setdefault("generated.ai_search_pb2", _pb2)
+_pb2_grpc = sys.modules.setdefault("generated.ai_search_pb2_grpc", _pb2_grpc)
+if isinstance(_pb2, MagicMock):
+    _pb2.SearchResultItem.side_effect = lambda **fields: SimpleNamespace(**fields)
 
 from grpc_server import AiSearchServicer  # noqa: E402
 from models import Filters, ParsedQuery, ScoredResult, SearchPipelineResult, SearchResultItem
@@ -83,6 +87,7 @@ class _FakeRequest:
         self.page = page
         self.page_size = page_size
         self.debug = debug
+        self.user_id = ""  # proto3 default: no personalized reranking
 
 
 def _make_servicer_with_mocks():

@@ -56,18 +56,18 @@ class QdrantSearchClient:
             if excluded in _ATTRIBUTE_EXCLUSION_MAP:
                 field_key, excluded_values = _ATTRIBUTE_EXCLUSION_MAP[excluded]
                 must_conditions.append(
-                    FieldCondition(key=field_key, match=MatchExcept(except_=excluded_values))
+                    FieldCondition(key=field_key, match=MatchExcept(**{"except": excluded_values}))
                 )
 
-        results = await self._client.search(
+        response = await self._client.query_points(
             collection_name=self._collection,
-            query_vector=vector,
+            query=vector,
             query_filter=Filter(must=must_conditions),
             limit=top_k,
             with_payload=True,
         )
 
-        return [ScoredResult(product_id=str(r.id), score=r.score) for r in results]
+        return [ScoredResult(product_id=str(r.id), score=r.score) for r in response.points]
 
     async def find_similar(
             self,
@@ -113,14 +113,17 @@ class QdrantSearchClient:
             HasIdCondition(has_id=[source_point.id]),
         ]
 
-        results = await self._client.search(
+        response = await self._client.query_points(
             collection_name=self._collection,
-            query_vector=source_vector,
+            query=source_vector,
             query_filter=Filter(must=must_conditions, must_not=must_not_conditions),
             limit=limit,
             with_payload=True,
         )
 
-        return [ScoredResult(product_id=str(r.payload.get("product_id", r.id)), score=r.score) for r in results]
+        return [
+            ScoredResult(product_id=str(r.payload.get("product_id", r.id)), score=r.score)
+            for r in response.points
+        ]
 
 

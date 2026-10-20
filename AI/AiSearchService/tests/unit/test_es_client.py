@@ -102,8 +102,9 @@ async def test_price_min_filter_is_range_gte_not_term_color(client: Elasticsearc
 async def test_hits_mapped_to_scored_results(client: ElasticsearchClient) -> None:
     mock_es = AsyncMock()
     mock_es.search.return_value = _es_response([
-        {"_source": {"id": "p1"}, "_score": 1.5},
-        {"_source": {"id": "p2"}, "_score": 0.9},
+        # Catalog item documents carry the ID in "productId".
+        {"_source": {"productId": "p1"}, "_score": 1.5},
+        {"_source": {"productId": "p2"}, "_score": 0.9},
     ])
     client._es = mock_es
 

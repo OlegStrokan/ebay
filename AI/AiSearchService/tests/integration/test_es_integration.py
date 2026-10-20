@@ -6,10 +6,26 @@ from tests.integration.conftest import drop_es_index, seed_es_index
 
 INDEX = "test_products_es"
 
+def _catalog_item(item_id: str, name: str, description: str, category: str, min_price: float) -> dict:
+    return {
+        "id": item_id,
+        "productId": item_id,
+        "productType": "catalog_item",
+        "name": name,
+        "description": description,
+        "category": category,
+        "categoryId": category,
+        "minPrice": min_price,
+        "minPriceCurrency": "USD",
+        "hasActiveListings": True,
+        "bestCondition": "New",
+    }
+
+
 _PRODUCTS = [
-    {"id": "p1", "name": "Mechanical Keyboard", "description": "tactile switches", "category": "keyboards", "price": 80.0},
-    {"id": "p2", "name": "Gaming Mouse", "description": "high dpi optical sensor", "category": "mice", "price": 40.0},
-    {"id": "p3", "name": "Expensive Monitor", "description": "4K display", "category": "monitors", "price": 500.0},
+    _catalog_item("p1", "Mechanical Keyboard", "tactile switches", "keyboards", 80.0),
+    _catalog_item("p2", "Gaming Mouse", "high dpi optical sensor", "mice", 40.0),
+    _catalog_item("p3", "Expensive Monitor", "4K display", "monitors", 500.0),
 ]
 
 
