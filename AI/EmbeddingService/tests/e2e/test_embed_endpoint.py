@@ -27,9 +27,10 @@ async def test_embed_returns_correct_response_shape(client: httpx.AsyncClient) -
     assert data["dimensions"] == len(data["embeddings"][0])
 
 
-async def test_embed_returns_400_for_empty_texts(client: httpx.AsyncClient) -> None:
+async def test_embed_returns_422_for_empty_texts(client: httpx.AsyncClient) -> None:
     response = await client.post("/embed", json={"texts": []})
-    assert response.status_code == 400
+    # EmbedRequest.texts has min_length=1: FastAPI validation error.
+    assert response.status_code == 422
 
 
 async def test_embed_is_idempotent_for_same_input(client: httpx.AsyncClient) -> None:
@@ -48,8 +49,11 @@ async def test_embed_ollama_error_returns_500(ollama_mock) -> None:
     from main import app
 
     async with LifespanManager(app) as manager:
+        # By default ASGITransport re-raises app exceptions into the test.
+        # A real server (uvicorn) turns an unhandled exception into a 500 response.
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=manager.app), base_url="http://test"
+            transport=httpx.ASGITransport(app=manager.app, raise_app_exceptions=False),
+            base_url="http://test",
         ) as ac:
             response = await ac.post("/embed", json={"texts": ["test"]})
 

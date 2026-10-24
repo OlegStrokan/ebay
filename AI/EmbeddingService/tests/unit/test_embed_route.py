@@ -16,13 +16,14 @@ def app() -> tuple[FastAPI, AsyncMock]:
     return test_app, mock_client
 
 
-async def test_empty_texts_returns_400(app: tuple) -> None:
+async def test_empty_texts_returns_422(app: tuple) -> None:
     test_app, _ = app
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=test_app), base_url="http://test"
     ) as ac:
         response = await ac.post("/embed", json={"texts": []})
-    assert response.status_code == 400
+    # EmbedRequest.texts has min_length=1: FastAPI validation error.
+    assert response.status_code == 422
 
 
 async def test_single_text_returns_correct_response(app: tuple) -> None:

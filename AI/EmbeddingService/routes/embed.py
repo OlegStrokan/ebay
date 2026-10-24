@@ -1,5 +1,5 @@
 ﻿
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 import asyncio
 
@@ -18,8 +18,7 @@ async def embed(
         request: EmbedRequest,
         client: OllamaClient = Depends(get_ollama_client),
 ) -> EmbedResponse:
-    if not request.texts:
-        raise HTTPException(status_code=400, detail="texts must not be empty")
+    # EmbedRequest.texts has min_length=1, so FastAPI rejects an empty list with 422 before this runs.
     model = request.model or settings.default_model
     embeddings = await asyncio.gather(*(client.embed(text, model=model) for text in request.texts))
     return EmbedResponse(
