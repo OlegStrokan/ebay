@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 import math
@@ -30,6 +31,8 @@ class PreferenceAggregator:
     def __init__(self, redis_client: redis.Redis) -> None:
         self._redis = redis_client
         self._decay_half_life_seconds = settings.decay_half_life_days * 86400
+        # One pending trailing recompute per user (see _record_interaction).
+        self._trailing: dict[str, asyncio.Task] = {}
 
     async def record_view(self, event: ProductViewedEvent) -> None:
         weight = _WEIGHTS["view"]
@@ -100,14 +103,41 @@ class PreferenceAggregator:
 
         # Throttle full recomputation to once per debounce window per user.
         # SET NX EX is atomic: returns True only for the first caller in the window.
-        # Burst events skip the O(N) recompute; the profile is at most
-        # `profile_recompute_debounce_seconds` stale, which is acceptable given
-        # the 14-day decay half-life.
+        # The first event recomputes now (leading edge). One more recompute runs when the
+        # window ends (trailing edge), so the other events of the burst also reach the profile.
+        # The profile is at most `profile_recompute_debounce_seconds` stale.
         guard_key = _RECOMPUTE_GUARD_KEY.format(user_id=user_id)
         should_recompute = await self._redis.set(
             guard_key, "1", nx=True, ex=settings.profile_recompute_debounce_seconds
         )
         if should_recompute:
+            await self._recompute_profile(user_id)
+            self._schedule_trailing_recompute(user_id)
+
+    def _schedule_trailing_recompute(self, user_id: str) -> None:
+        if user_id in self._trailing:
+            return
+        task = asyncio.create_task(self._trailing_recompute(user_id))
+        self._trailing[user_id] = task
+        task.add_done_callback(lambda _: self._trailing.pop(user_id, None))
+
+    async def _trailing_recompute(self, user_id: str) -> None:
+        await asyncio.sleep(settings.profile_recompute_debounce_seconds)
+        try:
+            await self._recompute_profile(user_id)
+        except Exception:
+            log.exception("trailing_recompute_failed", user_id=user_id)
+
+    async def aclose(self) -> None:
+        """Run pending trailing recomputes now, so no burst is lost at shutdown."""
+        pending = list(self._trailing.items())
+        for _, task in pending:
+            task.cancel()
+        for user_id, task in pending:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
             await self._recompute_profile(user_id)
 
     async def _recompute_profile(self, user_id: str) -> None:

@@ -22,6 +22,8 @@ async def main() -> None:
         await run_consumer(aggregator, cooccurrence)
     finally:
         health_server.shutdown()
+        # Before Redis closes: write the pending trailing recomputes.
+        await aggregator.aclose()
         await redis_client.aclose()
 
 

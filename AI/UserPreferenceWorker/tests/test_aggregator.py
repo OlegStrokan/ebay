@@ -1,3 +1,4 @@
+import asyncio
 import time
 import json
 import pytest
@@ -21,8 +22,10 @@ async def redis_client():
 
 
 @pytest.fixture
-def aggregator(redis_client) -> PreferenceAggregator:
-    return PreferenceAggregator(redis_client=redis_client)
+async def aggregator(redis_client):
+    agg = PreferenceAggregator(redis_client=redis_client)
+    yield agg
+    await agg.aclose()
 
 
 async def test_record_view_stores_interaction(aggregator, redis_client):
@@ -140,6 +143,7 @@ async def test_profile_computed_after_interaction(aggregator, redis_client):
         condition="New",
     ))
 
+    await aggregator.aclose()  # run the trailing recompute of this burst now
     profile = await aggregator.get_profile("user-4")
     assert profile is not None
     assert profile.user_id == "user-4"
@@ -160,6 +164,7 @@ async def test_profile_price_percentiles(aggregator, redis_client):
             price=price,
         ))
 
+    await aggregator.aclose()  # run the trailing recompute of this burst now
     profile = await aggregator.get_profile("user-5")
     assert profile is not None
     assert profile.price_p25 is not None
@@ -183,6 +188,7 @@ async def test_profile_condition_weights(aggregator, redis_client):
         condition="Used",
     ))
 
+    await aggregator.aclose()  # run the trailing recompute of this burst now
     profile = await aggregator.get_profile("user-6")
     assert profile is not None
     assert "New" in profile.condition_weights
@@ -206,3 +212,19 @@ async def test_interactions_capped_at_max(aggregator, redis_client, monkeypatch)
 async def test_get_profile_returns_none_for_unknown_user(aggregator):
     profile = await aggregator.get_profile("nonexistent-user")
     assert profile is None
+
+
+async def test_trailing_recompute_includes_whole_burst(aggregator, monkeypatch):
+    # Leading edge: the first event recomputes. Trailing edge: one recompute after the window.
+    monkeypatch.setattr(settings, "profile_recompute_debounce_seconds", 1)
+    await aggregator.record_view(ProductViewedEvent(user_id="user-8", catalog_item_id="i1", brand="Sony"))
+    await aggregator.record_view(ProductViewedEvent(user_id="user-8", catalog_item_id="i2", brand="Canon"))
+
+    profile = await aggregator.get_profile("user-8")
+    assert set(profile.brands) == {"Sony"}  # only the leading recompute so far
+
+    await asyncio.sleep(1.3)
+
+    profile = await aggregator.get_profile("user-8")
+    assert set(profile.brands) == {"Sony", "Canon"}
+    assert profile.interaction_count == 2
